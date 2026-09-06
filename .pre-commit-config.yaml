@@ -31,3 +31,12 @@ repos:
         pass_filenames: false
         files: ^services/frontend/.*\.(js|jsx|ts|tsx)$
         entry: bash -c 'cd services/frontend && npx eslint --max-warnings=0 .'
+      # `next build` type-checks with tsconfig.build.json, which only excludes
+      # tests — so a clean tsconfig.json (the superset) guarantees the image
+      # build type-checks too. Neither eslint nor vitest runs tsc.
+      - id: frontend-tsc
+        name: frontend tsc
+        language: system
+        pass_filenames: false
+        files: ^services/frontend/.*\.(ts|tsx)$
+        entry: bash -c 'cd services/frontend && npm run --silent typecheck'

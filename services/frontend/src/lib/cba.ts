@@ -282,7 +282,9 @@ export function layoutCapBarMarkers(
       label: marker.label,
       value: marker.value,
       pct: capPercent(marker.value, scale.min, scale.max),
-      lane: 0,
+      // `as const` keeps this 0 rather than widening to number, which would not
+      // satisfy CapBarMarker["lane"]. The loop below still reassigns it to 1.
+      lane: 0 as const,
     }))
     .sort((left, right) => left.pct - right.pct || left.label.localeCompare(right.label));
 

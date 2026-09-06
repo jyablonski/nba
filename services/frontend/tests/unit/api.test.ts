@@ -330,7 +330,9 @@ describe("api client", () => {
     );
     await expect(api.queryNlp("How many?")).rejects.toBeInstanceOf(ApiClientError);
 
-    const nlpFetch = vi.fn(async () =>
+    // Typed as fetch so mock.calls is a 2-tuple; the assertion below reads
+    // calls[0][1], which does not exist on an untyped zero-arg mock.
+    const nlpFetch = vi.fn<typeof fetch>(async () =>
       jsonResponse({ answer: "ok", data: [{ a: 1 }], sql: "select 1" })
     );
     vi.stubGlobal("fetch", nlpFetch);

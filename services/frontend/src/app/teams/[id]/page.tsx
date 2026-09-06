@@ -148,6 +148,10 @@ function TeamProfile() {
     setLocation("all");
   }
 
+  // TeamRecord.games is optional; a missing count reads as zero so the KPI hides.
+  const playInGames = team.play_in_record?.games ?? 0;
+  const playoffGames = team.playoff_record?.games ?? 0;
+
   return (
     <div className="space-y-8">
       <p className="text-xs text-muted-foreground">
@@ -190,20 +194,20 @@ function TeamProfile() {
             }
             subtext={rsSubline}
           />
-          {team.play_in_record && team.play_in_record.games > 0 ? (
+          {team.play_in_record && playInGames > 0 ? (
             <SeasonKpi
               testId="team-kpi-play-in"
               label="Play-in"
               value={formatRecord(team.play_in_record.wins, team.play_in_record.losses)}
-              subtext={`${team.play_in_record.games} GP`}
+              subtext={`${playInGames} GP`}
             />
           ) : null}
-          {team.playoff_record && team.playoff_record.games > 0 ? (
+          {team.playoff_record && playoffGames > 0 ? (
             <SeasonKpi
               testId="team-kpi-playoffs"
               label="Playoffs"
               value={formatRecord(team.playoff_record.wins, team.playoff_record.losses)}
-              subtext={`${team.playoff_record.games} GP`}
+              subtext={`${playoffGames} GP`}
             />
           ) : null}
           <SeasonKpi
