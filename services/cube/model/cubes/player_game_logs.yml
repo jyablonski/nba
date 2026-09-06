@@ -1,0 +1,158 @@
+# services/cube/model/cubes/player_game_logs.yml
+cubes:
+  - name: player_game_logs
+    sql_table: gold.fct_player_game_logs
+
+    joins:
+      - name: players
+        sql: "{CUBE}.player_id = {players}.player_id"
+        relationship: many_to_one
+
+    dimensions:
+      - name: id
+        sql: "CAST(player_id AS VARCHAR) || '-' || game_id"
+        type: string
+        primary_key: true
+
+      - name: player_id
+        sql: player_id
+        type: number
+
+      - name: game_id
+        sql: game_id
+        type: string
+
+      - name: player_name
+        sql: player_name
+        type: string
+
+      - name: team_id
+        sql: team_id
+        type: number
+
+      - name: team_abbreviation
+        sql: team_abbreviation
+        type: string
+
+      - name: game_date
+        sql: game_date
+        type: time
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: matchup
+        sql: matchup
+        type: string
+
+      - name: opponent
+        sql: opponent_abbreviation
+        type: string
+
+      - name: location
+        sql: location
+        type: string
+
+      - name: result
+        sql: result
+        type: string
+
+      - name: minutes
+        sql: minutes
+        type: number
+
+      - name: points
+        sql: points
+        type: number
+
+      - name: rebounds
+        sql: rebounds
+        type: number
+
+      - name: assists
+        sql: assists
+        type: number
+
+      - name: steals
+        sql: steals
+        type: number
+
+      - name: blocks
+        sql: blocks
+        type: number
+
+      - name: turnovers
+        sql: turnovers
+        type: number
+
+      - name: plus_minus
+        sql: plus_minus
+        type: number
+
+      - name: is_back_to_back
+        sql: is_back_to_back
+        type: boolean
+
+    measures:
+      - name: games_played
+        sql: game_id
+        type: count_distinct
+
+      - name: avg_points
+        sql: points
+        type: avg
+
+      - name: avg_rebounds
+        sql: rebounds
+        type: avg
+
+      - name: avg_assists
+        sql: assists
+        type: avg
+
+      - name: back_to_back_games
+        sql: game_id
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.is_back_to_back = true"
+
+      - name: games_played_in_b2b
+        sql: game_id
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.is_back_to_back = true AND COALESCE({CUBE}.minutes, 0) > 0"
+
+      - name: games_sat_in_b2b
+        sql: game_id
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.is_back_to_back = true AND COALESCE({CUBE}.minutes, 0) = 0"
+
+      - name: avg_points_b2b
+        sql: points
+        type: avg
+        filters:
+          - sql: "{CUBE}.is_back_to_back = true"
+
+      - name: avg_points_non_b2b
+        sql: points
+        type: avg
+        filters:
+          - sql: "{CUBE}.is_back_to_back = false"
+
+      - name: teams_played
+        sql: team_id
+        type: count_distinct
+
+      - name: wins
+        sql: game_id
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.result = 'W'"
+
+      - name: losses
+        sql: game_id
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.result = 'L'"

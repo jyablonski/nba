@@ -1,0 +1,35 @@
+version: 2
+
+models:
+  - name: fct_game_predictions
+    description: >
+      Thin gold copy of pregame home win probabilities. Unique on
+      (game_id, as_of, model_version). Pregame only; not live WP.
+    columns:
+      - name: game_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_games_schedule')
+                field: game_id
+      - name: model_wp
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+                strictly: true
+      - name: market_wp
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+                strictly: true
+                row_condition: "market_wp is not null"
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["game_id", "as_of", "model_version"]

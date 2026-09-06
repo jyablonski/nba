@@ -1,0 +1,42 @@
+cubes:
+  - name: reddit_comments
+    sql_table: gold.fct_reddit_comments
+    description: PRAW comment ingest. Associated to reddit_posts via post_reddit_id. Queryable via Cube / MCP; no Courtline page.
+
+    dimensions:
+      - name: reddit_id
+        sql: reddit_id
+        type: string
+        primary_key: true
+
+      - name: post_reddit_id
+        sql: post_reddit_id
+        type: string
+
+      - name: parent_id
+        sql: parent_id
+        type: string
+
+      - name: author
+        sql: author
+        type: string
+
+      - name: body
+        sql: body
+        type: string
+
+      - name: score
+        sql: score
+        type: number
+
+      - name: created_utc
+        sql: created_utc
+        type: time
+
+      - name: permalink
+        sql: permalink
+        type: string
+
+    measures:
+      - name: count
+        type: count

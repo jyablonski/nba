@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: fct_play_by_play
+    description: >
+      Thin gold pass-through of PlayByPlayV3 actions. Grain is game_id x
+      action_number x action_id. Season-scoped ingest; do not assume a full-history backfill.
+    columns:
+      - name: game_id
+        data_tests:
+          - not_null
+      - name: season
+        data_tests:
+          - not_null
+      - name: action_number
+        data_tests:
+          - not_null
+      - name: action_id
+        data_tests:
+          - not_null
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["game_id", "action_number", "action_id"]

@@ -1,0 +1,47 @@
+# Ephemeral Postgres + Alembic + dbt e2e.
+# Host-native arch only (same as docker-compose.yml). No platform pin.
+services:
+  postgres:
+    image: postgres:16.15-alpine
+    environment:
+      POSTGRES_DB: nba
+      POSTGRES_USER: nba_user
+      POSTGRES_PASSWORD: nba_pass
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nba_user -d nba"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    image: nba-migrate
+    build:
+      context: ./services/migrate
+      target: runtime
+    environment:
+      POSTGRES_HOST: postgres
+      DATABASE_URL: postgresql://nba_user:nba_pass@postgres:5432/nba
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+
+  dbt:
+    image: nba-dbt
+    build:
+      context: ./services/dbt
+      target: development
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: nba
+      POSTGRES_USER: nba_user
+      POSTGRES_PASSWORD: nba_pass
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully

@@ -1,0 +1,107 @@
+-- Seeded gold mart rows for API/MCP integration tests (no dbt required).
+
+TRUNCATE gold.fct_standings, gold.fct_player_season_stats, gold.fct_player_game_logs,
+         gold.fct_team_game_results, gold.fct_games_schedule, gold.dim_players, gold.dim_teams
+         RESTART IDENTITY CASCADE;
+
+INSERT INTO gold.dim_teams (
+    team_id, abbreviation, team_name, city, nickname, conference, division,
+    arena_name, arena_latitude, arena_longitude,
+    primary_color, alternate_color,
+    current_contract_season, current_season_payroll, current_remaining_guaranteed
+) VALUES
+    (1610612744, 'GSW', 'Golden State Warriors', 'San Francisco', 'Warriors', 'West', 'Pacific',
+     'Chase Center', 37.76806, -122.38750, '#1D428A', '#FFC72C', '2024-25', 51000000, NULL),
+    (1610612746, 'LAC', 'LA Clippers', 'Los Angeles', 'Clippers', 'West', 'Pacific',
+     'Intuit Dome', 33.94510, -118.34310, '#C8102E', '#1D428A', NULL, NULL, NULL),
+    (1610612741, 'CHI', 'Chicago Bulls', 'Chicago', 'Bulls', 'East', 'Central',
+     'United Center', 41.88056, -87.67417, '#CE1141', '#000000', NULL, NULL, NULL);
+
+INSERT INTO gold.dim_players (
+    player_id, first_name, last_name, full_name, is_active, position, height, weight,
+    birth_date, team_id, from_year, to_year, career_games_played, first_game_date,
+    last_game_date, first_season, last_season, seasons_played, career_ppg, career_rpg, career_apg,
+    current_contract_season, current_contract_team_id, current_season_salary,
+    current_remaining_guaranteed
+) VALUES
+    (202695, 'Kawhi', 'Leonard', 'Kawhi Leonard', TRUE, 'F', '6-7', 225,
+     '1991-06-29', 1610612746, 2011, 2025, 3, '2024-10-22', '2024-10-25', '2024-25', '2024-25', 1, 27.3, 8.0, 5.0,
+     '2024-25', 1610612746, 45000000, NULL),
+    (201939, 'Stephen', 'Curry', 'Stephen Curry', TRUE, 'G', '6-2', 185,
+     '1988-03-14', 1610612744, 2009, 2025, 2, '2024-10-22', '2024-10-25', '2024-25', '2024-25', 1, 30.5, 4.5, 7.5,
+     '2024-25', 1610612744, 50000000, 101000000);
+
+INSERT INTO gold.fct_team_game_results (
+    game_id, season, season_type, game_date, arena, arena_city, arena_state, score_margin,
+    home_team_id, home_team_abbreviation, home_team_name, home_score,
+    away_team_id, away_team_abbreviation, away_team_name, away_score,
+    winning_team_id, winner_location
+) VALUES
+    ('0022400001', '2024-25', 'Regular Season', '2024-10-22',
+     'Chase Center', 'San Francisco', 'CA', 10,
+     1610612744, 'GSW', 'Golden State Warriors', 120,
+     1610612746, 'LAC', 'LA Clippers', 110,
+     1610612744, 'home'),
+    ('0022400002', '2024-25', 'Regular Season', '2024-10-23',
+     'United Center', 'Chicago', 'IL', 7,
+     1610612741, 'CHI', 'Chicago Bulls', 105,
+     1610612746, 'LAC', 'LA Clippers', 112,
+     1610612746, 'away'),
+    ('0022400003', '2024-25', 'Regular Season', '2024-10-25',
+     'Crypto.com Arena', 'Los Angeles', 'CA', 3,
+     1610612746, 'LAC', 'LA Clippers', 118,
+     1610612744, 'GSW', 'Golden State Warriors', 115,
+     1610612746, 'home');
+
+INSERT INTO gold.fct_player_game_logs (
+    player_id, game_id, team_id, game_date, season, matchup, location, opponent_abbreviation,
+    result, minutes, points, rebounds, assists, steals, blocks, turnovers,
+    field_goals_made, field_goals_attempted, field_goal_pct,
+    three_pointers_made, three_pointers_attempted, three_point_pct,
+    free_throws_made, free_throws_attempted, free_throw_pct, plus_minus,
+    is_back_to_back, season_game_number, career_game_number,
+    player_name, team_abbreviation, team_name
+) VALUES
+    (202695, '0022400001', 1610612746, '2024-10-22', '2024-25', 'LAC @ GSW', 'away', 'GSW',
+     'L', 36.0, 28, 8, 5, 2, 1, 2, 10, 20, 0.500, 2, 5, 0.400, 6, 6, 1.000, -8,
+     FALSE, 1, 1, 'Kawhi Leonard', 'LAC', 'LA Clippers'),
+    (202695, '0022400002', 1610612746, '2024-10-23', '2024-25', 'LAC @ CHI', 'away', 'CHI',
+     'W', 34.0, 24, 7, 4, 1, 1, 1, 9, 18, 0.500, 1, 4, 0.250, 5, 5, 1.000, 6,
+     TRUE, 2, 2, 'Kawhi Leonard', 'LAC', 'LA Clippers'),
+    (202695, '0022400003', 1610612746, '2024-10-25', '2024-25', 'LAC vs. GSW', 'home', 'GSW',
+     'W', 38.0, 30, 9, 6, 2, 0, 3, 11, 22, 0.500, 3, 7, 0.429, 5, 6, 0.833, 4,
+     FALSE, 3, 3, 'Kawhi Leonard', 'LAC', 'LA Clippers'),
+    (201939, '0022400001', 1610612744, '2024-10-22', '2024-25', 'GSW vs. LAC', 'home', 'LAC',
+     'W', 35.0, 32, 4, 8, 1, 0, 3, 11, 23, 0.478, 6, 12, 0.500, 4, 4, 1.000, 10,
+     FALSE, 1, 1, 'Stephen Curry', 'GSW', 'Golden State Warriors'),
+    (201939, '0022400003', 1610612744, '2024-10-25', '2024-25', 'GSW @ LAC', 'away', 'LAC',
+     'L', 37.0, 29, 5, 7, 2, 0, 2, 10, 24, 0.417, 5, 13, 0.385, 4, 4, 1.000, -3,
+     FALSE, 2, 2, 'Stephen Curry', 'GSW', 'Golden State Warriors');
+
+INSERT INTO gold.fct_player_season_stats (
+    player_id, season, games_played, first_game_date, last_game_date, ppg, rpg, apg
+) VALUES
+    (202695, '2024-25', 3, '2024-10-22', '2024-10-25', 27.3, 8.0, 5.0),
+    (201939, '2024-25', 2, '2024-10-22', '2024-10-25', 30.5, 4.5, 7.5);
+
+INSERT INTO gold.fct_games_schedule (
+    game_id, season, season_type, game_date, status, arena, arena_city, arena_state,
+    home_team_id, home_team_abbreviation, home_team_name, home_score,
+    away_team_id, away_team_abbreviation, away_team_name, away_score
+) VALUES
+    ('0022400999', '2024-25', 'Regular Season', CURRENT_DATE + 14, 'Scheduled',
+     'Chase Center', 'San Francisco', 'CA',
+     1610612744, 'GSW', 'Golden State Warriors', NULL,
+     1610612746, 'LAC', 'LA Clippers', NULL);
+
+INSERT INTO gold.fct_standings (
+    team_id, abbreviation, team_name, season, season_type, as_of_date,
+    conference, division, conference_rank, division_rank,
+    wins, losses, win_pct, games_back, conf_games_back, streak, last_10
+) VALUES
+    (1610612744, 'GSW', 'Golden State Warriors', '2024-25', 'Regular Season', '2025-04-13',
+     'West', 'Pacific', 1, 1, 50, 32, 0.610, 0, 0, 'W5', '8-2'),
+    (1610612746, 'LAC', 'LA Clippers', '2024-25', 'Regular Season', '2025-04-13',
+     'West', 'Pacific', 2, 2, 48, 33, 0.593, 1.5, 1.5, 'L1', '6-4'),
+    (1610612741, 'CHI', 'Chicago Bulls', '2024-25', 'Regular Season', '2025-04-13',
+     'East', 'Central', 5, 2, 45, 37, 0.549, 4, 4, 'W2', '5-5');

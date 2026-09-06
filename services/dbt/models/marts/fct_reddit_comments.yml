@@ -1,0 +1,23 @@
+version: 2
+
+models:
+  - name: fct_reddit_comments
+    description: >
+      Thin gold copy of PRAW comments. Unique on reddit_id.
+      post_reddit_id associates the comment to fct_reddit_posts.
+      Queryable via Cube / MCP; no Courtline page.
+    columns:
+      - name: reddit_id
+        data_tests:
+          - unique
+          - not_null
+      - name: post_reddit_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_reddit_posts')
+                field: reddit_id
+      - name: created_utc
+        data_tests:
+          - not_null

@@ -1,0 +1,187 @@
+-- Sample source data for dbt e2e. Assumes Alembic source tables already exist.
+
+TRUNCATE source.reddit_comments, source.reddit_posts, source.game_predictions,
+    source.game_odds, source.player_injuries, source.standings,
+    source.player_game_logs, source.play_by_play, source.games,
+    source.player_contracts, source.team_payroll, source.players, source.teams
+    RESTART IDENTITY CASCADE;
+
+INSERT INTO source.teams (
+    team_id, abbreviation, full_name, city, nickname, conference, division, scraped_at
+) VALUES
+    (1610612744, 'GSW', 'Golden State Warriors', 'San Francisco', 'Warriors', 'West', 'Pacific', NOW()),
+    (1610612746, 'LAC', 'LA Clippers', 'Los Angeles', 'Clippers', 'West', 'Pacific', NOW()),
+    (1610612741, 'CHI', 'Chicago Bulls', 'Chicago', 'Bulls', 'East', 'Central', NOW());
+
+INSERT INTO source.players (
+    player_id, first_name, last_name, full_name, is_active, position, team_id,
+    height, weight, birth_date, from_year, to_year, scraped_at
+) VALUES
+    (202695, 'Kawhi', 'Leonard', 'Kawhi Leonard', TRUE, 'F', 1610612746,
+     '6-7', 225, '1991-06-29', 2011, 2025, NOW()),
+    (201939, 'Stephen', 'Curry', 'Stephen Curry', TRUE, 'G', 1610612744,
+     '6-2', 185, '1988-03-14', 2009, 2025, NOW());
+
+INSERT INTO source.games (
+    game_id, season, season_type, game_date, home_team_id, away_team_id,
+    home_score, away_score, arena, city, state, status, scraped_at
+) VALUES
+    ('0022400001', '2024-25', 'Regular Season', '2024-10-22',
+     1610612744, 1610612746, 120, 110, 'Chase Center', 'San Francisco', 'CA', 'Final', NOW()),
+    ('0022400002', '2024-25', 'Regular Season', '2024-10-23',
+     1610612741, 1610612746, 105, 112, 'United Center', 'Chicago', 'IL', 'Final', NOW()),
+    ('0022400003', '2024-25', 'Regular Season', '2024-10-25',
+     1610612746, 1610612744, 118, 115, 'Crypto.com Arena', 'Los Angeles', 'CA', 'Final', NOW()),
+    ('0022400999', '2024-25', 'Regular Season', '2024-10-27',
+     1610612744, 1610612741, NULL, NULL, 'Chase Center', 'San Francisco', 'CA', 'Scheduled', NOW());
+
+INSERT INTO source.player_game_logs (
+    player_id, game_id, team_id, game_date, season, matchup, wl, min,
+    pts, reb, ast, stl, blk, tov, fgm, fga, fg_pct, fg3m, fg3a, fg3_pct,
+    ftm, fta, ft_pct, plus_minus, scraped_at
+) VALUES
+    -- Kawhi: back-to-back on 10/22 and 10/23
+    (202695, '0022400001', 1610612746, '2024-10-22', '2024-25', 'LAC @ GSW', 'L', 36.0,
+     28, 8, 5, 2, 1, 2, 10, 20, 0.500, 2, 5, 0.400, 6, 6, 1.000, -8, NOW()),
+    (202695, '0022400002', 1610612746, '2024-10-23', '2024-25', 'LAC @ CHI', 'W', 34.0,
+     24, 7, 4, 1, 1, 1, 9, 18, 0.500, 1, 4, 0.250, 5, 5, 1.000, 6, NOW()),
+    (202695, '0022400003', 1610612746, '2024-10-25', '2024-25', 'LAC vs. GSW', 'W', 38.0,
+     30, 9, 6, 2, 0, 3, 11, 22, 0.500, 3, 7, 0.429, 5, 6, 0.833, 4, NOW()),
+    -- Curry
+    (201939, '0022400001', 1610612744, '2024-10-22', '2024-25', 'GSW vs. LAC', 'W', 35.0,
+     32, 4, 8, 1, 0, 3, 11, 23, 0.478, 6, 12, 0.500, 4, 4, 1.000, 10, NOW()),
+    (201939, '0022400003', 1610612744, '2024-10-25', '2024-25', 'GSW @ LAC', 'L', 37.0,
+     29, 5, 7, 2, 0, 2, 10, 24, 0.417, 5, 13, 0.385, 4, 4, 1.000, -3, NOW());
+
+INSERT INTO source.player_contracts (
+    bref_player_slug, player_name, player_name_normalized,
+    bref_team_abbreviation, nba_team_abbreviation, season, salary,
+    is_fully_guaranteed, remaining_guaranteed, player_age, source_url, scraped_at
+) VALUES
+    ('curryst01', 'Stephen Curry', 'stephen curry',
+     'GSW', 'GSW', '2024-25', 50000000, TRUE, 101000000, 36,
+     'https://www.basketball-reference.com/contracts/GSW.html', NOW()),
+    ('curryst01', 'Stephen Curry', 'stephen curry',
+     'GSW', 'GSW', '2025-26', 51000000, TRUE, 101000000, 36,
+     'https://www.basketball-reference.com/contracts/GSW.html', NOW()),
+    ('leonaka01', 'Kawhi Leonard', 'kawhi leonard',
+     'LAC', 'LAC', '2024-25', 45000000, TRUE, 45000000, 33,
+     'https://www.basketball-reference.com/contracts/LAC.html', NOW()),
+    ('ghostx01', 'Missing Person', 'missing person',
+     'GSW', 'GSW', '2024-25', 1000000, TRUE, 1000000, 25,
+     'https://www.basketball-reference.com/contracts/GSW.html', NOW());
+
+INSERT INTO source.standings (
+    team_id, season, season_type, as_of_date, conference, division,
+    conference_rank, division_rank, wins, losses, win_pct, games_back,
+    conf_games_back, streak, last_10, scraped_at
+) VALUES
+    (1610612744, '2024-25', 'Regular Season', '2024-10-25', 'West', 'Pacific',
+     1, 1, 3, 0, 1.000, 0.0, 0.0, 'W 3', '3-0', NOW()),
+    (1610612746, '2024-25', 'Regular Season', '2024-10-25', 'West', 'Pacific',
+     2, 2, 2, 1, 0.667, 1.5, 1.5, 'W 1', '2-1', NOW()),
+    (1610612741, '2024-25', 'Regular Season', '2024-10-25', 'East', 'Central',
+     5, 3, 1, 2, 0.333, 4.0, 4.0, 'L 2', '1-2', NOW());
+
+INSERT INTO source.team_payroll (
+    bref_team_abbreviation, nba_team_abbreviation, season, total_salary,
+    remaining_guaranteed, source_url, scraped_at
+) VALUES
+    ('GSW', 'GSW', '2024-25', 51000000, 102000000,
+     'https://www.basketball-reference.com/contracts/GSW.html', NOW()),
+    ('GSW', 'GSW', '2025-26', 51000000, 102000000,
+     'https://www.basketball-reference.com/contracts/GSW.html', NOW()),
+    ('LAC', 'LAC', '2024-25', 45000000, 45000000,
+     'https://www.basketball-reference.com/contracts/LAC.html', NOW());
+
+INSERT INTO source.player_injuries (
+    player_name, player_name_normalized, bref_player_slug,
+    bref_team_abbreviation, nba_team_abbreviation, update_date, description,
+    source_url, scraped_at
+) VALUES
+    ('Stephen Curry', 'stephen curry', 'curryst01',
+     'GSW', 'GSW', '2024-10-26', 'Out (Ankle) - Left ankle sprain',
+     'https://www.basketball-reference.com/friv/injuries.fcgi', NOW()),
+    ('Missing Person', 'missing person', 'ghostx01',
+     'GSW', 'GSW', '2024-10-26', 'Day To Day (Rest) - Load management',
+     'https://www.basketball-reference.com/friv/injuries.fcgi', NOW());
+
+INSERT INTO source.game_odds (
+    odds_event_id, commence_time, home_team_name, away_team_name, game_id,
+    bookmaker, market, home_price, away_price, home_implied_wp, away_implied_wp,
+    home_market_wp, away_market_wp, spread_home, scraped_at
+) VALUES
+    ('evt-gsw-chi', '2024-10-27 19:00:00', 'Golden State Warriors', 'Chicago Bulls',
+     '0022400999', 'draftkings', 'h2h', -150, 130, 0.6, 0.4348, 0.58, 0.42, NULL, NOW());
+
+INSERT INTO source.play_by_play (
+    game_id, season, action_number, action_id, period, clock,
+    score_home, score_away, team_id, player_id, action_type, sub_type,
+    description, extras, scraped_at
+) VALUES
+    ('0022400001', '2024-25', 1, 1, 1, 'PT12M00.00S',
+     NULL, NULL, NULL, NULL, 'period', 'start',
+     'Start of 1st Period', NULL, NOW()),
+    ('0022400001', '2024-25', 2, 2, 1, 'PT11M30.00S',
+     2, 0, 1610612744, 201939, 'Made Shot', '2pt',
+     'Curry 15'' Jump Shot (2 PTS)', NULL, NOW()),
+    ('0022400001', '2024-25', 3, 3, 1, 'PT11M00.00S',
+     2, 2, 1610612746, 202695, 'Made Shot', '2pt',
+     'Leonard 12'' Jump Shot (2 PTS)', NULL, NOW()),
+    ('0022400001', '2024-25', 4, 4, 1, 'PT10M30.00S',
+     2, 5, 1610612746, 202695, 'Made Shot', '3pt',
+     'Leonard 26'' 3PT (5 PTS)', NULL, NOW()),
+    ('0022400001', '2024-25', 5, 5, 1, 'PT10M00.00S',
+     2, 5, 1610612744, 201939, 'Missed Shot', '2pt',
+     'MISS Curry 18'' Jump Shot', NULL, NOW()),
+    ('0022400001', '2024-25', 6, 6, 1, 'PT9M00.00S',
+     5, 5, 1610612744, 201939, 'Made Shot', '3pt',
+     'Curry 25'' 3PT (5 PTS)', NULL, NOW()),
+    ('0022400001', '2024-25', 7, 7, 1, 'PT8M00.00S',
+     8, 5, 1610612744, 201939, 'Made Shot', '3pt',
+     'Curry 27'' 3PT (8 PTS)', NULL, NOW()),
+    ('0022400001', '2024-25', 8, 8, 1, 'PT7M00.00S',
+     11, 5, 1610612744, 201939, 'Made Shot', '3pt',
+     'Curry 26'' 3PT (11 PTS)', NULL, NOW()),
+    ('0022400001', '2024-25', 9, 9, 1, 'PT6M00.00S',
+     13, 5, 1610612744, 201939, 'Made Shot', '2pt',
+     'Curry 8'' Driving Layup (13 PTS)', NULL, NOW()),
+    ('0022400001', '2024-25', 10, 10, 4, 'PT0M00.00S',
+     16, 8, 1610612744, 201939, 'Made Shot', '3pt',
+     'Curry 24'' 3PT (16 PTS)', NULL, NOW());
+
+INSERT INTO source.game_predictions (
+    game_id, as_of, model_name, model_version, home_team_id, away_team_id,
+    model_wp, market_wp, scraped_at
+) VALUES
+    ('0022400999', '2024-10-26 12:00:00', 'elo', 'elo-v0',
+     1610612744, 1610612741, 0.62, 0.58, NOW());
+
+INSERT INTO source.reddit_posts (
+    reddit_id, subreddit, title, author, score, num_comments, created_utc,
+    permalink, url, selftext, flair, is_self, scraped_at
+) VALUES
+    (
+        'abc123', 'nba', 'Game Thread: Clippers at Warriors', 'nba_mod',
+        120, 2, '2024-10-22 02:00:00',
+        'https://www.reddit.com/r/nba/comments/abc123/game_thread/',
+        'https://www.reddit.com/r/nba/comments/abc123/game_thread/',
+        'Tip-off discussion', 'Game Thread', TRUE, NOW()
+    );
+
+INSERT INTO source.reddit_comments (
+    reddit_id, post_reddit_id, parent_id, author, body, score, created_utc,
+    permalink, scraped_at
+) VALUES
+    (
+        'cmt001', 'abc123', 't3_abc123', 'hoopsfan',
+        'Kawhi looks locked in tonight.', 42, '2024-10-22 02:15:00',
+        'https://www.reddit.com/r/nba/comments/abc123/game_thread/cmt001/',
+        NOW()
+    ),
+    (
+        'cmt002', 'abc123', 't1_cmt001', 'splash',
+        'Curry answered immediately.', 18, '2024-10-22 02:16:00',
+        'https://www.reddit.com/r/nba/comments/abc123/game_thread/cmt002/',
+        NOW()
+    );

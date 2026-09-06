@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: fct_team_payroll
+    description: >
+      Team-season payroll totals from Basketball-Reference, joined to NBA
+      team_id via abbreviation (BRK/CHO/PHO mapped at ingest). This is a
+      reported salary sum compared to official CBA tax/apron seeds, not a
+      luxury-tax bill (no repeater tax).
+    columns:
+      - name: team_id
+        data_tests:
+          - not_null
+      - name: season
+        data_tests:
+          - not_null
+      - name: total_salary
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 5000000000
+                row_condition: "total_salary is not null"
+      - name: salary_cap
+        description: Official CBA salary cap for payroll.season from seed nba_cba_caps.
+      - name: luxury_tax
+        description: Official CBA tax level for payroll.season from seed nba_cba_caps.
+      - name: first_apron
+        description: Official CBA first apron for payroll.season from seed nba_cba_caps.
+      - name: second_apron
+        description: Official CBA second apron for payroll.season from seed nba_cba_caps.
+      - name: over_luxury_tax
+        description: True when reported BRef total_salary is above the season tax level.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+      - name: over_first_apron
+        description: True when reported BRef total_salary is above the season first apron.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+      - name: over_second_apron
+        description: True when reported BRef total_salary is above the season second apron.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["team_id", "season"]

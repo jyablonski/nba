@@ -1,0 +1,66 @@
+cubes:
+  - name: player_contracts
+    sql_table: gold.fct_player_contracts
+    description: Basketball-Reference remaining-year player-season salary (player_id null when unmatched)
+
+    dimensions:
+      - name: id
+        sql: "bref_player_slug || '-' || COALESCE(bref_team_abbreviation, '') || '-' || season"
+        type: string
+        primary_key: true
+
+      - name: bref_player_slug
+        sql: bref_player_slug
+        type: string
+
+      - name: player_id
+        sql: player_id
+        type: number
+
+      - name: player_name
+        sql: player_name
+        type: string
+
+      - name: match_method
+        sql: match_method
+        type: string
+
+      - name: team_id
+        sql: team_id
+        type: number
+
+      - name: bref_team_abbreviation
+        sql: bref_team_abbreviation
+        type: string
+
+      - name: nba_team_abbreviation
+        sql: nba_team_abbreviation
+        type: string
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: salary
+        sql: salary
+        type: number
+
+      - name: is_fully_guaranteed
+        sql: is_fully_guaranteed
+        type: boolean
+
+      - name: remaining_guaranteed
+        sql: remaining_guaranteed
+        type: number
+
+      - name: player_age
+        sql: player_age
+        type: number
+
+    measures:
+      - name: count
+        type: count
+
+      - name: total_salary
+        sql: salary
+        type: sum

@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: fct_games_schedule
+    description: >
+      Thin games-with-status mart (Final and upcoming). Do not use this as
+      a completed-game fact; fct_team_game_results stays Final-only.
+    columns:
+      - name: game_id
+        data_tests:
+          - unique
+          - not_null
+      - name: game_date
+        data_tests:
+          - not_null
+      - name: season
+        data_tests:
+          - not_null
+      - name: status
+        data_tests:
+          - not_null
+      - name: home_team_id
+        data_tests:
+          - not_null
+      - name: away_team_id
+        data_tests:
+          - not_null

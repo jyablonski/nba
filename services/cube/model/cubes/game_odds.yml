@@ -1,0 +1,70 @@
+cubes:
+  - name: game_odds
+    sql_table: gold.fct_game_odds
+    description: Current The Odds API upcoming-slate snapshot (h2h / spreads). Market snapshot, not a book and not a historical ledger.
+
+    dimensions:
+      - name: id
+        sql: "odds_event_id || '-' || bookmaker || '-' || market"
+        type: string
+        primary_key: true
+
+      - name: odds_event_id
+        sql: odds_event_id
+        type: string
+
+      - name: commence_time
+        sql: commence_time
+        type: time
+
+      - name: home_team_name
+        sql: home_team_name
+        type: string
+
+      - name: away_team_name
+        sql: away_team_name
+        type: string
+
+      - name: game_id
+        sql: game_id
+        type: string
+
+      - name: bookmaker
+        sql: bookmaker
+        type: string
+
+      - name: market
+        sql: market
+        type: string
+
+      - name: home_price
+        sql: home_price
+        type: number
+
+      - name: away_price
+        sql: away_price
+        type: number
+
+      - name: home_implied_wp
+        sql: home_implied_wp
+        type: number
+
+      - name: away_implied_wp
+        sql: away_implied_wp
+        type: number
+
+      - name: home_market_wp
+        sql: home_market_wp
+        type: number
+
+      - name: away_market_wp
+        sql: away_market_wp
+        type: number
+
+      - name: spread_home
+        sql: spread_home
+        type: number
+
+    measures:
+      - name: count
+        type: count

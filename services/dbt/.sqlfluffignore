@@ -1,0 +1,9 @@
+# Installed dbt packages
+dbt_packages/
+logs/
+target/
+# Package macros / SQL we do not own
+macros/dbt_*/
+# Compiled / ephemeral artifacts
+*.pyc
+__pycache__/

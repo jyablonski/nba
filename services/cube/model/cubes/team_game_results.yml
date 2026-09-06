@@ -1,0 +1,43 @@
+# services/cube/model/cubes/team_game_results.yml
+cubes:
+  - name: team_game_results
+    sql_table: gold.fct_team_game_results
+
+    dimensions:
+      - name: game_id
+        sql: game_id
+        type: string
+        primary_key: true
+
+      - name: game_date
+        sql: game_date
+        type: time
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: home_team
+        sql: home_team_abbreviation
+        type: string
+
+      - name: away_team
+        sql: away_team_abbreviation
+        type: string
+
+      - name: arena_city
+        sql: arena_city
+        type: string
+
+      - name: winning_team_id
+        sql: winning_team_id
+        type: number
+
+    measures:
+      - name: total_games
+        sql: game_id
+        type: count_distinct
+
+      - name: avg_score_margin
+        sql: score_margin
+        type: avg

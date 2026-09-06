@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: stg_game_predictions
+    description: >
+      Pregame home win probabilities written by services/ml. Grain is
+      game_id x as_of x model_version. market_wp is null when odds did not
+      match that game.
+    columns:
+      - name: game_id
+        data_tests:
+          - not_null
+      - name: as_of
+        data_tests:
+          - not_null
+      - name: model_version
+        data_tests:
+          - not_null
+      - name: model_wp
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+                strictly: true
+      - name: market_wp
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+                strictly: true
+                row_condition: "market_wp is not null"
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["game_id", "as_of", "model_version"]

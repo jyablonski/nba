@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+*.log
+.DS_Store
+.env
+.env.local
+.env*.local
+tests
+playwright.config.ts
+vitest.config.ts
+coverage
+playwright-report
+test-results

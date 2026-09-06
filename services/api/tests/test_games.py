@@ -1,0 +1,296 @@
+from datetime import date
+
+import pytest
+
+
+@pytest.mark.unit
+def test_list_games(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(scalar=1),
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "game_id": "0022400001",
+                        "season": "2024-25",
+                        "season_type": "Regular Season",
+                        "game_date": date(2024, 10, 22),
+                        "arena": "Chase Center",
+                        "arena_city": "San Francisco",
+                        "arena_state": "CA",
+                        "home_team_id": 1610612744,
+                        "home_team_abbreviation": "GSW",
+                        "home_team_name": "Golden State Warriors",
+                        "home_score": 120,
+                        "away_team_id": 1610612747,
+                        "away_team_abbreviation": "LAL",
+                        "away_team_name": "Los Angeles Lakers",
+                        "away_score": 110,
+                        "winning_team_id": 1610612744,
+                        "winner_location": "home",
+                        "score_margin": 10,
+                    }
+                )
+            ]
+        ),
+    ]
+    response = client.get("/api/v1/games", params={"season": "2024-25", "limit": 10})
+    assert response.status_code == 200
+    assert response.json()["data"][0]["game_id"] == "0022400001"
+    assert response.json()["data"][0]["arena_city"] == "San Francisco"
+
+
+@pytest.mark.unit
+def test_list_games_rejects_invalid_season_type(client) -> None:
+    response = client.get("/api/v1/games", params={"season_type": "Summer League"})
+    assert response.status_code == 400
+
+
+@pytest.mark.unit
+def test_list_games_accepts_regular_season_filter(client, session, query_result) -> None:
+    session.queue = [query_result(scalar=0), query_result([])]
+    response = client.get(
+        "/api/v1/games",
+        params={"season": "2025-26", "season_type": "Regular Season"},
+    )
+    assert response.status_code == 200
+    assert response.json()["data"] == []
+
+
+@pytest.mark.unit
+def test_list_games_sql_fills_arena_from_home_team() -> None:
+    from queries.games import LIST_GAMES
+
+    sql = str(LIST_GAMES)
+    assert "gold.dim_teams" in sql
+    assert "coalesce" in sql.lower()
+    assert "home_teams.city" in sql
+    assert "games.season_type = :season_type" in sql
+
+
+@pytest.mark.unit
+def test_get_game_play_by_play(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(scalar=1),
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "game_id": "0042500405",
+                        "action_number": 12,
+                        "period": 1,
+                        "clock": "PT11M32.00S",
+                        "clock_remaining_seconds": 692,
+                        "elapsed_seconds": 28,
+                        "score_home": 2,
+                        "score_away": 0,
+                        "score_differential": 2,
+                        "home_points": 2,
+                        "away_points": 0,
+                        "points_scored": 2,
+                        "scoring_side": "home",
+                        "team_id": 1610612759,
+                        "player_id": 1,
+                        "action_type": "Made Shot",
+                        "sub_type": "2pt",
+                        "description": "Wembanyama 2PT",
+                    }
+                )
+            ]
+        ),
+    ]
+    response = client.get("/api/v1/games/0042500405/play-by-play")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["meta"]["total"] == 1
+    assert body["data"][0]["score_differential"] == 2
+    assert body["data"][0]["elapsed_seconds"] == 28
+
+
+@pytest.mark.unit
+def test_get_game_play_by_play_empty_when_ingested_game_has_none(
+    client, session, query_result
+) -> None:
+    session.queue = [query_result(scalar=1), query_result([])]
+    response = client.get("/api/v1/games/0022400001/play-by-play")
+    assert response.status_code == 200
+    assert response.json()["data"] == []
+    assert response.json()["meta"]["total"] == 0
+
+
+@pytest.mark.unit
+def test_get_game_play_by_play_404(client, session, query_result) -> None:
+    session.queue = [query_result(scalar=None)]
+    response = client.get("/api/v1/games/missing/play-by-play")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Game not found"
+
+
+@pytest.mark.unit
+def test_get_game_flow(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "game_id": "0042500405",
+                        "season": "2025-26",
+                        "game_date": date(2026, 6, 13),
+                        "home_team_id": 1610612759,
+                        "home_team_abbreviation": "SAS",
+                        "home_team_name": "San Antonio Spurs",
+                        "home_score": 90,
+                        "away_team_id": 1610612752,
+                        "away_team_abbreviation": "NYK",
+                        "away_team_name": "New York Knicks",
+                        "away_score": 94,
+                        "winning_team_id": 1610612752,
+                        "winning_team_abbreviation": "NYK",
+                        "winner_location": "away",
+                        "scoring_play_count": 97,
+                        "max_home_lead": 16,
+                        "max_away_lead": 4,
+                        "max_lead": 16,
+                        "lead_changes": 13,
+                        "ties": 5,
+                        "home_lead_seconds": 2419,
+                        "away_lead_seconds": 173,
+                        "tied_seconds": 288,
+                        "home_lead_pct": 0.84,
+                        "away_lead_pct": 0.06,
+                        "tied_pct": 0.10,
+                        "game_elapsed_seconds": 2880,
+                        "biggest_run_team_abbreviation": "NYK",
+                        "biggest_run_winner_points": 16,
+                        "biggest_run_opponent_points": 2,
+                        "biggest_run_start_seconds": 2300,
+                        "biggest_run_end_seconds": 2800,
+                        "biggest_run_label": "NYK 16-2",
+                    }
+                )
+            ]
+        )
+    ]
+    response = client.get("/api/v1/games/0042500405/flow")
+    assert response.status_code == 200
+    flow = response.json()["data"]
+    assert flow["has_play_by_play"] is True
+    assert flow["biggest_run_label"] == "NYK 16-2"
+    assert flow["away_team_abbreviation"] == "NYK"
+
+
+@pytest.mark.unit
+def test_get_game_flow_empty_pbp(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "game_id": "0022400001",
+                        "season": "2024-25",
+                        "game_date": date(2024, 10, 22),
+                        "home_team_id": 1,
+                        "away_team_id": 2,
+                        "winning_team_id": 1,
+                        "winner_location": "home",
+                        "scoring_play_count": None,
+                        "biggest_run_label": None,
+                    }
+                )
+            ]
+        )
+    ]
+    response = client.get("/api/v1/games/0022400001/flow")
+    assert response.status_code == 200
+    flow = response.json()["data"]
+    assert flow["has_play_by_play"] is False
+    assert flow["scoring_play_count"] is None
+
+
+@pytest.mark.unit
+def test_get_game_flow_404(client, session, query_result) -> None:
+    session.queue = [query_result([])]
+    response = client.get("/api/v1/games/missing/flow")
+    assert response.status_code == 404
+
+
+@pytest.mark.unit
+def test_flow_and_pbp_sql_use_gold_marts() -> None:
+    from queries.games import GET_GAME_FLOW, LIST_PLAY_BY_PLAY
+
+    assert "gold.fct_game_flow" in str(GET_GAME_FLOW)
+    assert "gold.fct_play_by_play_scoring" in str(LIST_PLAY_BY_PLAY)
+    assert "gold.fct_team_game_results" in str(GET_GAME_FLOW)
+    assert "gold.dim_teams" in str(GET_GAME_FLOW)
+    assert "primary_color" in str(GET_GAME_FLOW)
+
+
+@pytest.mark.unit
+def test_list_schedule(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(scalar=1),
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "game_id": "0022600100",
+                        "season": "2026-27",
+                        "season_type": "Regular Season",
+                        "game_date": date(2026, 10, 22),
+                        "status": "Scheduled",
+                        "arena": "Chase Center",
+                        "arena_city": "San Francisco",
+                        "arena_state": "CA",
+                        "home_team_id": 1610612744,
+                        "home_team_abbreviation": "GSW",
+                        "home_team_name": "Golden State Warriors",
+                        "away_team_id": 1610612747,
+                        "away_team_abbreviation": "LAL",
+                        "away_team_name": "Los Angeles Lakers",
+                    }
+                )
+            ]
+        ),
+    ]
+    response = client.get(
+        "/api/v1/schedule",
+        params={"season": "2026-27", "status": "Scheduled", "from_date": "2026-09-05"},
+    )
+    assert response.status_code == 200
+    row = response.json()["data"][0]
+    assert row["game_id"] == "0022600100"
+    assert row["status"] == "Scheduled"
+    assert row["away_team_abbreviation"] == "LAL"
+    assert row["home_team_abbreviation"] == "GSW"
+    assert "score_margin" not in row
+    assert "home_score" not in row
+
+
+@pytest.mark.unit
+def test_list_schedule_empty(client, session, query_result) -> None:
+    session.queue = [query_result(scalar=0), query_result([])]
+    response = client.get("/api/v1/schedule", params={"season": "2024-25"})
+    assert response.status_code == 200
+    assert response.json()["data"] == []
+    assert response.json()["meta"]["total"] == 0
+
+
+@pytest.mark.unit
+def test_list_schedule_sql_filters_upcoming() -> None:
+    from queries.games import LIST_SCHEDULE, LIST_SCHEDULE_COUNT, LIST_SEASONS
+
+    sql = str(LIST_SCHEDULE)
+    assert "gold.fct_games_schedule" in sql
+    assert "games.game_date >= :from_date" in sql
+    assert "gold.fct_team_game_results" not in sql
+    assert "gold.fct_games_schedule" in str(LIST_SCHEDULE_COUNT)
+    assert "gold.fct_games_schedule" in str(LIST_SEASONS)
+
+
+@pytest.mark.unit
+def test_list_seasons(client, session, query_result) -> None:
+    session.queue = [query_result(rows=[("2024-25",), ("2023-24",)])]
+    response = client.get("/api/v1/seasons")
+    assert response.status_code == 200
+    assert response.json()["data"] == ["2024-25", "2023-24"]
+    assert response.json()["meta"]["total"] == 2

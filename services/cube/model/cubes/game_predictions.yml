@@ -1,0 +1,66 @@
+cubes:
+  - name: game_predictions
+    sql_table: gold.fct_game_predictions
+    description: Elo pregame home win probability (model_wp). Pregame snapshot only; not live WP and not a betting line.
+
+    dimensions:
+      - name: id
+        sql: "game_id || '-' || CAST(as_of AS VARCHAR) || '-' || model_version"
+        type: string
+        primary_key: true
+
+      - name: game_id
+        sql: game_id
+        type: string
+
+      - name: as_of
+        sql: as_of
+        type: time
+
+      - name: model_name
+        sql: model_name
+        type: string
+
+      - name: model_version
+        sql: model_version
+        type: string
+
+      - name: home_team_id
+        sql: home_team_id
+        type: number
+
+      - name: away_team_id
+        sql: away_team_id
+        type: number
+
+      - name: model_wp
+        sql: model_wp
+        type: number
+
+      - name: market_wp
+        sql: market_wp
+        type: number
+
+      - name: game_date
+        sql: game_date
+        type: time
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: season_type
+        sql: season_type
+        type: string
+
+      - name: game_status
+        sql: game_status
+        type: string
+
+    measures:
+      - name: count
+        type: count
+
+      - name: avg_model_wp
+        sql: model_wp
+        type: avg

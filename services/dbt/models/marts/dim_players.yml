@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: dim_players
+    description: Player dimension with career aggregates from game logs.
+    columns:
+      - name: player_id
+        description: Unique NBA player identifier.
+        data_tests:
+          - unique
+          - not_null
+      - name: full_name
+        data_tests:
+          - dbt_expectations.expect_column_values_to_not_be_null
+      - name: career_games_played
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 5000
+      - name: seasons_played
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 40
+      - name: first_season
+        description: Earliest season with a loaded game log (warehouse coverage, not NBA debut).
+      - name: last_season
+        description: Latest season with a loaded game log.
+      - name: current_season_salary
+        description: Remaining salary for the earliest season in the contracts snapshot.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1000000000
+                row_condition: "current_season_salary is not null"
+    data_tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          arguments:
+            min_value: 1

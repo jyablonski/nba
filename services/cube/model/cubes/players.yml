@@ -1,0 +1,119 @@
+cubes:
+  - name: players
+    sql_table: gold.dim_players
+    description: Player dimension with career totals, per-game averages, and remaining-year salary snapshot
+
+    joins:
+      - name: teams
+        sql: "{CUBE}.team_id = {teams}.team_id"
+        relationship: many_to_one
+
+    dimensions:
+      - name: player_id
+        sql: player_id
+        type: number
+        primary_key: true
+
+      - name: full_name
+        sql: full_name
+        type: string
+
+      - name: first_name
+        sql: first_name
+        type: string
+
+      - name: last_name
+        sql: last_name
+        type: string
+
+      - name: position
+        sql: position
+        type: string
+
+      - name: height
+        sql: height
+        type: string
+
+      - name: weight
+        sql: weight
+        type: number
+
+      - name: birth_date
+        sql: birth_date
+        type: time
+
+      - name: first_season
+        sql: first_season
+        type: string
+
+      - name: last_season
+        sql: last_season
+        type: string
+
+      - name: is_active
+        sql: is_active
+        type: boolean
+
+      - name: team_id
+        sql: team_id
+        type: number
+
+      - name: career_games_played
+        sql: career_games_played
+        type: number
+
+      - name: seasons_played
+        sql: seasons_played
+        type: number
+
+      - name: career_ppg
+        sql: career_ppg
+        type: number
+
+      - name: career_rpg
+        sql: career_rpg
+        type: number
+
+      - name: career_apg
+        sql: career_apg
+        type: number
+
+      - name: first_game_date
+        sql: first_game_date
+        type: time
+
+      - name: last_game_date
+        sql: last_game_date
+        type: time
+
+      - name: current_contract_season
+        sql: current_contract_season
+        type: string
+
+      - name: current_season_salary
+        sql: current_season_salary
+        type: number
+
+      - name: current_remaining_guaranteed
+        sql: current_remaining_guaranteed
+        type: number
+
+    measures:
+      - name: count
+        type: count
+
+      - name: avg_career_games_played
+        sql: career_games_played
+        type: avg
+
+      - name: avg_career_ppg
+        sql: career_ppg
+        type: avg
+
+      - name: avg_career_rpg
+        sql: career_rpg
+        type: avg
+
+      - name: avg_career_apg
+        sql: career_apg
+        type: avg

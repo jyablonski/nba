@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: fct_game_odds
+    description: >
+      Thin gold copy of the current The Odds API upcoming-slate snapshot.
+      Grain is odds_event_id x bookmaker x market. Market snapshot, not a book.
+      game_id is null when the event could not be matched to source.games.
+    columns:
+      - name: odds_event_id
+        data_tests:
+          - not_null
+      - name: bookmaker
+        data_tests:
+          - not_null
+      - name: market
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ["h2h", "spreads"]
+                quote_values: true
+      - name: home_market_wp
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+                row_condition: "home_market_wp is not null"
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["odds_event_id", "bookmaker", "market"]

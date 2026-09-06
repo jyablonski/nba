@@ -1,0 +1,33 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.5
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        types_or: [python, pyi]
+      - id: ruff-format
+        types_or: [python, pyi]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        exclude: ^docker-compose\.prod\.yml$
+      - id: check-toml
+      - id: debug-statements
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier
+        language: system
+        types_or: [javascript, jsx, ts, tsx, css, json, markdown, yaml]
+        exclude: ^(package-lock\.json|.*uv\.lock|htmlcov/|.*coverage/)
+        entry: node services/frontend/node_modules/prettier/bin/prettier.cjs --write
+        pass_filenames: true
+      - id: frontend-eslint
+        name: frontend eslint
+        language: system
+        pass_filenames: false
+        files: ^services/frontend/.*\.(js|jsx|ts|tsx)$
+        entry: bash -c 'cd services/frontend && npx eslint --max-warnings=0 .'

@@ -1,0 +1,52 @@
+version: 2
+
+seeds:
+  - name: nba_cba_caps
+    description: >
+      Official NBA CBA system levels by season (USD integers). Reported
+      Basketball-Reference payroll is compared to these thresholds; this is
+      not a tax-bill calculator (no repeater tax). Sources: 2024-25 NBA CBA
+      101 (https://cms.nba.com/wp-content/uploads/sites/4/2024/11/2024-25-CBA-101.pdf);
+      2025-26 league announcement via Hoops Rumors (https://www.hoopsrumors.com/2025/06/salary-cap-tax-line-set-for-2025-26-nba-season.html);
+      2026-27 NBA.com official release (https://www.nba.com/news/nba-salary-cap-2026-27-season).
+    config:
+      column_types:
+        season: varchar(10)
+        salary_cap: bigint
+        luxury_tax: bigint
+        first_apron: bigint
+        second_apron: bigint
+    columns:
+      - name: season
+        description: NBA season label, e.g. 2025-26.
+        data_tests:
+          - unique
+          - not_null
+      - name: salary_cap
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 5000000000
+      - name: luxury_tax
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 5000000000
+      - name: first_apron
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 5000000000
+      - name: second_apron
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 5000000000

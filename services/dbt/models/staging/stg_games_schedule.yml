@@ -1,0 +1,25 @@
+version: 2
+
+models:
+  - name: stg_games_schedule
+    description: >
+      All source.games rows including Scheduled / upcoming (nullable scores).
+      Final-only results stay on stg_games / fct_team_game_results.
+    columns:
+      - name: game_id
+        description: Unique NBA game identifier (Final or upcoming).
+        data_tests:
+          - unique
+          - not_null
+      - name: game_date
+        data_tests:
+          - not_null
+      - name: status
+        data_tests:
+          - not_null
+      - name: home_team_id
+        data_tests:
+          - not_null
+      - name: away_team_id
+        data_tests:
+          - not_null

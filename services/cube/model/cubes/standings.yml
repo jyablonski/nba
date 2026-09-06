@@ -1,0 +1,98 @@
+cubes:
+  - name: standings
+    sql_table: gold.fct_standings
+    description: Season-to-date Regular Season standings (one row per team per season)
+
+    dimensions:
+      - name: id
+        sql: "CAST(team_id AS VARCHAR) || '-' || season || '-' || COALESCE(season_type, '')"
+        type: string
+        primary_key: true
+
+      - name: team_id
+        sql: team_id
+        type: number
+
+      - name: abbreviation
+        sql: abbreviation
+        type: string
+
+      - name: team_name
+        sql: team_name
+        type: string
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: season_type
+        sql: season_type
+        type: string
+
+      - name: as_of_date
+        sql: as_of_date
+        type: time
+
+      - name: conference
+        sql: conference
+        type: string
+
+      - name: division
+        sql: division
+        type: string
+
+      - name: conference_rank
+        sql: conference_rank
+        type: number
+
+      - name: division_rank
+        sql: division_rank
+        type: number
+
+      - name: streak
+        sql: streak
+        type: string
+
+      - name: last_10
+        sql: last_10
+        type: string
+
+      - name: win_pct
+        sql: win_pct
+        type: number
+
+      - name: games_back
+        sql: games_back
+        type: number
+
+      - name: conf_games_back
+        sql: conf_games_back
+        type: number
+
+      - name: team_wins
+        sql: wins
+        type: number
+
+      - name: team_losses
+        sql: losses
+        type: number
+
+    measures:
+      - name: count
+        type: count
+
+      - name: wins
+        sql: wins
+        type: sum
+
+      - name: losses
+        sql: losses
+        type: sum
+
+      - name: avg_win_pct
+        sql: win_pct
+        type: avg
+
+      - name: avg_games_back
+        sql: games_back
+        type: avg

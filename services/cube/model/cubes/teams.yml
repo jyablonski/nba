@@ -1,0 +1,74 @@
+cubes:
+  - name: teams
+    sql_table: gold.dim_teams
+    description: Team dimension with arena coordinates, brand hex colors, and remaining-year payroll snapshot
+
+    dimensions:
+      - name: team_id
+        sql: team_id
+        type: number
+        primary_key: true
+
+      - name: abbreviation
+        sql: abbreviation
+        type: string
+
+      - name: team_name
+        sql: team_name
+        type: string
+
+      - name: city
+        sql: city
+        type: string
+
+      - name: nickname
+        sql: nickname
+        type: string
+
+      - name: conference
+        sql: conference
+        type: string
+
+      - name: division
+        sql: division
+        type: string
+
+      - name: arena_name
+        sql: arena_name
+        type: string
+
+      - name: arena_latitude
+        sql: arena_latitude
+        type: number
+
+      - name: arena_longitude
+        sql: arena_longitude
+        type: number
+
+      - name: primary_color
+        sql: primary_color
+        type: string
+
+      - name: alternate_color
+        sql: alternate_color
+        type: string
+
+      - name: current_contract_season
+        sql: current_contract_season
+        type: string
+
+      - name: current_season_payroll
+        sql: current_season_payroll
+        type: number
+
+      - name: current_remaining_guaranteed
+        sql: current_remaining_guaranteed
+        type: number
+
+    measures:
+      - name: count
+        type: count
+
+      - name: avg_payroll
+        sql: current_season_payroll
+        type: avg

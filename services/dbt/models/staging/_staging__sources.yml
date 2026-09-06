@@ -1,0 +1,53 @@
+version: 2
+
+sources:
+  - name: source
+    schema: source
+    tables:
+      - name: players
+        description: Player biographical data from NBA API (Alembic source schema)
+      - name: teams
+        description: Team reference data from NBA API
+      - name: games
+        description: Game results from NBA API
+      - name: player_game_logs
+        description: Per-player per-game stat lines from NBA API
+      - name: player_contracts
+        description: >
+          Remaining player-season salaries from Basketball-Reference team
+          payroll pages (not NBA Stats). Historical paid-salary ledgers
+          are planned.
+      - name: team_payroll
+        description: >
+          Team-season payroll totals from the Basketball-Reference
+          Team Totals footer. Luxury-tax rules are not applied.
+      - name: standings
+        description: >
+          Season-to-date Regular Season standings from NBA Stats
+          LeagueStandingsV3. Unique on (season, season_type, team_id);
+          as_of_date is the scrape watermark.
+      - name: player_injuries
+        description: >
+          Current Basketball-Reference injury report snapshot. Unique on
+          (player_name_normalized, bref_team_abbreviation). Not a historical
+          ledger; history exists only from the day scraping starts.
+      - name: game_odds
+        description: >
+          Current The Odds API upcoming-slate snapshot (h2h / spreads).
+          Unique on (odds_event_id, bookmaker, market). Historical odds
+          backfill is out of scope. ODDS_API_KEY required to ingest.
+      - name: game_predictions
+        description: >
+          Pregame home win probabilities written by services/ml. Grain is
+          (game_id, as_of, model_version).
+      - name: play_by_play
+        description: >
+          NBA Stats PlayByPlayV3 actions. Unique on (game_id, action_number, action_id).
+          Opt-in current-season ingest; not a full-history backfill.
+      - name: reddit_posts
+        description: >
+          PRAW submission ingest. Unique on reddit_id. No Courtline page.
+      - name: reddit_comments
+        description: >
+          PRAW comment ingest. Unique on reddit_id. post_reddit_id
+          associates the comment to reddit_posts. No Courtline page.

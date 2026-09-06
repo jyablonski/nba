@@ -1,0 +1,58 @@
+cubes:
+  - name: player_injuries
+    sql_table: gold.fct_player_injuries
+    description: Current Basketball-Reference injury snapshot. Not a historical ledger. player_id is null when unmatched.
+
+    dimensions:
+      - name: id
+        sql: "player_name_normalized || '-' || bref_team_abbreviation"
+        type: string
+        primary_key: true
+
+      - name: player_name
+        sql: player_name
+        type: string
+
+      - name: player_name_normalized
+        sql: player_name_normalized
+        type: string
+
+      - name: bref_player_slug
+        sql: bref_player_slug
+        type: string
+
+      - name: bref_team_abbreviation
+        sql: bref_team_abbreviation
+        type: string
+
+      - name: nba_team_abbreviation
+        sql: nba_team_abbreviation
+        type: string
+
+      - name: update_date
+        sql: update_date
+        type: time
+
+      - name: description
+        sql: description
+        type: string
+
+      - name: source_url
+        sql: source_url
+        type: string
+
+      - name: team_id
+        sql: team_id
+        type: number
+
+      - name: player_id
+        sql: player_id
+        type: number
+
+      - name: match_method
+        sql: match_method
+        type: string
+
+    measures:
+      - name: count
+        type: count

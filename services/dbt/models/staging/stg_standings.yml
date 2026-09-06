@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: stg_standings
+    description: Regular Season standings from source.standings, lightly cleaned.
+    columns:
+      - name: team_id
+        data_tests:
+          - not_null
+      - name: season
+        data_tests:
+          - not_null
+      - name: season_type
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ["Regular Season"]
+                quote_values: true
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["team_id", "season", "season_type"]

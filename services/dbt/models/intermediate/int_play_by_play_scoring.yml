@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: int_play_by_play_scoring
+    description: >
+      Scoring plays only from PlayByPlayV3. A scoring play is a row where the
+      running home or away score changes. Grain is game_id x action_number.
+      Clock is parsed to remaining and elapsed seconds (Q1–Q4 = 720s, OT = 300s).
+      Differential is home minus away. Season-scoped ingest; not a full-history backfill.
+    columns:
+      - name: game_id
+        data_tests:
+          - not_null
+      - name: action_number
+        data_tests:
+          - not_null
+      - name: score_differential
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: -200
+                max_value: 200
+      - name: elapsed_seconds
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 20000
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["game_id", "action_number"]

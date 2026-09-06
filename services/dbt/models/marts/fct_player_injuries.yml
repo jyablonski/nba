@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: fct_player_injuries
+    description: >
+      Current Basketball-Reference injury snapshot matched to NBA person_id
+      when unique. Grain is player_name_normalized x bref team. Not a
+      historical ledger. player_id is null when unmatched.
+    columns:
+      - name: player_name_normalized
+        data_tests:
+          - not_null
+      - name: bref_team_abbreviation
+        data_tests:
+          - not_null
+      - name: description
+        data_tests:
+          - not_null
+      - name: match_method
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ["unique_name", "name_and_team", "unmatched"]
+                quote_values: true
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["player_name_normalized", "bref_team_abbreviation"]

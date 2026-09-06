@@ -1,0 +1,220 @@
+# Build for the host CPU (linux/amd64 or linux/arm64). Do not pin
+# `platform: linux/amd64` — that qemu-emulates the whole stack on ARM Macs.
+# Native: `make build` / `docker compose build`. Both ISAs: `make build-multiarch`.
+services:
+  postgres:
+    image: postgres:16.15-alpine
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot. `compose up` will not re-run an already-exited container when
+  # new revisions land — use `make db-migrate` (`compose run --rm --no-deps`).
+  migrate:
+    image: nba-migrate
+    build:
+      context: ./services/migrate
+      target: ${DOCKER_TARGET:-runtime}
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+
+  api:
+    image: nba-api
+    build:
+      context: ./services/api
+      target: ${DOCKER_TARGET:-runtime}
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      CUBE_API_URL: http://cube:4000
+      CUBEJS_API_SECRET: ${CUBEJS_API_SECRET}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  frontend:
+    image: nba-frontend
+    build:
+      context: ./services/frontend
+      target: ${DOCKER_TARGET:-runtime}
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    env_file: .env
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+  scraper:
+    image: nba-scraper
+    build:
+      context: ./services/scraper
+      target: ${DOCKER_TARGET:-runtime}
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      REDDIT_CLIENT_ID: ${REDDIT_CLIENT_ID:-}
+      REDDIT_CLIENT_SECRET: ${REDDIT_CLIENT_SECRET:-}
+      REDDIT_USER_AGENT: ${REDDIT_USER_AGENT:-}
+      REDDIT_USERNAME: ${REDDIT_USERNAME:-}
+      REDDIT_PASSWORD: ${REDDIT_PASSWORD:-}
+      ODDS_API_KEY: ${ODDS_API_KEY:-}
+    # Host src for `compose run --no-deps` (tools are not started by `make up`).
+    # Do not mount `.venv`. Prod overlay resets volumes to the baked image.
+    volumes:
+      - ./services/scraper/src:/app/src
+    # `compose run` without --no-deps reconciles depends_on and can recreate
+    # Tilt-managed postgres (init.sql will not re-run on existing pgdata).
+    # One-shots (refresh-daily.sh, make pipeline-*, make db-migrate) must pass --no-deps.
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    profiles:
+      - tools
+
+  dbt:
+    image: nba-dbt
+    build:
+      context: ./services/dbt
+      target: ${DOCKER_TARGET:-runtime}
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    # Host project files for `compose run --no-deps`. Leave `.venv` and baked
+    # `dbt_packages` in the image (`dbt deps` still uses those). Prod resets.
+    volumes:
+      - ./services/dbt/models:/app/models
+      - ./services/dbt/tests:/app/tests
+      - ./services/dbt/macros:/app/macros
+      - ./services/dbt/seeds:/app/seeds
+      - ./services/dbt/dbt_project.yml:/app/dbt_project.yml
+      - ./services/dbt/packages.yml:/app/packages.yml
+      - ./services/dbt/profiles.yml:/app/profiles.yml
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    profiles:
+      - tools
+
+  ml:
+    image: nba-ml
+    build:
+      context: ./services/ml
+      target: ${DOCKER_TARGET:-runtime}
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - ./services/ml/src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    profiles:
+      - tools
+
+  mcp:
+    image: nba-mcp
+    build:
+      context: ./services/mcp
+      target: ${DOCKER_TARGET:-runtime}
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      CUBE_API_URL: http://cube:4000
+      CUBEJS_API_SECRET: ${CUBEJS_API_SECRET}
+    volumes:
+      - ./services/mcp/src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    profiles:
+      - tools
+
+  cube:
+    image: nba-cube
+    build:
+      context: ./services/cube
+      target: ${DOCKER_TARGET:-runtime}
+    env_file: .env
+    environment:
+      CUBEJS_DB_HOST: postgres
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # ------------------------------------------------------------------
+  # Daily refresh (DISABLED by default).
+  # Profile `cron` is not started by `make up` / Tilt. Even when the
+  # service is started, source.scrape_pipeline.enabled must be true.
+  # NBA daily also needs season_active / window; r/nba always runs when
+  # enabled (not behind season_active). Prefer host cron → `make refresh`.
+  # ------------------------------------------------------------------
+  refresh-daily:
+    image: nba-scraper
+    build:
+      context: ./services/scraper
+      target: ${DOCKER_TARGET:-runtime}
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+    # Same recreate footgun as scraper; prefer `make refresh` (--no-deps).
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    profiles:
+      - cron
+    # One-shot; pair with an external scheduler if you enable profile cron.
+    # Example host cron (still respects DB enabled flag):
+    #   15 8 * * * cd /path/to/nba && make refresh
+    entrypoint: ["python", "-m", "main", "pipeline", "run-once"]
+    restart: "no"
+
+volumes:
+  pgdata:

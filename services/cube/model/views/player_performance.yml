@@ -1,0 +1,26 @@
+views:
+  - name: player_performance
+    description: Player performance — games played, scoring, and back-to-back load
+    cubes:
+      - join_path: player_game_logs
+        includes:
+          - player_id
+          - player_name
+          - season
+          - game_date
+          - opponent
+          - location
+          - is_back_to_back
+          - games_played
+          - avg_points
+          - avg_rebounds
+          - avg_assists
+          - back_to_back_games
+          - wins
+          - losses
+
+      - join_path: player_game_logs.players
+        includes:
+          - full_name
+          - position
+          - is_active

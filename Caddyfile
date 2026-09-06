@@ -1,0 +1,23 @@
+# ACME HTTP-01 needs :80 reachable. Grey-cloud DNS for baseline.jyablonski.dev.
+# Optional ACME account email: set CADDY_EMAIL on the caddy service.
+# Caddy requires `{` to be the last token on its line — one-line handle blocks
+# do not parse. Check with `caddy validate --config Caddyfile` before deploying.
+# Retiring nbadashboard later is a second site block here; see
+# docs/plans/oci-caddy-hosting.md. It only takes effect once that name's DNS
+# points at this VM.
+
+baseline.jyablonski.dev {
+	encode gzip zstd
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle /health {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

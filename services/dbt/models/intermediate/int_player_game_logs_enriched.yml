@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: int_player_game_logs_enriched
+    description: Player game logs enriched with back-to-back flags and career/season game numbers.
+    columns:
+      - name: player_id
+        data_tests:
+          - not_null
+      - name: game_id
+        data_tests:
+          - not_null
+      - name: is_back_to_back
+        data_tests:
+          - dbt_expectations.expect_column_values_to_not_be_null
+      - name: season_game_number
+        description: >
+          row_number per player × season ordered by game_date. Counts every
+          loaded log in that season (regular season, play-in, and playoffs),
+          not regular-season games only. 82 + play-in + four 7-game series
+          can reach ~112; max_value 120 is that ceiling plus headroom so
+          numbering bugs (0, career totals) still fail.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 120
+      - name: career_game_number
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 5000
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["player_id", "game_id"]
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          arguments:
+            min_value: 1

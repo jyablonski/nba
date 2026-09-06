@@ -1,0 +1,59 @@
+[project]
+name = "nba"
+version = "0.1.0"
+description = "NBA project"
+authors = [{ name = "jyablonski9", email = "jyablonski9@gmail.com" }]
+requires-python = ">=3.14,<3.15"
+dependencies = []
+
+[dependency-groups]
+local = [
+    "pre-commit==4.6.2",
+    "ruff==0.16.5",
+    "ty==0.0.78",
+]
+
+[tool.uv]
+package = false
+
+[build-system]
+requires = ["hatchling==1.32.0"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"services/api/src/routers/*.py" = ["B008"]
+"services/api/src/dependencies.py" = ["B008"]
+"services/mcp/src/server.py" = ["E402"]
+"**/tests/**" = ["E501", "SIM117"]
+"testing/**" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+    "config",
+    "db",
+    "dependencies",
+    "main",
+    "models",
+    "queries",
+    "repositories",
+    "routers",
+    "schema",
+    "schemas",
+    "scrapers",
+    "scoring",
+    "server",
+    "testing",
+    "elo",
+    "metrics",
+]
+
+[tool.ty.environment]
+python-version = "3.14"

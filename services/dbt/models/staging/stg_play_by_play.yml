@@ -1,0 +1,25 @@
+version: 2
+
+models:
+  - name: stg_play_by_play
+    description: >
+      Lightly cleaned PlayByPlayV3 actions. Grain is game_id x action_number x
+      action_id (V3 repeats actionNumber for steal/block pairs).
+      Season-scoped ingest; not a full-history backfill.
+    columns:
+      - name: game_id
+        data_tests:
+          - not_null
+      - name: season
+        data_tests:
+          - not_null
+      - name: action_number
+        data_tests:
+          - not_null
+      - name: action_id
+        data_tests:
+          - not_null
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["game_id", "action_number", "action_id"]

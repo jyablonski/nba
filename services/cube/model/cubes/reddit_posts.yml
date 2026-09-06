@@ -1,0 +1,54 @@
+cubes:
+  - name: reddit_posts
+    sql_table: gold.fct_reddit_posts
+    description: PRAW submission ingest. Queryable via Cube / MCP; no Courtline page.
+
+    dimensions:
+      - name: reddit_id
+        sql: reddit_id
+        type: string
+        primary_key: true
+
+      - name: subreddit
+        sql: subreddit
+        type: string
+
+      - name: title
+        sql: title
+        type: string
+
+      - name: author
+        sql: author
+        type: string
+
+      - name: score
+        sql: score
+        type: number
+
+      - name: num_comments
+        sql: num_comments
+        type: number
+
+      - name: created_utc
+        sql: created_utc
+        type: time
+
+      - name: permalink
+        sql: permalink
+        type: string
+
+      - name: url
+        sql: url
+        type: string
+
+      - name: flair
+        sql: flair
+        type: string
+
+      - name: is_self
+        sql: is_self
+        type: boolean
+
+    measures:
+      - name: count
+        type: count

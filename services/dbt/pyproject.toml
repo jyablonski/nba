@@ -1,0 +1,76 @@
+[project]
+name = "nba-dbt"
+version = "0.1.0"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "dbt-core==1.12.3",
+    "dbt-postgres==1.11.0",
+]
+
+[dependency-groups]
+dev = [
+    "sqlfluff==4.3.0",
+    "sqlfluff-templater-dbt==4.3.0",
+]
+
+[tool.uv]
+package = false
+default-groups = ["dev"]
+
+[build-system]
+requires = ["hatchling==1.32.0"]
+build-backend = "hatchling.build"
+
+[tool.sqlfluff.core]
+dialect = "postgres"
+templater = "dbt"
+max_line_length = 120
+exclude_rules = "AM04"
+
+[tool.sqlfluff.templater.dbt]
+project_dir = "."
+profiles_dir = "."
+
+[tool.sqlfluff.indentation]
+tab_space_size = 4
+indent_unit = "space"
+
+[tool.sqlfluff.rules.capitalisation.keywords]
+capitalisation_policy = "lower"
+
+[tool.sqlfluff.rules.capitalisation.identifiers]
+extended_capitalisation_policy = "lower"
+
+[tool.sqlfluff.rules.capitalisation.functions]
+extended_capitalisation_policy = "lower"
+
+[tool.sqlfluff.rules.capitalisation.literals]
+capitalisation_policy = "lower"
+
+[tool.sqlfluff.rules.capitalisation.types]
+extended_capitalisation_policy = "lower"
+
+[tool.sqlfluff.rules.aliasing.table]
+# If a table alias slips in, require explicit AS (defense in depth with AL07).
+aliasing = "explicit"
+
+[tool.sqlfluff.rules.aliasing.column]
+aliasing = "explicit"
+
+[tool.sqlfluff.rules.aliasing.forbid]
+# Forbid table aliases in FROM/JOIN; use full relation/CTE names (dbt style).
+# Disabled by default for all dialects — must force-enable.
+force_enable = true
+
+[tool.sqlfluff.rules.structure.subquery]
+# Prefer CTEs over derived tables in FROM/JOIN (ST05 / L042).
+# Does not cover scalar subqueries in SELECT/WHERE — ban those by convention.
+forbid_subquery_in = "both"
+
+[tool.sqlfluff.rules.references.qualification]
+# Prefer fully qualified CTE/table column references over short aliases.
+forbid_qualified = false
+
+[tool.sqlfluff.rules.references.keywords]
+# NBA domain columns that collide with SQL keywords (e.g. LOCATION).
+ignore_words = "location,result,source"

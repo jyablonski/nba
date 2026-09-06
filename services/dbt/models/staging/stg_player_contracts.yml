@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: stg_player_contracts
+    description: >
+      Remaining player-season salaries from Basketball-Reference, lightly cleaned.
+      Grain is bref_player_slug x bref team x season.
+    columns:
+      - name: bref_player_slug
+        data_tests:
+          - not_null
+      - name: player_name_normalized
+        data_tests:
+          - not_null
+      - name: nba_team_abbreviation
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_value_lengths_to_equal:
+              arguments:
+                value: 3
+      - name: season
+        data_tests:
+          - not_null
+      - name: salary
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1000000000
+                row_condition: "salary is not null"
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["bref_player_slug", "bref_team_abbreviation", "season"]

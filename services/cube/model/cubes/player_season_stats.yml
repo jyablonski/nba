@@ -1,0 +1,55 @@
+cubes:
+  - name: player_season_stats
+    sql_table: gold.fct_player_season_stats
+    description: Per-player per-season averages from loaded game logs (no league-minimum qualifier)
+
+    joins:
+      - name: players
+        sql: "{CUBE}.player_id = {players}.player_id"
+        relationship: many_to_one
+
+    dimensions:
+      - name: id
+        sql: "CAST(player_id AS VARCHAR) || '-' || season"
+        type: string
+        primary_key: true
+
+      - name: player_id
+        sql: player_id
+        type: number
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: games_played
+        sql: games_played
+        type: number
+
+      - name: first_game_date
+        sql: first_game_date
+        type: time
+
+      - name: last_game_date
+        sql: last_game_date
+        type: time
+
+      - name: ppg
+        sql: ppg
+        type: number
+
+      - name: rpg
+        sql: rpg
+        type: number
+
+      - name: apg
+        sql: apg
+        type: number
+
+    measures:
+      - name: count
+        type: count
+
+      - name: avg_ppg
+        sql: ppg
+        type: avg

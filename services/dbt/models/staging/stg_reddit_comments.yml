@@ -1,0 +1,19 @@
+version: 2
+
+models:
+  - name: stg_reddit_comments
+    description: >
+      PRAW comment ingest, lightly cleaned. Unique on reddit_id.
+      Associated to the parent submission via post_reddit_id.
+      Queryable via gold / Cube; no Courtline page.
+    columns:
+      - name: reddit_id
+        data_tests:
+          - unique
+          - not_null
+      - name: post_reddit_id
+        data_tests:
+          - not_null
+      - name: created_utc
+        data_tests:
+          - not_null

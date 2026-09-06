@@ -1,0 +1,66 @@
+cubes:
+  - name: play_by_play
+    sql_table: gold.fct_play_by_play
+    description: Season-scoped PlayByPlayV3 actions (one row per game_id + action_number + action_id). No joins — do not cartesian.
+
+    dimensions:
+      - name: id
+        sql: "game_id || '-' || CAST(action_number AS VARCHAR) || '-' || CAST(COALESCE(action_id, 0) AS VARCHAR)"
+        type: string
+        primary_key: true
+
+      - name: game_id
+        sql: game_id
+        type: string
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: action_number
+        sql: action_number
+        type: number
+
+      - name: action_id
+        sql: action_id
+        type: number
+
+      - name: period
+        sql: period
+        type: number
+
+      - name: clock
+        sql: clock
+        type: string
+
+      - name: score_home
+        sql: score_home
+        type: number
+
+      - name: score_away
+        sql: score_away
+        type: number
+
+      - name: team_id
+        sql: team_id
+        type: number
+
+      - name: player_id
+        sql: player_id
+        type: number
+
+      - name: action_type
+        sql: action_type
+        type: string
+
+      - name: sub_type
+        sql: sub_type
+        type: string
+
+      - name: description
+        sql: description
+        type: string
+
+    measures:
+      - name: count
+        type: count

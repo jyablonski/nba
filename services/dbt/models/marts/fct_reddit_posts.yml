@@ -1,0 +1,21 @@
+version: 2
+
+models:
+  - name: fct_reddit_posts
+    description: >
+      Thin gold copy of PRAW submissions. Unique on reddit_id.
+      Queryable via Cube / MCP; no Courtline page.
+    columns:
+      - name: reddit_id
+        data_tests:
+          - unique
+          - not_null
+      - name: subreddit
+        data_tests:
+          - not_null
+      - name: title
+        data_tests:
+          - not_null
+      - name: created_utc
+        data_tests:
+          - not_null

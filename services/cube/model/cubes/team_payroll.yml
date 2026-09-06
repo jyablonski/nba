@@ -1,0 +1,54 @@
+cubes:
+  - name: team_payroll
+    sql_table: gold.fct_team_payroll
+    description: Basketball-Reference team-season payroll totals (reported sum, not luxury-tax math)
+
+    dimensions:
+      - name: id
+        sql: "CAST(team_id AS VARCHAR) || '-' || season"
+        type: string
+        primary_key: true
+
+      - name: team_id
+        sql: team_id
+        type: number
+
+      - name: bref_team_abbreviation
+        sql: bref_team_abbreviation
+        type: string
+
+      - name: nba_team_abbreviation
+        sql: nba_team_abbreviation
+        type: string
+
+      - name: team_name
+        sql: team_name
+        type: string
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: total_salary
+        sql: total_salary
+        type: number
+
+      - name: remaining_guaranteed
+        sql: remaining_guaranteed
+        type: number
+
+      - name: player_season_count
+        sql: player_season_count
+        type: number
+
+      - name: matched_player_count
+        sql: matched_player_count
+        type: number
+
+    measures:
+      - name: count
+        type: count
+
+      - name: sum_total_salary
+        sql: total_salary
+        type: sum

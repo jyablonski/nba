@@ -1,0 +1,56 @@
+[project]
+name = "nba-api"
+version = "0.1.0"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.52.4",
+    "sqlalchemy==2.0.52",
+    "psycopg2-binary==2.9.12",
+    "pydantic==2.13.5",
+    "pydantic-settings==2.15.0",
+    "python-dotenv==1.2.3",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2==2.12.0",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "testcontainers[postgres]==4.15.0",
+]
+
+[tool.uv]
+package = false
+
+[build-system]
+requires = ["hatchling==1.32.0"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "-m",
+    "not integration",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-fail-under=90",
+    "--color=yes",
+]
+markers = [
+    "unit: Unit tests that don't require external dependencies",
+    "integration: Tests that require Docker / Testcontainers Postgres",
+]
+# Starlette 1.6.0 TestClient still types BlockingPortal via anyio.abc (deprecated
+# in anyio 4.15). FastAPI 0.141.1 / Starlette 1.6.0 are current; no upgrade path.
+filterwarnings = [
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead\\.:DeprecationWarning:starlette.testclient",
+]

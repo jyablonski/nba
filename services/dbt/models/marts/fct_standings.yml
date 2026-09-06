@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: fct_standings
+    description: >
+      Season-to-date Regular Season standings joined to team attributes.
+      Grain is team_id x season x season_type; as_of_date is the scrape watermark.
+    columns:
+      - name: team_id
+        data_tests:
+          - not_null
+      - name: season
+        data_tests:
+          - not_null
+      - name: conference
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ["East", "West"]
+                quote_values: true
+                row_condition: "conference is not null"
+      - name: conference_rank
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 15
+                row_condition: "conference_rank is not null"
+      - name: wins
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 82
+                row_condition: "wins is not null"
+      - name: losses
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 82
+                row_condition: "losses is not null"
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["team_id", "season", "season_type"]

@@ -1,0 +1,39 @@
+version: 2
+
+models:
+  - name: stg_games
+    description: Final games with winning_team_id and score_margin.
+    columns:
+      - name: game_id
+        description: Unique NBA game identifier.
+        data_tests:
+          - unique
+          - not_null
+      - name: status
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ["Final"]
+                quote_values: true
+      - name: home_score
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 400
+      - name: away_score
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 400
+      - name: score_margin
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 400
+    data_tests:
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          arguments:
+            min_value: 1

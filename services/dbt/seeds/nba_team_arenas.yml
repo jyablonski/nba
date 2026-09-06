@@ -1,0 +1,55 @@
+version: 2
+
+seeds:
+  - name: nba_team_arenas
+    description: >
+      Versioned lookup of each current NBA franchise's home arena.
+      Grain is one row per team_id (2025-26 homes). Coordinates are
+      WGS84 from published venue locations (Wikipedia / OpenStreetMap),
+      not the NBA Stats API, which exposes arena name and city on
+      games but not latitude or longitude. Update this seed when a
+      team moves buildings; do not geocode at scrape time.
+    config:
+      column_types:
+        team_id: integer
+        abbreviation: varchar(5)
+        arena_name: varchar(100)
+        arena_city: varchar(50)
+        arena_state: varchar(50)
+        arena_latitude: numeric(9, 6)
+        arena_longitude: numeric(9, 6)
+    columns:
+      - name: team_id
+        description: NBA Stats team_id; matches source.teams / dim_teams.
+        data_tests:
+          - unique
+          - not_null
+      - name: abbreviation
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_value_lengths_to_equal:
+              arguments:
+                value: 3
+      - name: arena_name
+        data_tests:
+          - not_null
+      - name: arena_latitude
+        description: WGS84 latitude of the current home arena.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: -90
+                max_value: 90
+      - name: arena_longitude
+        description: WGS84 longitude of the current home arena.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: -180
+                max_value: 180
+    data_tests:
+      - dbt_expectations.expect_table_row_count_to_equal:
+          arguments:
+            value: 30

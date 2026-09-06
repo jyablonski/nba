@@ -1,0 +1,82 @@
+cubes:
+  - name: games
+    sql_table: gold.fct_team_game_results
+    description: Game-level results (one row per game) from the team results mart
+
+    dimensions:
+      - name: game_id
+        sql: game_id
+        type: string
+        primary_key: true
+
+      - name: game_date
+        sql: game_date
+        type: time
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: season_type
+        sql: season_type
+        type: string
+
+      - name: home_team_id
+        sql: home_team_id
+        type: number
+
+      - name: home_team
+        sql: home_team_abbreviation
+        type: string
+
+      - name: home_team_name
+        sql: home_team_name
+        type: string
+
+      - name: away_team_id
+        sql: away_team_id
+        type: number
+
+      - name: away_team
+        sql: away_team_abbreviation
+        type: string
+
+      - name: away_team_name
+        sql: away_team_name
+        type: string
+
+      - name: arena
+        sql: arena
+        type: string
+
+      - name: arena_city
+        sql: arena_city
+        type: string
+
+      - name: arena_state
+        sql: arena_state
+        type: string
+
+      - name: winner_location
+        sql: winner_location
+        type: string
+
+      - name: winning_team_id
+        sql: winning_team_id
+        type: number
+
+    measures:
+      - name: count
+        type: count
+
+      - name: avg_home_score
+        sql: home_score
+        type: avg
+
+      - name: avg_away_score
+        sql: away_score
+        type: avg
+
+      - name: avg_score_margin
+        sql: score_margin
+        type: avg

@@ -1,0 +1,108 @@
+# Frontend + Python unit tests, pre-commit, and optional OCI deploy.
+# Does not run make test-dbt, Playwright, or Testcontainers.
+# images + deploy run only when ENABLE_OCI_DEPLOY=true and not on pull_request.
+# images builds native arm64 on GitHub's free-for-public-repos ARM runner and
+# pushes to GHCR; the VM only pulls, so no Next.js build ever runs on the 12GB box.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: services/frontend/package-lock.json
+      - run: make quality
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: services/frontend/package-lock.json
+      - run: make test-frontend
+
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api, scraper, mcp, cube, ml, migrate-unit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: "3.14"
+          enable-cache: true
+          cache-dependency-glob: services/*/uv.lock
+      - run: make test-${{ matrix.service }}
+
+  # OCI Ampere A1 is aarch64, so this must be an arm64 runner. Do not swap to
+  # ubuntu-latest and qemu-emulate — the Next.js build takes ~10x longer.
+  images:
+    if: vars.ENABLE_OCI_DEPLOY == 'true' && github.event_name != 'pull_request'
+    needs: [quality, frontend, python]
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      prefix: ${{ steps.prefix.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # GHCR rejects uppercase path segments; owner casing is not guaranteed.
+      - id: prefix
+        run: echo "value=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/" >> "$GITHUB_OUTPUT"
+      - name: Bake and push api / frontend / migrate
+        run: docker buildx bake --file docker-bake.hcl --push prod
+        env:
+          DOCKER_TARGET: runtime
+          PLATFORMS: linux/arm64
+          IMAGE_PREFIX: ${{ steps.prefix.outputs.value }}
+          IMAGE_TAG: ${{ github.sha }}
+          NEXT_PUBLIC_API_URL: https://baseline.jyablonski.dev
+
+  deploy:
+    if: vars.ENABLE_OCI_DEPLOY == 'true' && github.event_name != 'pull_request'
+    needs: [images]
+    runs-on: ubuntu-latest
+    steps:
+      # Pinning the sha (not latest) makes the deployed commit unambiguous and
+      # lets a rollback re-run this with an older tag.
+      - name: SSH prod-deploy
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USER }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          command_timeout: 20m
+          script_stop: true
+          script: >-
+            cd /opt/nba &&
+            make prod-deploy
+            IMAGE_PREFIX=${{ needs.images.outputs.prefix }}
+            IMAGE_TAG=${{ github.sha }}

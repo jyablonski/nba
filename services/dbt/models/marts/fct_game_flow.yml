@@ -1,0 +1,70 @@
+version: 2
+
+models:
+  - name: fct_game_flow
+    description: >
+      One row per game that has ingested scoring play-by-play. Time-led shares,
+      max lead, lead changes, ties, and the biggest lopsided scoring run: consecutive
+      scoring-play windows with team_pts + opp_pts under 25, ranked by net then
+      net/scored (e.g. 21-2 over 31-15 or a 79-59 marathon). Either team. Courtline
+      recomputes the highlight from the same PBP series it plots. Not live win probability.
+    columns:
+      - name: game_id
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('fct_team_game_results')
+                field: game_id
+      - name: scoring_play_count
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 500
+      - name: home_lead_pct
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+                row_condition: "home_lead_pct is not null"
+      - name: away_lead_pct
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+                row_condition: "away_lead_pct is not null"
+      - name: tied_pct
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+                row_condition: "tied_pct is not null"
+      - name: max_lead
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 200
+                row_condition: "max_lead is not null"
+      - name: biggest_run_winner_points
+        description: Points scored by the run team inside the selected window (team + opponent under 25).
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 24
+                row_condition: "biggest_run_winner_points is not null"
+      - name: biggest_run_opponent_points
+        description: Points scored by the other team in the same window.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 23
+                row_condition: "biggest_run_opponent_points is not null"

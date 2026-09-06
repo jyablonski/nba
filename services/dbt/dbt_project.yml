@@ -1,0 +1,24 @@
+name: nba_analytics
+version: "1.0.0"
+config-version: 2
+profile: nba
+
+flags:
+  require_generic_test_arguments_property: true
+
+models:
+  nba_analytics:
+    staging:
+      +schema: silver
+      +materialized: view
+    intermediate:
+      +schema: silver
+      +materialized: view
+    marts:
+      +schema: gold
+      +materialized: table
+
+seeds:
+  nba_analytics:
+    +schema: silver
+    +quote_columns: false
