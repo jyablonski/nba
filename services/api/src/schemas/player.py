@@ -1,4 +1,5 @@
 from datetime import date
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
@@ -6,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 class PlayerSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    player_id: int
+    player_id: UUID
     full_name: str
     position: str | None = None
     team_abbreviation: str | None = None
@@ -50,7 +51,7 @@ class GameLogEntry(BaseModel):
 
 
 class BackToBackStats(BaseModel):
-    player_id: int
+    player_id: UUID
     player_name: str
     season: str | None = None
     total_back_to_backs: int
@@ -63,7 +64,7 @@ class BackToBackStats(BaseModel):
 class PlayerComparison(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    player_id: int
+    player_id: UUID
     full_name: str
     team_abbreviation: str | None = None
     position: str | None = None
@@ -80,7 +81,7 @@ class PlayerComparison(BaseModel):
 class PlayerSeasonStats(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    player_id: int
+    player_id: UUID
     season: str
     games_played: int
     ppg: float | None = None
@@ -89,7 +90,7 @@ class PlayerSeasonStats(BaseModel):
 
 
 class HeadToHeadPlayerAverages(BaseModel):
-    player_id: int
+    player_id: UUID
     full_name: str
     games: int
     mpg: float | None = None
@@ -102,7 +103,7 @@ class HeadToHeadPlayerAverages(BaseModel):
 class HeadToHeadGameLine(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    player_id: int
+    player_id: UUID
     full_name: str
     team_abbreviation: str
     opponent_abbreviation: str
@@ -119,7 +120,7 @@ class HeadToHeadGameLine(BaseModel):
 
 
 class HeadToHeadGame(BaseModel):
-    game_id: str
+    game_id: UUID
     game_date: date
     season: str
     matchup: str

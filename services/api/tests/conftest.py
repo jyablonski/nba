@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
@@ -23,7 +24,19 @@ from testing.postgres_tc import (  # noqa: E402
 
 class MappingRow:
     def __init__(self, data: dict):
-        self._mapping = data
+        id_keys = {
+            "player_id",
+            "team_id",
+            "game_id",
+            "home_team_id",
+            "away_team_id",
+            "winning_team_id",
+            "opponent_team_id",
+        }
+        self._mapping = {
+            key: UUID(value) if key in id_keys and isinstance(value, str) else value
+            for key, value in data.items()
+        }
 
     def __getitem__(self, key):
         if isinstance(key, int):

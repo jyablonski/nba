@@ -51,7 +51,7 @@ def _configure_logging() -> None:
 
 @click.group()
 def cli() -> None:
-    """Scrape NBA Stats data into the source Postgres schema."""
+    """Scrape Basketball-Reference data into the source Postgres schema."""
     _configure_logging()
 
 
@@ -61,16 +61,13 @@ def cli() -> None:
     default=None,
     help="Comma-separated seasons (e.g. 2010-11,2024-25). Default: current season only.",
 )
-@click.option(
-    "--enrich/--no-enrich", default=False, help="Best-effort CommonPlayerInfo enrichment."
-)
 @click.option("--active-only", is_flag=True, help="Only scrape game logs for active players.")
 @click.option(
     "--with-reddit",
     is_flag=True,
     help="Also scrape r/nba posts and top comments via PRAW (requires REDDIT_*). Off by default.",
 )
-def scrape_all(seasons: str | None, enrich: bool, active_only: bool, with_reddit: bool) -> None:
+def scrape_all(seasons: str | None, active_only: bool, with_reddit: bool) -> None:
     season_list = parse_seasons(seasons)
     click.echo(
         f"Scraping teams, players, then {len(season_list)} season(s): {', '.join(season_list)}"
@@ -79,7 +76,7 @@ def scrape_all(seasons: str | None, enrich: bool, active_only: bool, with_reddit
     n_teams = alert.try_run("teams", scrape_teams)
     if n_teams is not None:
         click.echo(f"Teams: {n_teams}")
-    n_players = alert.try_run("players", lambda: scrape_players(enrich=enrich))
+    n_players = alert.try_run("players", scrape_players)
     if n_players is not None:
         click.echo(f"Players: {n_players}")
     contracts = alert.try_run("contracts", scrape_contracts)
@@ -115,11 +112,8 @@ def scrape_all(seasons: str | None, enrich: bool, active_only: bool, with_reddit
 
 
 @cli.command("scrape-players")
-@click.option(
-    "--enrich/--no-enrich", default=False, help="Best-effort CommonPlayerInfo enrichment."
-)
-def scrape_players_cmd(enrich: bool) -> None:
-    count = scrape_players(enrich=enrich)
+def scrape_players_cmd() -> None:
+    count = scrape_players()
     click.echo(f"Upserted {count} players")
 
 
@@ -222,7 +216,7 @@ def scrape_odds_cmd() -> None:
     help="Scrape these Final game_ids only (repeatable). Skips the season-wide Finals backfill.",
 )
 def scrape_play_by_play_cmd(season: str | None, game_ids: tuple[str, ...]) -> None:
-    """Upsert PlayByPlayV3 events for Finals. Omit --game-id to load a whole season."""
+    """Upsert Basketball-Reference play-by-play events. Omit --game-id to load a season."""
     ids = list(game_ids) or None
     try:
         count = scrape_play_by_play(season, game_ids=ids)

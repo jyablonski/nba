@@ -3,11 +3,10 @@ with source as (
 )
 
 select
-    source.bref_player_slug,
+    source.player_id,
+    source.team_id,
     source.player_name,
     source.player_name_normalized,
-    source.bref_team_abbreviation,
-    source.nba_team_abbreviation,
     source.season,
     source.salary,
     source.is_fully_guaranteed,

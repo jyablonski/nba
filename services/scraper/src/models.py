@@ -1,3 +1,8 @@
+"""SQLAlchemy models for the provider-independent source schema."""
+
+from __future__ import annotations
+
+import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (
@@ -7,12 +12,16 @@ from sqlalchemy import (
     Date,
     DateTime,
     Float,
+    ForeignKey,
+    Index,
     Integer,
+    PrimaryKeyConstraint,
     String,
+    Text,
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -20,34 +29,13 @@ class Base(DeclarativeBase):
     pass
 
 
-class Player(Base):
-    __tablename__ = "players"
-    __table_args__ = {"schema": "source"}
-
-    player_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    full_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    jersey_number: Mapped[str | None] = mapped_column(String(10))
-    position: Mapped[str | None] = mapped_column(String(20))
-    height: Mapped[str | None] = mapped_column(String(10))
-    weight: Mapped[int | None] = mapped_column(Integer)
-    birth_date: Mapped[date | None] = mapped_column(Date)
-    team_id: Mapped[int | None] = mapped_column(Integer)
-    from_year: Mapped[int | None] = mapped_column(Integer)
-    to_year: Mapped[int | None] = mapped_column(Integer)
-    scraped_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, server_default=func.now()
-    )
-
-
 class Team(Base):
     __tablename__ = "teams"
     __table_args__ = {"schema": "source"}
 
-    team_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    abbreviation: Mapped[str] = mapped_column(String(5), nullable=False)
+    team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    canonical_slug: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
+    abbreviation: Mapped[str] = mapped_column(String(5), nullable=False, unique=True)
     full_name: Mapped[str] = mapped_column(String(100), nullable=False)
     city: Mapped[str] = mapped_column(String(50), nullable=False)
     nickname: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -58,16 +46,44 @@ class Team(Base):
     )
 
 
+class Player(Base):
+    __tablename__ = "players"
+    __table_args__ = {"schema": "source"}
+
+    player_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    jersey_number: Mapped[str | None] = mapped_column(String(10))
+    position: Mapped[str | None] = mapped_column(String(20))
+    height: Mapped[str | None] = mapped_column(String(10))
+    weight: Mapped[int | None] = mapped_column(Integer)
+    birth_date: Mapped[date | None] = mapped_column(Date)
+    team_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.teams.team_id")
+    )
+    from_year: Mapped[int | None] = mapped_column(Integer)
+    to_year: Mapped[int | None] = mapped_column(Integer)
+    scraped_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+
 class Game(Base):
     __tablename__ = "games"
     __table_args__ = {"schema": "source"}
 
-    game_id: Mapped[str] = mapped_column(String(20), primary_key=True)
+    game_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     season: Mapped[str] = mapped_column(String(10), nullable=False)
     season_type: Mapped[str] = mapped_column(String(20), nullable=False)
     game_date: Mapped[date] = mapped_column(Date, nullable=False)
-    home_team_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    away_team_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    home_team_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.teams.team_id"), nullable=False
+    )
+    away_team_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.teams.team_id"), nullable=False
+    )
     home_score: Mapped[int | None] = mapped_column(Integer)
     away_score: Mapped[int | None] = mapped_column(Integer)
     arena: Mapped[str | None] = mapped_column(String(100))
@@ -87,12 +103,18 @@ class PlayerGameLog(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    player_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    game_id: Mapped[str] = mapped_column(String(20), nullable=False)
-    team_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    player_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.players.player_id"), nullable=False
+    )
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.games.game_id"), nullable=False
+    )
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.teams.team_id"), nullable=False
+    )
     game_date: Mapped[date] = mapped_column(Date, nullable=False)
     season: Mapped[str] = mapped_column(String(10), nullable=False)
-    matchup: Mapped[str] = mapped_column(String(20), nullable=False)
+    matchup: Mapped[str] = mapped_column(String(40), nullable=False)
     wl: Mapped[str | None] = mapped_column(CHAR(1))
     min: Mapped[float | None] = mapped_column(Float)
     pts: Mapped[int | None] = mapped_column(Integer)
@@ -120,20 +142,20 @@ class PlayerContract(Base):
     __tablename__ = "player_contracts"
     __table_args__ = (
         UniqueConstraint(
-            "bref_player_slug",
-            "bref_team_abbreviation",
-            "season",
-            name="player_contracts_bref_player_slug_bref_team_abbreviation_season_key",
+            "player_id", "team_id", "season", name="player_contracts_player_team_season_key"
         ),
         {"schema": "source"},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    bref_player_slug: Mapped[str] = mapped_column(String(32), nullable=False)
+    player_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.players.player_id"), nullable=False
+    )
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.teams.team_id"), nullable=False
+    )
     player_name: Mapped[str] = mapped_column(String(200), nullable=False)
     player_name_normalized: Mapped[str] = mapped_column(String(200), nullable=False)
-    bref_team_abbreviation: Mapped[str] = mapped_column(String(5), nullable=False)
-    nba_team_abbreviation: Mapped[str] = mapped_column(String(5), nullable=False)
     season: Mapped[str] = mapped_column(String(10), nullable=False)
     salary: Mapped[int | None] = mapped_column(BigInteger)
     is_fully_guaranteed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -149,16 +171,15 @@ class Standing(Base):
     __tablename__ = "standings"
     __table_args__ = (
         UniqueConstraint(
-            "season",
-            "season_type",
-            "team_id",
-            name="standings_season_season_type_team_id_key",
+            "season", "season_type", "team_id", name="standings_season_season_type_team_id_key"
         ),
         {"schema": "source"},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    team_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.teams.team_id"), nullable=False
+    )
     season: Mapped[str] = mapped_column(String(10), nullable=False)
     season_type: Mapped[str] = mapped_column(String(20), nullable=False, default="Regular Season")
     as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -181,22 +202,21 @@ class Standing(Base):
 class PlayerInjury(Base):
     __tablename__ = "player_injuries"
     __table_args__ = (
-        UniqueConstraint(
-            "player_name_normalized",
-            "bref_team_abbreviation",
-            name="player_injuries_player_name_normalized_bref_team_abbreviation_key",
-        ),
+        UniqueConstraint("player_id", "team_id", name="player_injuries_player_id_team_id_key"),
         {"schema": "source"},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    player_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.players.player_id"), nullable=False
+    )
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.teams.team_id"), nullable=False
+    )
     player_name: Mapped[str] = mapped_column(String(200), nullable=False)
     player_name_normalized: Mapped[str] = mapped_column(String(200), nullable=False)
-    bref_player_slug: Mapped[str | None] = mapped_column(String(32))
-    bref_team_abbreviation: Mapped[str] = mapped_column(String(5), nullable=False)
-    nba_team_abbreviation: Mapped[str] = mapped_column(String(5), nullable=False)
     update_date: Mapped[date | None] = mapped_column(Date)
-    description: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
     source_url: Mapped[str] = mapped_column(String(300), nullable=False)
     scraped_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
@@ -220,7 +240,9 @@ class GameOdds(Base):
     commence_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     home_team_name: Mapped[str] = mapped_column(String(100), nullable=False)
     away_team_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    game_id: Mapped[str | None] = mapped_column(String(20))
+    game_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.games.game_id")
+    )
     bookmaker: Mapped[str] = mapped_column(String(50), nullable=False)
     market: Mapped[str] = mapped_column(String(20), nullable=False)
     home_price: Mapped[int | None] = mapped_column(Integer)
@@ -248,12 +270,18 @@ class GamePrediction(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    game_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.games.game_id"), nullable=False
+    )
     as_of: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     model_name: Mapped[str] = mapped_column(String(50), nullable=False)
     model_version: Mapped[str] = mapped_column(String(50), nullable=False)
-    home_team_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    away_team_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    home_team_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.teams.team_id"), nullable=False
+    )
+    away_team_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.teams.team_id"), nullable=False
+    )
     model_wp: Mapped[float] = mapped_column(Float, nullable=False)
     market_wp: Mapped[float | None] = mapped_column(Float)
     scraped_at: Mapped[datetime] = mapped_column(
@@ -274,7 +302,9 @@ class PlayByPlay(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    game_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.games.game_id"), nullable=False
+    )
     season: Mapped[str] = mapped_column(String(10), nullable=False)
     action_number: Mapped[int] = mapped_column(Integer, nullable=False)
     action_id: Mapped[int | None] = mapped_column(Integer)
@@ -282,13 +312,131 @@ class PlayByPlay(Base):
     clock: Mapped[str | None] = mapped_column(String(32))
     score_home: Mapped[int | None] = mapped_column(Integer)
     score_away: Mapped[int | None] = mapped_column(Integer)
-    team_id: Mapped[int | None] = mapped_column(Integer)
-    player_id: Mapped[int | None] = mapped_column(Integer)
+    team_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.teams.team_id")
+    )
+    player_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.players.player_id")
+    )
     action_type: Mapped[str | None] = mapped_column(String(50))
     sub_type: Mapped[str | None] = mapped_column(String(80))
-    description: Mapped[str | None] = mapped_column(String)
+    description: Mapped[str | None] = mapped_column(Text)
     extras: Mapped[dict | None] = mapped_column(JSONB)
     scraped_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+
+class PlayerExternalId(Base):
+    __tablename__ = "player_external_ids"
+    __table_args__ = (
+        PrimaryKeyConstraint("provider", "external_id", name="player_external_ids_pkey"),
+        Index("idx_player_external_ids_player", "player_id"),
+        {"schema": "source"},
+    )
+
+    player_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("source.players.player_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    source_url: Mapped[str | None] = mapped_column(String(500))
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    metadata_json: Mapped[dict | None] = mapped_column("metadata", JSONB)
+
+
+class TeamExternalId(Base):
+    __tablename__ = "team_external_ids"
+    __table_args__ = (
+        PrimaryKeyConstraint("provider", "external_id", name="team_external_ids_pkey"),
+        Index("idx_team_external_ids_team", "team_id"),
+        {"schema": "source"},
+    )
+
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.teams.team_id", ondelete="CASCADE"), nullable=False
+    )
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    valid_from: Mapped[date | None] = mapped_column(Date)
+    valid_to: Mapped[date | None] = mapped_column(Date)
+    source_url: Mapped[str | None] = mapped_column(String(500))
+    metadata_json: Mapped[dict | None] = mapped_column("metadata", JSONB)
+
+
+class GameExternalId(Base):
+    __tablename__ = "game_external_ids"
+    __table_args__ = (
+        PrimaryKeyConstraint("provider", "external_id", name="game_external_ids_pkey"),
+        Index("idx_game_external_ids_game", "game_id"),
+        {"schema": "source"},
+    )
+
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.games.game_id", ondelete="CASCADE"), nullable=False
+    )
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    source_url: Mapped[str | None] = mapped_column(String(500))
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    metadata_json: Mapped[dict | None] = mapped_column("metadata", JSONB)
+
+
+class TeamAlias(Base):
+    __tablename__ = "team_aliases"
+    __table_args__ = (
+        UniqueConstraint("provider", "alias", name="team_aliases_provider_alias_key"),
+        Index("idx_team_aliases_team", "team_id"),
+        {"schema": "source"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.teams.team_id", ondelete="CASCADE"), nullable=False
+    )
+    provider: Mapped[str | None] = mapped_column(String(50))
+    alias: Mapped[str] = mapped_column(String(200), nullable=False)
+    valid_from: Mapped[date | None] = mapped_column(Date)
+    valid_to: Mapped[date | None] = mapped_column(Date)
+
+
+class IdentityReviewQueue(Base):
+    __tablename__ = "identity_review_queue"
+    __table_args__ = (
+        UniqueConstraint(
+            "entity_type",
+            "provider",
+            "external_id",
+            name="identity_review_queue_entity_provider_external_key",
+        ),
+        Index("idx_identity_review_queue_status", "status"),
+        {"schema": "source"},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    candidate_name: Mapped[str | None] = mapped_column(String(200))
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
+    metadata_json: Mapped[dict | None] = mapped_column("metadata", JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
 
@@ -299,14 +447,14 @@ class RedditPost(Base):
 
     reddit_id: Mapped[str] = mapped_column(String(16), primary_key=True)
     subreddit: Mapped[str] = mapped_column(String(50), nullable=False)
-    title: Mapped[str] = mapped_column(String, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
     author: Mapped[str | None] = mapped_column(String(50))
     score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     num_comments: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_utc: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     permalink: Mapped[str] = mapped_column(String(500), nullable=False)
-    url: Mapped[str | None] = mapped_column(String)
-    selftext: Mapped[str | None] = mapped_column(String)
+    url: Mapped[str | None] = mapped_column(Text)
+    selftext: Mapped[str | None] = mapped_column(Text)
     flair: Mapped[str | None] = mapped_column(String(200))
     is_self: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     scraped_at: Mapped[datetime] = mapped_column(
@@ -319,10 +467,12 @@ class RedditComment(Base):
     __table_args__ = {"schema": "source"}
 
     reddit_id: Mapped[str] = mapped_column(String(16), primary_key=True)
-    post_reddit_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    post_reddit_id: Mapped[str] = mapped_column(
+        String(16), ForeignKey("source.reddit_posts.reddit_id"), nullable=False
+    )
     parent_id: Mapped[str | None] = mapped_column(String(20))
     author: Mapped[str | None] = mapped_column(String(50))
-    body: Mapped[str | None] = mapped_column(String)
+    body: Mapped[str | None] = mapped_column(Text)
     score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_utc: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     permalink: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -334,17 +484,14 @@ class RedditComment(Base):
 class TeamPayroll(Base):
     __tablename__ = "team_payroll"
     __table_args__ = (
-        UniqueConstraint(
-            "bref_team_abbreviation",
-            "season",
-            name="team_payroll_bref_team_abbreviation_season_key",
-        ),
+        UniqueConstraint("team_id", "season", name="team_payroll_team_season_key"),
         {"schema": "source"},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    bref_team_abbreviation: Mapped[str] = mapped_column(String(5), nullable=False)
-    nba_team_abbreviation: Mapped[str] = mapped_column(String(5), nullable=False)
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.teams.team_id"), nullable=False
+    )
     season: Mapped[str] = mapped_column(String(10), nullable=False)
     total_salary: Mapped[int | None] = mapped_column(BigInteger)
     remaining_guaranteed: Mapped[int | None] = mapped_column(BigInteger)
@@ -352,3 +499,6 @@ class TeamPayroll(Base):
     scraped_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
+
+
+__all__ = [name for name in globals() if not name.startswith("_")]

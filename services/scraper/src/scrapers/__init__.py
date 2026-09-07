@@ -1,4 +1,4 @@
-"""NBA Stats API scrapers with shared rate-limiting and retry helpers."""
+"""Shared Basketball-Reference transport and parsing helpers."""
 
 from __future__ import annotations
 
@@ -7,64 +7,43 @@ from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any
 
+import requests
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
-REQUEST_DELAY_SECONDS = 0.6
-NBA_REQUEST_TIMEOUT = 60
-
-HEADERS = {
-    "Host": "stats.nba.com",
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/126.0.0.0 Safari/537.36"
-    ),
-    "Accept": "application/json, text/plain, */*",
+BREF_BASE_URL = "https://www.basketball-reference.com"
+BREF_REQUEST_TIMEOUT = 60
+BREF_REQUEST_DELAY_SECONDS = 3.0
+BREF_PROVIDER = "basketball-reference"
+BREF_HEADERS = {
+    "User-Agent": "Baseline/1.0 (+https://baseline.jyablonski.dev; respectful research client)",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://stats.nba.com/",
-    "Origin": "https://stats.nba.com",
-    "Connection": "keep-alive",
-    "x-nba-stats-origin": "stats",
-    "x-nba-stats-token": "true",
+    "Referer": f"{BREF_BASE_URL}/",
 }
 
-GAME_SEASON_TYPES = ("Regular Season", "Playoffs", "PlayIn")
-LOG_SEASON_TYPES = ("Regular Season", "Playoffs", "PlayIn")
-
-_last_request_at = 0.0
-_headers_applied = False
+_last_bref_request_at = 0.0
 
 
-def ensure_headers() -> None:
-    """nba_api sets headers by default; re-apply if a 403-style failure is likely."""
-    global _headers_applied
-    if _headers_applied:
-        return
-    try:
-        from nba_api.stats.library.http import NBAStatsHTTP
-
-        # Current nba_api uses `.headers`; older builds used `.nba_headers`.
-        for attr in ("headers", "nba_headers"):
-            current = getattr(NBAStatsHTTP, attr, None)
-            if isinstance(current, dict):
-                current.update(HEADERS)
-            else:
-                setattr(NBAStatsHTTP, attr, dict(HEADERS))
-    except Exception:
-        pass
-    _headers_applied = True
-
-
-def rate_limit() -> None:
-    global _last_request_at
-    elapsed = time.monotonic() - _last_request_at
-    if elapsed < REQUEST_DELAY_SECONDS:
-        time.sleep(REQUEST_DELAY_SECONDS - elapsed)
-    _last_request_at = time.monotonic()
+class BrefHTTPError(RuntimeError):
+    def __init__(self, status: int, url: str) -> None:
+        self.status = int(status)
+        self.url = url
+        super().__init__(f"Basketball-Reference HTTP {status} for {url}")
 
 
 def _is_retryable(exc: BaseException) -> bool:
-    return not isinstance(exc, (KeyboardInterrupt, SystemExit))
+    if isinstance(exc, (KeyboardInterrupt, SystemExit, ValueError)):
+        return False
+    return not (isinstance(exc, BrefHTTPError) and 400 <= exc.status < 500 and exc.status != 429)
+
+
+def bref_rate_limit() -> None:
+    """Serialize requests and keep a deliberately conservative site delay."""
+    global _last_bref_request_at
+    elapsed = time.monotonic() - _last_bref_request_at
+    if elapsed < BREF_REQUEST_DELAY_SECONDS:
+        time.sleep(BREF_REQUEST_DELAY_SECONDS - elapsed)
+    _last_bref_request_at = time.monotonic()
 
 
 @retry(
@@ -73,18 +52,18 @@ def _is_retryable(exc: BaseException) -> bool:
     stop=stop_after_attempt(5),
     reraise=True,
 )
-def nba_call[T](fn: Callable[[], T]) -> T:
-    """Rate-limit, then invoke an NBA API request with exponential backoff."""
-    ensure_headers()
-    rate_limit()
-    return fn()
+def bref_get(url: str, *, get: Callable[..., Any] | None = None) -> str:
+    bref_rate_limit()
+    response = (get or requests.get)(url, headers=BREF_HEADERS, timeout=BREF_REQUEST_TIMEOUT)
+    status = getattr(response, "status_code", None)
+    if status is not None and int(status) >= 400:
+        raise BrefHTTPError(int(status), url)
+    return str(response.text)
 
 
 def current_season(today: date | None = None) -> str:
-    """NBA season string for `today`. October starts a new season."""
     today = today or date.today()
-    start_year = today.year if today.month >= 10 else today.year - 1
-    return season_from_start_year(start_year)
+    return season_from_start_year(today.year if today.month >= 10 else today.year - 1)
 
 
 def season_from_start_year(year: int | str) -> str:
@@ -93,7 +72,7 @@ def season_from_start_year(year: int | str) -> str:
 
 
 def season_start_year(season: str) -> int:
-    return int(season.split("-")[0])
+    return int(season.split("-", 1)[0])
 
 
 def generate_seasons(start: str, end: str) -> list[str]:
@@ -105,13 +84,10 @@ def generate_seasons(start: str, end: str) -> list[str]:
 
 
 def parse_seasons(value: str | None) -> list[str]:
-    """Parse a comma-separated season list. Empty/None -> current season only."""
     if value is None or not value.strip():
         return [current_season()]
     seasons = [part.strip() for part in value.split(",") if part.strip()]
-    if not seasons:
-        return [current_season()]
-    return seasons
+    return seasons or [current_season()]
 
 
 def parse_game_date(value: Any) -> date:
@@ -120,7 +96,7 @@ def parse_game_date(value: Any) -> date:
     if isinstance(value, date):
         return value
     text = str(value).strip()
-    for fmt in ("%Y-%m-%d", "%b %d, %Y", "%B %d, %Y", "%m/%d/%Y"):
+    for fmt in ("%Y-%m-%d", "%a, %b %d, %Y", "%b %d, %Y", "%B %d, %Y", "%m/%d/%Y"):
         try:
             return datetime.strptime(text, fmt).date()
         except ValueError:
@@ -186,59 +162,40 @@ def dataset_rows(payload: dict[str, Any], *preferred: str) -> list[dict[str, Any
         rows = payload.get(name)
         if isinstance(rows, list):
             return rows
-    for rows in payload.values():
-        if isinstance(rows, list):
-            return rows
-    return []
-
-
-def matchup_is_home(matchup: str) -> bool:
-    lowered = matchup.lower()
-    return " vs." in lowered or " vs " in lowered
-
-
-def matchup_team_abbr(matchup: str) -> str | None:
-    token = matchup.strip().split()[0] if matchup and matchup.strip() else ""
-    return token.upper() or None
+    return [rows for rows in payload.values() if isinstance(rows, dict)]
 
 
 def parse_matchup_sides(matchup: str) -> tuple[str | None, str | None]:
-    """Return (home_abbr, away_abbr) from ``DAL @ DET`` or ``DET vs. DAL``.
-
-    LeagueGameFinder sometimes repeats the ``@`` string on both team rows
-    (NBA Cup knockout / restaged dates). Callers must not assume the current
-    row is home just because the matchup lacks ``vs``.
-    """
     text = (matchup or "").strip()
-    if not text:
-        return None, None
-    lowered = text.lower()
-    if " @ " in lowered:
-        left, right = text.split("@", 1)
-        away = left.strip().split()[0].upper() if left.strip() else None
-        home = right.strip().split()[0].upper() if right.strip() else None
-        return home, away
-    if " vs." in lowered or " vs " in lowered:
-        marker = " vs." if " vs." in lowered else " vs "
-        idx = lowered.find(marker)
-        left, right = text[:idx], text[idx + len(marker) :]
-        home = left.strip().split()[0].upper() if left.strip() else None
-        away = right.strip().split()[0].upper() if right.strip() else None
-        return home, away
+    if " @ " in text:
+        away, home = text.split("@", 1)
+        return home.strip().split()[0].upper(), away.strip().split()[0].upper()
+    if " vs. " in text:
+        home, away = text.split(" vs. ", 1)
+        return home.strip().split()[0].upper(), away.strip().split()[0].upper()
     return None, None
 
 
-def matchup_row_is_home(matchup: str, team_abbr: str | None) -> bool:
-    """Whether this team's finder row is the home side."""
-    home_abbr, away_abbr = parse_matchup_sides(matchup)
-    key = (team_abbr or "").strip().upper()
-    if key and home_abbr and key == home_abbr:
-        return True
-    if key and away_abbr and key == away_abbr:
-        return False
-    return matchup_is_home(matchup)
-
-
-def nba_date(value: date) -> str:
-    """NBA Stats date filter format (YYYY-MM-DD per nba_api LeagueGameFinder)."""
-    return value.strftime("%Y-%m-%d")
+__all__ = [
+    "BREF_BASE_URL",
+    "BREF_HEADERS",
+    "BREF_PROVIDER",
+    "BREF_REQUEST_TIMEOUT",
+    "BREF_REQUEST_DELAY_SECONDS",
+    "BrefHTTPError",
+    "bref_get",
+    "bref_rate_limit",
+    "current_season",
+    "dataset_rows",
+    "generate_seasons",
+    "parse_game_date",
+    "parse_matchup_sides",
+    "parse_minutes",
+    "parse_seasons",
+    "row_get",
+    "season_from_start_year",
+    "season_start_year",
+    "to_float",
+    "to_int",
+    "to_str",
+]

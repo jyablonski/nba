@@ -6,7 +6,7 @@ cubes:
     dimensions:
       - name: team_id
         sql: team_id
-        type: number
+        type: string
         primary_key: true
 
       - name: abbreviation

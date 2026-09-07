@@ -1,6 +1,15 @@
 from datetime import date
 
 import pytest
+from ids import (
+    GAME_ONE,
+    GAME_TWO,
+    MISSING_ID,
+    PLAYER_CURRY,
+    PLAYER_KAWHI,
+    PLAYER_LEBRON,
+    TEAM_GSW,
+)
 
 
 @pytest.mark.unit
@@ -11,7 +20,7 @@ def test_list_players(client, session, mapping_row, query_result) -> None:
             [
                 mapping_row(
                     {
-                        "player_id": 202695,
+                        "player_id": PLAYER_KAWHI,
                         "full_name": "Kawhi Leonard",
                         "position": "F",
                         "team_abbreviation": "LAC",
@@ -32,7 +41,7 @@ def test_list_players(client, session, mapping_row, query_result) -> None:
 @pytest.mark.unit
 def test_get_player_not_found(client, session, query_result) -> None:
     session.queue = [query_result(rows=[])]
-    response = client.get("/api/v1/players/1")
+    response = client.get(f"/api/v1/players/{MISSING_ID}")
     assert response.status_code == 404
     assert response.json()["detail"] == "Player not found"
 
@@ -43,7 +52,7 @@ def test_get_player_detail(client, session, query_result) -> None:
         query_result(
             [
                 {
-                    "player_id": 2544,
+                    "player_id": PLAYER_LEBRON,
                     "full_name": "LeBron James",
                     "position": "F",
                     "team_abbreviation": "LAL",
@@ -62,7 +71,7 @@ def test_get_player_detail(client, session, query_result) -> None:
             ]
         )
     ]
-    response = client.get("/api/v1/players/2544")
+    response = client.get(f"/api/v1/players/{PLAYER_LEBRON}")
     assert response.status_code == 200
     body = response.json()["data"]
     assert body["full_name"] == "LeBron James"
@@ -77,7 +86,7 @@ def test_get_player_includes_salary_snapshot(client, session, query_result) -> N
         query_result(
             [
                 {
-                    "player_id": 201939,
+                    "player_id": PLAYER_CURRY,
                     "full_name": "Stephen Curry",
                     "position": "G",
                     "team_abbreviation": "GSW",
@@ -99,7 +108,7 @@ def test_get_player_includes_salary_snapshot(client, session, query_result) -> N
             ]
         )
     ]
-    response = client.get("/api/v1/players/201939")
+    response = client.get(f"/api/v1/players/{PLAYER_CURRY}")
     assert response.status_code == 200
     body = response.json()["data"]
     assert body["current_season_salary"] == 50_000_000
@@ -109,7 +118,7 @@ def test_get_player_includes_salary_snapshot(client, session, query_result) -> N
 
 @pytest.mark.unit
 def test_compare_requires_two_ids(client) -> None:
-    response = client.get("/api/v1/players/compare", params={"ids": "2544"})
+    response = client.get("/api/v1/players/compare", params={"ids": PLAYER_LEBRON})
     assert response.status_code == 400
 
 
@@ -122,7 +131,8 @@ def test_compare_rejects_bad_ids(client) -> None:
 @pytest.mark.unit
 def test_compare_rejects_unknown_stat(client) -> None:
     response = client.get(
-        "/api/v1/players/compare", params={"ids": "2544,201939", "stat": "blocks"}
+        "/api/v1/players/compare",
+        params={"ids": f"{PLAYER_LEBRON},{PLAYER_CURRY}", "stat": "blocks"},
     )
     assert response.status_code == 400
 
@@ -134,7 +144,7 @@ def test_compare_players(client, session, mapping_row, query_result) -> None:
             [
                 mapping_row(
                     {
-                        "player_id": 2544,
+                        "player_id": PLAYER_LEBRON,
                         "full_name": "LeBron James",
                         "career_games_played": 1500,
                         "career_ppg": 27.1,
@@ -145,7 +155,7 @@ def test_compare_players(client, session, mapping_row, query_result) -> None:
                 ),
                 mapping_row(
                     {
-                        "player_id": 201939,
+                        "player_id": PLAYER_CURRY,
                         "full_name": "Stephen Curry",
                         "career_games_played": 1000,
                         "career_ppg": 24.6,
@@ -157,7 +167,9 @@ def test_compare_players(client, session, mapping_row, query_result) -> None:
             ]
         )
     ]
-    response = client.get("/api/v1/players/compare", params={"ids": "2544,201939"})
+    response = client.get(
+        "/api/v1/players/compare", params={"ids": f"{PLAYER_LEBRON},{PLAYER_CURRY}"}
+    )
     assert response.status_code == 200
     body = response.json()["data"]
     assert len(body) == 2
@@ -172,7 +184,7 @@ def test_compare_accepts_plus_minus_stat(client, session, mapping_row, query_res
             [
                 mapping_row(
                     {
-                        "player_id": 2544,
+                        "player_id": PLAYER_LEBRON,
                         "full_name": "LeBron James",
                         "career_games_played": 1500,
                         "career_ppg": 27.1,
@@ -183,7 +195,7 @@ def test_compare_accepts_plus_minus_stat(client, session, mapping_row, query_res
                 ),
                 mapping_row(
                     {
-                        "player_id": 201939,
+                        "player_id": PLAYER_CURRY,
                         "full_name": "Stephen Curry",
                         "career_games_played": 1000,
                         "career_ppg": 24.6,
@@ -196,7 +208,8 @@ def test_compare_accepts_plus_minus_stat(client, session, mapping_row, query_res
         )
     ]
     response = client.get(
-        "/api/v1/players/compare", params={"ids": "2544,201939", "stat": "plus_minus"}
+        "/api/v1/players/compare",
+        params={"ids": f"{PLAYER_LEBRON},{PLAYER_CURRY}", "stat": "plus_minus"},
     )
     assert response.status_code == 200
     body = response.json()["data"]
@@ -219,13 +232,16 @@ def test_compare_sql_averages_box_plus_minus() -> None:
 
 @pytest.mark.unit
 def test_head_to_head_requires_exactly_two_ids(client) -> None:
-    response = client.get("/api/v1/players/compare/head-to-head", params={"ids": "2544"})
+    response = client.get("/api/v1/players/compare/head-to-head", params={"ids": PLAYER_LEBRON})
     assert response.status_code == 400
 
 
 @pytest.mark.unit
 def test_head_to_head_rejects_duplicate_ids(client) -> None:
-    response = client.get("/api/v1/players/compare/head-to-head", params={"ids": "2544,2544"})
+    response = client.get(
+        "/api/v1/players/compare/head-to-head",
+        params={"ids": f"{PLAYER_LEBRON},{PLAYER_LEBRON}"},
+    )
     assert response.status_code == 400
 
 
@@ -240,11 +256,14 @@ def test_head_to_head_missing_player(client, session, mapping_row, query_result)
     session.queue = [
         query_result(
             [
-                mapping_row({"player_id": 2544, "full_name": "LeBron James"}),
+                mapping_row({"player_id": PLAYER_LEBRON, "full_name": "LeBron James"}),
             ]
         )
     ]
-    response = client.get("/api/v1/players/compare/head-to-head", params={"ids": "2544,201939"})
+    response = client.get(
+        "/api/v1/players/compare/head-to-head",
+        params={"ids": f"{PLAYER_LEBRON},{PLAYER_CURRY}"},
+    )
     assert response.status_code == 404
 
 
@@ -253,13 +272,16 @@ def test_head_to_head_empty_meetings(client, session, mapping_row, query_result)
     session.queue = [
         query_result(
             [
-                mapping_row({"player_id": 2544, "full_name": "LeBron James"}),
-                mapping_row({"player_id": 201939, "full_name": "Stephen Curry"}),
+                mapping_row({"player_id": PLAYER_LEBRON, "full_name": "LeBron James"}),
+                mapping_row({"player_id": PLAYER_CURRY, "full_name": "Stephen Curry"}),
             ]
         ),
         query_result([]),
     ]
-    response = client.get("/api/v1/players/compare/head-to-head", params={"ids": "2544,201939"})
+    response = client.get(
+        "/api/v1/players/compare/head-to-head",
+        params={"ids": f"{PLAYER_LEBRON},{PLAYER_CURRY}"},
+    )
     assert response.status_code == 200
     body = response.json()["data"]
     assert body["games_played"] == 0
@@ -275,17 +297,17 @@ def test_head_to_head_averages_and_logs(client, session, mapping_row, query_resu
     session.queue = [
         query_result(
             [
-                mapping_row({"player_id": 201939, "full_name": "Stephen Curry"}),
-                mapping_row({"player_id": 202695, "full_name": "Kawhi Leonard"}),
+                mapping_row({"player_id": PLAYER_CURRY, "full_name": "Stephen Curry"}),
+                mapping_row({"player_id": PLAYER_KAWHI, "full_name": "Kawhi Leonard"}),
             ]
         ),
         query_result(
             [
                 mapping_row(
                     {
-                        "player_id": 201939,
+                        "player_id": PLAYER_CURRY,
                         "full_name": "Stephen Curry",
-                        "game_id": "0022400003",
+                        "game_id": GAME_TWO,
                         "game_date": date(2024, 10, 25),
                         "season": "2024-25",
                         "matchup": "GSW @ LAC",
@@ -305,9 +327,9 @@ def test_head_to_head_averages_and_logs(client, session, mapping_row, query_resu
                 ),
                 mapping_row(
                     {
-                        "player_id": 202695,
+                        "player_id": PLAYER_KAWHI,
                         "full_name": "Kawhi Leonard",
-                        "game_id": "0022400003",
+                        "game_id": GAME_TWO,
                         "game_date": date(2024, 10, 25),
                         "season": "2024-25",
                         "matchup": "LAC vs. GSW",
@@ -327,9 +349,9 @@ def test_head_to_head_averages_and_logs(client, session, mapping_row, query_resu
                 ),
                 mapping_row(
                     {
-                        "player_id": 201939,
+                        "player_id": PLAYER_CURRY,
                         "full_name": "Stephen Curry",
-                        "game_id": "0022400001",
+                        "game_id": GAME_ONE,
                         "game_date": date(2024, 10, 22),
                         "season": "2024-25",
                         "matchup": "GSW vs. LAC",
@@ -349,9 +371,9 @@ def test_head_to_head_averages_and_logs(client, session, mapping_row, query_resu
                 ),
                 mapping_row(
                     {
-                        "player_id": 202695,
+                        "player_id": PLAYER_KAWHI,
                         "full_name": "Kawhi Leonard",
-                        "game_id": "0022400001",
+                        "game_id": GAME_ONE,
                         "game_date": date(2024, 10, 22),
                         "season": "2024-25",
                         "matchup": "LAC @ GSW",
@@ -372,7 +394,10 @@ def test_head_to_head_averages_and_logs(client, session, mapping_row, query_resu
             ]
         ),
     ]
-    response = client.get("/api/v1/players/compare/head-to-head", params={"ids": "201939,202695"})
+    response = client.get(
+        "/api/v1/players/compare/head-to-head",
+        params={"ids": f"{PLAYER_CURRY},{PLAYER_KAWHI}"},
+    )
     assert response.status_code == 200
     body = response.json()["data"]
     assert body["games_played"] == 2
@@ -387,8 +412,8 @@ def test_head_to_head_averages_and_logs(client, session, mapping_row, query_resu
     assert kawhi["ppg"] == 29.0
     assert kawhi["plus_minus"] == -2.0
     assert body["games"][0]["lines"][0]["plus_minus"] == -3
-    assert body["games"][0]["game_id"] == "0022400003"
-    assert [line["player_id"] for line in body["games"][0]["lines"]] == [201939, 202695]
+    assert body["games"][0]["game_id"] == GAME_TWO
+    assert [line["player_id"] for line in body["games"][0]["lines"]] == [PLAYER_CURRY, PLAYER_KAWHI]
 
 
 @pytest.mark.unit
@@ -405,7 +430,7 @@ def test_compare_missing_player(client, session, mapping_row, query_result) -> N
             [
                 mapping_row(
                     {
-                        "player_id": 2544,
+                        "player_id": PLAYER_LEBRON,
                         "full_name": "LeBron James",
                         "career_games_played": 1500,
                         "career_ppg": 27.1,
@@ -416,14 +441,16 @@ def test_compare_missing_player(client, session, mapping_row, query_result) -> N
             ]
         )
     ]
-    response = client.get("/api/v1/players/compare", params={"ids": "2544,201939"})
+    response = client.get(
+        "/api/v1/players/compare", params={"ids": f"{PLAYER_LEBRON},{PLAYER_CURRY}"}
+    )
     assert response.status_code == 404
 
 
 @pytest.mark.unit
 def test_game_log_not_found(client, session, query_result) -> None:
     session.queue = [query_result(rows=[])]
-    response = client.get("/api/v1/players/1/game-log")
+    response = client.get(f"/api/v1/players/{MISSING_ID}/game-log")
     assert response.status_code == 404
 
 
@@ -454,7 +481,7 @@ def test_game_log(client, session, mapping_row, query_result) -> None:
             ]
         ),
     ]
-    response = client.get("/api/v1/players/202695/game-log", params={"season": "2024-25"})
+    response = client.get(f"/api/v1/players/{PLAYER_KAWHI}/game-log", params={"season": "2024-25"})
     assert response.status_code == 200
     assert response.json()["data"][0]["points"] == 28
     assert response.json()["data"][0]["steals"] == 2
@@ -464,14 +491,14 @@ def test_game_log(client, session, mapping_row, query_result) -> None:
 @pytest.mark.unit
 def test_back_to_backs_not_found(client, session, query_result) -> None:
     session.queue = [query_result(rows=[])]
-    response = client.get("/api/v1/players/1/back-to-backs")
+    response = client.get(f"/api/v1/players/{MISSING_ID}/back-to-backs")
     assert response.status_code == 404
 
 
 @pytest.mark.unit
 def test_back_to_backs(client, session, query_result) -> None:
     session.queue = [
-        query_result(rows=[{"player_id": 202695, "full_name": "Kawhi Leonard"}]),
+        query_result(rows=[{"player_id": PLAYER_KAWHI, "full_name": "Kawhi Leonard"}]),
         query_result(
             rows=[
                 {
@@ -484,7 +511,9 @@ def test_back_to_backs(client, session, query_result) -> None:
             ]
         ),
     ]
-    response = client.get("/api/v1/players/202695/back-to-backs", params={"season": "2024-25"})
+    response = client.get(
+        f"/api/v1/players/{PLAYER_KAWHI}/back-to-backs", params={"season": "2024-25"}
+    )
     assert response.status_code == 200
     body = response.json()["data"]
     assert body["total_back_to_backs"] == 12
@@ -500,7 +529,7 @@ def test_list_players_team_filter(client, session, mapping_row, query_result) ->
             [
                 mapping_row(
                     {
-                        "player_id": 201939,
+                        "player_id": PLAYER_CURRY,
                         "full_name": "Stephen Curry",
                         "position": "G",
                         "team_abbreviation": "GSW",
@@ -514,7 +543,7 @@ def test_list_players_team_filter(client, session, mapping_row, query_result) ->
             ]
         ),
     ]
-    response = client.get("/api/v1/players", params={"team_id": 1610612744})
+    response = client.get("/api/v1/players", params={"team_id": TEAM_GSW})
     assert response.status_code == 200
     assert response.json()["data"][0]["career_ppg"] == 24.6
 
@@ -522,14 +551,14 @@ def test_list_players_team_filter(client, session, mapping_row, query_result) ->
 @pytest.mark.unit
 def test_game_log_rejects_bad_sort(client, session, query_result) -> None:
     session.queue = [query_result(rows=[1])]
-    response = client.get("/api/v1/players/202695/game-log", params={"sort": "fg_pct"})
+    response = client.get(f"/api/v1/players/{PLAYER_KAWHI}/game-log", params={"sort": "fg_pct"})
     assert response.status_code == 400
 
 
 @pytest.mark.unit
 def test_game_log_rejects_bad_order(client, session, query_result) -> None:
     session.queue = [query_result(rows=[1])]
-    response = client.get("/api/v1/players/202695/game-log", params={"order": "sideways"})
+    response = client.get(f"/api/v1/players/{PLAYER_KAWHI}/game-log", params={"order": "sideways"})
     assert response.status_code == 400
 
 
@@ -557,7 +586,7 @@ def test_game_log_b2b_filter(client, session, mapping_row, query_result) -> None
         ),
     ]
     response = client.get(
-        "/api/v1/players/202695/game-log",
+        f"/api/v1/players/{PLAYER_KAWHI}/game-log",
         params={"is_back_to_back": True, "sort": "points", "order": "asc"},
     )
     assert response.status_code == 200
@@ -567,7 +596,7 @@ def test_game_log_b2b_filter(client, session, mapping_row, query_result) -> None
 @pytest.mark.unit
 def test_season_stats_not_found(client, session, query_result) -> None:
     session.queue = [query_result(rows=[])]
-    response = client.get("/api/v1/players/1/season-stats")
+    response = client.get(f"/api/v1/players/{MISSING_ID}/season-stats")
     assert response.status_code == 404
 
 
@@ -580,7 +609,7 @@ def test_season_stats(client, session, mapping_row, query_result) -> None:
             [
                 mapping_row(
                     {
-                        "player_id": 202695,
+                        "player_id": PLAYER_KAWHI,
                         "season": "2024-25",
                         "games_played": 3,
                         "ppg": 27.3,
@@ -591,7 +620,7 @@ def test_season_stats(client, session, mapping_row, query_result) -> None:
             ]
         ),
     ]
-    response = client.get("/api/v1/players/202695/season-stats")
+    response = client.get(f"/api/v1/players/{PLAYER_KAWHI}/season-stats")
     assert response.status_code == 200
     row = response.json()["data"][0]
     assert row["season"] == "2024-25"

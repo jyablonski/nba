@@ -31,11 +31,11 @@ function PlayersDirectory() {
   const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
   const [activeOnly, setActiveOnly] = useState(true);
   const [teamId, setTeamId] = useState("");
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
   const debounced = useDebounce(search, 300);
 
-  const togglePlayer = useCallback((playerId: number) => {
+  const togglePlayer = useCallback((playerId: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(playerId)) next.delete(playerId);
@@ -59,7 +59,7 @@ function PlayersDirectory() {
     queryFn: () =>
       api.searchPlayers(debounced.trim(), {
         active: activeOnly ? true : undefined,
-        team_id: teamId ? Number(teamId) : undefined,
+        team_id: teamId || undefined,
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
       }),

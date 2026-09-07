@@ -1,125 +1,166 @@
-"""Scrape static player biographical data into source.players."""
+"""Discover and maintain the durable player registry from BRef rosters."""
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+import re
+from collections.abc import Callable
+from datetime import date, datetime
+from typing import Any
 
-from nba_api.stats.static import players as static_players
+from bs4 import BeautifulSoup, Comment, Tag
+from identity import BREF_PROVIDER, ensure_player, seed_team_catalog
 
-from db import get_session, upsert_rows
+from db import get_session
 from models import Player
-from scrapers import NBA_REQUEST_TIMEOUT, dataset_rows, nba_call, parse_game_date, to_int, to_str
+from scrapers import BREF_BASE_URL, bref_get, current_season, season_start_year, to_int
+from scrapers.contracts_parse import PLAYER_HREF_RE, normalize_player_name
 
 logger = logging.getLogger(__name__)
 
+ROSTER_TABLE_ID = "roster"
 
-def scrape_players(*, enrich: bool = False) -> int:
+
+def team_roster_url(bref_abbreviation: str, season: str | None = None) -> str:
+    year = season_start_year(season or current_season())
+    return f"{BREF_BASE_URL}/teams/{bref_abbreviation.upper()}/{year}.html"
+
+
+def _find_roster_table(soup: BeautifulSoup) -> Tag | None:
+    table = soup.find("table", id=ROSTER_TABLE_ID)
+    if isinstance(table, Tag):
+        return table
+    for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
+        if 'id="roster"' not in comment and "id='roster'" not in comment:
+            continue
+        nested = BeautifulSoup(str(comment), "html.parser")
+        table = nested.find("table", id=ROSTER_TABLE_ID)
+        if isinstance(table, Tag):
+            return table
+    return None
+
+
+def _cell_text(row: Tag, stat: str) -> str | None:
+    cell = row.find(["th", "td"], attrs={"data-stat": stat})
+    if not isinstance(cell, Tag):
+        return None
+    value = cell.get("csk") or cell.get_text(" ", strip=True)
+    return str(value).strip() or None
+
+
+def _player_cell(row: Tag) -> tuple[str | None, str | None]:
+    cell = row.find(["th", "td"], attrs={"data-stat": "player"})
+    if not isinstance(cell, Tag):
+        return None, None
+    link = cell.find("a")
+    if not isinstance(link, Tag):
+        return None, cell.get_text(" ", strip=True) or None
+    href = str(link.get("href") or "")
+    match = PLAYER_HREF_RE.search(href)
+    return (match.group(1).lower() if match else None), link.get_text(" ", strip=True) or None
+
+
+def _parse_years(value: str | None) -> tuple[int | None, int | None]:
+    years = [int(item) for item in re.findall(r"\b(\d{4})\b", value or "")]
+    if not years:
+        return None, None
+    return min(years), max(years)
+
+
+def parse_roster_html(html: str, *, team_id: Any, source_url: str) -> list[dict[str, Any]]:
+    """Parse BRef's roster table into provider-keyed player records."""
+    soup = BeautifulSoup(html, "html.parser")
+    table = _find_roster_table(soup)
+    if table is None:
+        return []
+    rows: list[dict[str, Any]] = []
+    for row in table.select("tbody tr"):
+        if not isinstance(row, Tag) or "thead" in (row.get("class") or []):
+            continue
+        slug, name = _player_cell(row)
+        if not slug or not name or name.lower() == "player":
+            continue
+        first, _, last = name.partition(" ")
+        from_year, to_year = _parse_years(_cell_text(row, "years"))
+        rows.append(
+            {
+                "provider": BREF_PROVIDER,
+                "external_id": slug,
+                "source_url": source_url,
+                "first_name": first,
+                "last_name": last or first,
+                "full_name": name,
+                "player_name_normalized": normalize_player_name(name),
+                "is_active": True,
+                "jersey_number": _cell_text(row, "number"),
+                "position": _cell_text(row, "pos"),
+                "height": _cell_text(row, "height"),
+                "weight": to_int(_cell_text(row, "weight")),
+                "birth_date": _parse_birth_date(_cell_text(row, "birth_date")),
+                "from_year": from_year,
+                "to_year": to_year,
+                "team_id": team_id,
+            }
+        )
+    return rows
+
+
+def _parse_birth_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except ValueError:
+        return None
+
+
+def scrape_players(
+    *,
+    season: str | None = None,
+    fetch_html: Callable[[str], str] | None = None,
+) -> int:
+    """Load current rosters from Basketball-Reference team pages."""
+    target_season = season or current_season()
+    fetch = fetch_html or bref_get
     scraped_at = datetime.now()
-    source = static_players.get_players()
-    rows: list[dict] = []
-    for raw in source:
-        player_id = int(raw["id"])
-        row = {
-            "player_id": player_id,
-            "first_name": raw.get("first_name") or "",
-            "last_name": raw.get("last_name") or "",
-            "full_name": raw.get("full_name")
-            or f"{raw.get('first_name', '')} {raw.get('last_name', '')}".strip(),
-            "is_active": bool(raw.get("is_active", False)),
-            "jersey_number": None,
-            "position": None,
-            "height": None,
-            "weight": None,
-            "birth_date": None,
-            "team_id": None,
-            "from_year": None,
-            "to_year": None,
-            "scraped_at": scraped_at,
-        }
-        if enrich:
-            extra = _best_effort_common_info(player_id)
-            if extra:
-                row.update(extra)
-        rows.append(row)
+    # Keep the HTTP phase outside the transaction while preserving deterministic order.
+    from catalog.teams import TEAM_CATALOG
 
+    all_rows: list[dict[str, Any]] = []
+    for entry in TEAM_CATALOG:
+        url = team_roster_url(entry.bref_abbreviation, target_season)
+        try:
+            all_rows.extend(parse_roster_html(fetch(url), team_id=entry.team_id, source_url=url))
+        except Exception:
+            logger.exception("BRef roster scrape failed for %s", url)
+    written = 0
     with get_session() as session:
-        written = upsert_rows(session, Player, rows, ["player_id"])
-    logger.info("Upserted %s players (enrich=%s)", written, enrich)
+        seed_team_catalog(session, scraped_at=scraped_at)
+        for row in all_rows:
+            player_id = ensure_player(
+                session,
+                provider=row.pop("provider"),
+                external_id=row.pop("external_id"),
+                full_name=row.pop("full_name"),
+                source_url=row.pop("source_url"),
+                team_id=row.pop("team_id"),
+                is_active=row.pop("is_active"),
+                metadata={
+                    key: value
+                    for key, value in row.items()
+                    if key not in {"first_name", "last_name"}
+                },
+            )
+            player = session.get(Player, player_id)
+            if player is None:
+                continue
+            for key, value in row.items():
+                if hasattr(player, key) and value is not None:
+                    setattr(player, key, value)
+            player.scraped_at = scraped_at
+            written += 1
+    logger.info("Upserted %s BRef roster players for %s", written, target_season)
     return written
 
 
-def upsert_player_stubs(players: list[dict]) -> int:
-    """Insert minimal player rows so game-log FKs succeed for new players."""
-    if not players:
-        return 0
-    scraped_at = datetime.now()
-    rows = []
-    for raw in players:
-        full_name = raw.get("full_name") or ""
-        first = raw.get("first_name") or (full_name.split(" ", 1)[0] if full_name else "")
-        last = raw.get("last_name") or (full_name.split(" ", 1)[1] if " " in full_name else "")
-        rows.append(
-            {
-                "player_id": int(raw["player_id"]),
-                "first_name": first or "Unknown",
-                "last_name": last or "Unknown",
-                "full_name": full_name or f"{first} {last}".strip() or "Unknown",
-                "is_active": bool(raw.get("is_active", True)),
-                "jersey_number": None,
-                "position": None,
-                "height": None,
-                "weight": None,
-                "birth_date": None,
-                "team_id": None,
-                "from_year": None,
-                "to_year": None,
-                "scraped_at": scraped_at,
-            }
-        )
-    with get_session() as session:
-        return upsert_rows(session, Player, rows, ["player_id"])
-
-
-def _best_effort_common_info(player_id: int) -> dict | None:
-    try:
-        from nba_api.stats.endpoints import commonplayerinfo
-
-        endpoint = nba_call(
-            lambda: commonplayerinfo.CommonPlayerInfo(
-                player_id=player_id,
-                timeout=NBA_REQUEST_TIMEOUT,
-            )
-        )
-        payload = endpoint.get_normalized_dict()
-        info_rows = dataset_rows(payload, "CommonPlayerInfo", "common_player_info")
-        if not info_rows:
-            return None
-        info = info_rows[0]
-        team_id = to_int(info.get("TEAM_ID"))
-        if team_id == 0:
-            team_id = None
-        birth_raw = to_str(info.get("BIRTHDATE"))
-        birth_date = None
-        if birth_raw:
-            try:
-                birth_date = parse_game_date(birth_raw.split("T")[0])
-            except ValueError:
-                birth_date = None
-        return {
-            "jersey_number": to_str(info.get("JERSEY")),
-            "position": to_str(info.get("POSITION")),
-            "height": to_str(info.get("HEIGHT")),
-            "weight": to_int(info.get("WEIGHT")),
-            "birth_date": birth_date,
-            "team_id": team_id,
-            "from_year": to_int(info.get("FROM_YEAR")),
-            "to_year": to_int(info.get("TO_YEAR")),
-        }
-    except Exception:
-        logger.warning(
-            "CommonPlayerInfo failed for player_id=%s; continuing",
-            player_id,
-            exc_info=False,
-        )
-        return None
+__all__ = ["parse_roster_html", "scrape_players", "team_roster_url"]

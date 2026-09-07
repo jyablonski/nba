@@ -1,395 +1,303 @@
-"""Scrape game results into source.games."""
+"""Scrape BRef schedule pages into canonical game identities."""
 
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta
+import re
+from collections.abc import Callable
+from datetime import date, datetime
+from typing import Any
+from urllib.parse import urljoin
 
+from bs4 import BeautifulSoup, Comment, Tag
+from identity import (
+    BREF_PROVIDER,
+    IdentityResolutionError,
+    resolve_game,
+    resolve_team_id,
+    seed_team_catalog,
+)
 from sqlalchemy import func
 
-from db import get_session, upsert_rows
+from db import get_session
 from models import Game, Team
 from scrapers import (
-    GAME_SEASON_TYPES,
-    NBA_REQUEST_TIMEOUT,
+    BREF_BASE_URL,
+    bref_get,
     current_season,
-    dataset_rows,
-    matchup_row_is_home,
-    nba_call,
-    nba_date,
     parse_game_date,
-    row_get,
-    season_from_start_year,
+    season_start_year,
     to_int,
-    to_str,
 )
-from scrapers.teams import scrape_teams
 
 logger = logging.getLogger(__name__)
+
+
+def schedule_url(season: str) -> str:
+    return f"{BREF_BASE_URL}/leagues/NBA_{season_start_year(season) + 1}_games.html"
+
+
+def _find_schedule_tables(soup: BeautifulSoup) -> list[Tag]:
+    tables = [
+        table
+        for table in soup.find_all("table", id=re.compile(r"schedule"))
+        if isinstance(table, Tag)
+    ]
+    if tables:
+        return tables
+    found: list[Tag] = []
+    for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
+        if "schedule" not in comment:
+            continue
+        nested = BeautifulSoup(str(comment), "html.parser")
+        found.extend(
+            table
+            for table in nested.find_all("table", id=re.compile(r"schedule"))
+            if isinstance(table, Tag)
+        )
+    return found
+
+
+def _cell(row: Tag, *stats: str) -> Tag | None:
+    for stat in stats:
+        cell = row.find(["th", "td"], attrs={"data-stat": stat})
+        if isinstance(cell, Tag):
+            return cell
+    return None
+
+
+def _cell_text(row: Tag, *stats: str) -> str | None:
+    cell = _cell(row, *stats)
+    if not isinstance(cell, Tag):
+        return None
+    value = cell.get("csk") or cell.get_text(" ", strip=True)
+    return str(value).strip() or None
+
+
+def _schedule_page_urls(html: str, season: str, base_url: str) -> list[str]:
+    """Return the season schedule URL followed by BRef's linked month pages."""
+    schedule_prefix = f"NBA_{season_start_year(season) + 1}_games-"
+    month_pattern = re.compile(rf"/{re.escape(schedule_prefix)}[a-z]+\.html$")
+    urls = [base_url]
+    soup = BeautifulSoup(html, "html.parser")
+    for link in soup.find_all("a", href=True):
+        url = urljoin(base_url, str(link["href"]))
+        if month_pattern.search(url) and url not in urls:
+            urls.append(url)
+    return urls
+
+
+def _game_date_text(row: Tag) -> str | None:
+    cell = _cell(row, "date_game")
+    if not isinstance(cell, Tag):
+        return None
+    csk = str(cell.get("csk") or "").strip()
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", csk):
+        return csk
+    return cell.get_text(" ", strip=True) or None
+
+
+def _team_code(row: Tag, stat: str) -> str | None:
+    cell = _cell(row, stat)
+    if not isinstance(cell, Tag):
+        return None
+    link = cell.find("a", href=re.compile(r"/teams/[A-Z]{3}/"))
+    if not isinstance(link, Tag):
+        return None
+    match = re.search(r"/teams/([A-Z]{3})/", str(link.get("href") or ""), re.IGNORECASE)
+    return match.group(1).upper() if match else None
+
+
+def _boxscore_key(row: Tag) -> str | None:
+    cell = _cell(row, "box_score_text")
+    if not isinstance(cell, Tag):
+        return None
+    link = cell.find("a", href=re.compile(r"/boxscores/[^/]+\.html"))
+    if not isinstance(link, Tag):
+        return None
+    match = re.search(r"/boxscores/([^/]+)\.html", str(link.get("href") or ""), re.IGNORECASE)
+    return match.group(1) if match else None
+
+
+def _season_type_for_row(
+    game_date: date,
+    remark: str | None,
+    *,
+    first_play_in_date: date | None,
+    source_url: str,
+) -> str:
+    normalized_remark = (remark or "").casefold().replace("-", " ")
+    if "play in" in normalized_remark:
+        return "PlayIn"
+    if first_play_in_date is not None and game_date >= first_play_in_date:
+        return "Playoffs"
+    if re.search(r"_games-(?:may|june)\.html$", source_url):
+        return "Playoffs"
+    return "Regular Season"
+
+
+def parse_schedule_html(html: str, *, season: str, source_url: str) -> list[dict[str, Any]]:
+    """Parse schedule rows and classify regular season, play-in, and playoffs."""
+    soup = BeautifulSoup(html, "html.parser")
+    parsed_rows: list[tuple[Tag, date, str, str, str | None]] = []
+    first_play_in_date: date | None = None
+    for table in _find_schedule_tables(soup):
+        for row in table.select("tbody tr"):
+            if not isinstance(row, Tag) or "thead" in (row.get("class") or []):
+                continue
+            raw_date = _game_date_text(row)
+            visitor = _team_code(row, "visitor_team_name")
+            home = _team_code(row, "home_team_name")
+            if not raw_date or not visitor or not home:
+                continue
+            try:
+                game_date = parse_game_date(raw_date)
+            except ValueError:
+                continue
+            remark = _cell_text(row, "game_remarks")
+            normalized_remark = (remark or "").casefold().replace("-", " ")
+            if "play in" in normalized_remark:
+                first_play_in_date = (
+                    min(first_play_in_date, game_date) if first_play_in_date else game_date
+                )
+            parsed_rows.append((row, game_date, visitor, home, remark))
+
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[date, str, str]] = set()
+    for row, game_date, visitor, home, remark in parsed_rows:
+        key = (game_date, home, visitor)
+        if key in seen:
+            continue
+        seen.add(key)
+        home_score = to_int(_cell_text(row, "home_pts"))
+        away_score = to_int(_cell_text(row, "visitor_pts"))
+        external_id = _boxscore_key(row)
+        rows.append(
+            {
+                "provider": BREF_PROVIDER,
+                "external_id": external_id or "",
+                "source_url": source_url,
+                "season": season,
+                "season_type": _season_type_for_row(
+                    game_date,
+                    remark,
+                    first_play_in_date=first_play_in_date,
+                    source_url=source_url,
+                ),
+                "game_date": game_date,
+                "home_bref_abbreviation": home,
+                "away_bref_abbreviation": visitor,
+                "home_score": home_score,
+                "away_score": away_score,
+                "arena": _cell_text(row, "arena_name"),
+                "status": "Final"
+                if home_score is not None and away_score is not None
+                else "Scheduled",
+            }
+        )
+    return rows
+
+
+def _season_schedule_url(season: str) -> str:
+    return schedule_url(season)
+
+
+def scrape_games(season: str, *, fetch_html: Callable[[str], str] | None = None) -> int:
+    url = _season_schedule_url(season)
+    fetch = fetch_html or bref_get
+    first_html = fetch(url)
+    records: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+    for page_url in _schedule_page_urls(first_html, season, url):
+        html = first_html if page_url == url else fetch(page_url)
+        for record in parse_schedule_html(html, season=season, source_url=page_url):
+            key = (
+                (BREF_PROVIDER, record["external_id"])
+                if record["external_id"]
+                else (
+                    record["game_date"],
+                    record["home_bref_abbreviation"],
+                    record["away_bref_abbreviation"],
+                )
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            records.append(record)
+    stamp = datetime.now()
+    written = 0
+    with get_session() as session:
+        seed_team_catalog(session, scraped_at=stamp)
+        for record in records:
+            home_team_id = resolve_team_id(session, record["home_bref_abbreviation"])
+            away_team_id = resolve_team_id(session, record["away_bref_abbreviation"])
+            if home_team_id is None or away_team_id is None:
+                logger.error("Skipping game with unresolved team: %s", record)
+                continue
+            try:
+                resolve_game(
+                    session,
+                    provider=BREF_PROVIDER,
+                    external_id=record["external_id"],
+                    season=record["season"],
+                    season_type=record["season_type"],
+                    game_date=record["game_date"],
+                    home_team_id=home_team_id,
+                    away_team_id=away_team_id,
+                    source_url=record["source_url"],
+                    values={
+                        "home_score": record["home_score"],
+                        "away_score": record["away_score"],
+                        "arena": record["arena"],
+                        "status": record["status"],
+                        "scraped_at": stamp,
+                    },
+                )
+            except IdentityResolutionError:
+                logger.exception("Skipping unresolved game identity %s", record)
+                continue
+            written += 1
+    logger.info("Upserted %s BRef games for %s", written, season)
+    return written
+
+
+def _is_final_status(status: object) -> bool:
+    return str(status or "").lower() == "final"
 
 
 def _ensure_teams() -> None:
     with get_session() as session:
         count = session.query(func.count(Team.team_id)).scalar() or 0
     if count == 0:
-        logger.info("No teams in source.teams; scraping teams first")
+        from scrapers.teams import scrape_teams
+
         scrape_teams()
 
 
-def _team_ids() -> list[int]:
-    with get_session() as session:
-        return [team_id for (team_id,) in session.query(Team.team_id).order_by(Team.team_id).all()]
-
-
-def _team_abbreviations() -> dict[int, str]:
-    with get_session() as session:
-        return {
-            team_id: abbreviation
-            for team_id, abbreviation in session.query(Team.team_id, Team.abbreviation).all()
-        }
-
-
-def _finder_scopes(team_ids: list[int]) -> list[int | None]:
-    """Per-team LeagueGameFinder so a league-wide dump cannot drop a Final."""
-    return list(team_ids) if team_ids else [None]
-
-
-def scrape_games(season: str) -> int:
-    _ensure_teams()
-    scraped_at = datetime.now()
-    team_abbreviations = _team_abbreviations()
-    games: dict[str, dict] = {}
-    for team_id in _finder_scopes(_team_ids()):
-        for season_type in GAME_SEASON_TYPES:
-            try:
-                rows = _league_game_finder(season=season, season_type=season_type, team_id=team_id)
-            except Exception:
-                logger.warning(
-                    "LeagueGameFinder failed for %s %s team_id=%s; skipping",
-                    season,
-                    season_type,
-                    team_id,
-                )
-                continue
-            _merge_game_rows(
-                games,
-                rows,
-                season=season,
-                season_type=season_type,
-                scraped_at=scraped_at,
-                team_abbreviations=team_abbreviations,
-            )
-
-    try:
-        _merge_league_schedule(games, season=season, scraped_at=scraped_at, from_date=date.today())
-    except Exception:
-        logger.warning("ScheduleLeagueV2 failed for %s; upcoming slate not merged", season)
-
-    records = [
-        game for game in games.values() if game.get("home_team_id") and game.get("away_team_id")
-    ]
-    with get_session() as session:
-        written = upsert_rows(session, Game, records, ["game_id"])
-    logger.info("Upserted %s games for season %s", written, season)
-    return written
-
-
 def scrape_todays_games(today: date | None = None, *, days_ahead: int = 7) -> list[dict]:
-    """Persist today's scoreboard, the next ``days_ahead`` dates, and the rest of the season slate.
-
-    ScoreboardV2 covers the near-term window (live status / scores). ScheduleLeagueV2
-    fills remaining current-season games (and the next season before October).
-    Scheduled / upcoming rows are stored with nullable scores. Returns only
-    completed (Final) game rows so log scraping stays Final-only.
-    """
+    """Refresh the current season schedule and return Final games in the horizon."""
+    del days_ahead
+    target = today or date.today()
     _ensure_teams()
-    today = today or date.today()
-    season = current_season(today)
-    scraped_at = datetime.now()
-    games: dict[str, dict] = {}
-    horizon = max(0, int(days_ahead))
-
-    scoreboard_ok = False
-    for offset in range(horizon + 1):
-        day = today + timedelta(days=offset)
-        try:
-            _merge_scoreboard(games, day, season=season, scraped_at=scraped_at)
-            scoreboard_ok = True
-        except Exception:
-            logger.warning("ScoreboardV2 failed for %s", day)
-
-    for schedule_season in _schedule_seasons(today):
-        try:
-            _merge_league_schedule(
-                games, season=schedule_season, scraped_at=scraped_at, from_date=today
-            )
-        except Exception:
-            logger.warning("ScheduleLeagueV2 failed for %s", schedule_season)
-
-    if not games and not scoreboard_ok:
-        logger.warning("ScoreboardV2 failed for %s; falling back to LeagueGameFinder", today)
-        for season_type in GAME_SEASON_TYPES:
-            try:
-                rows = _league_game_finder(
-                    season=season,
-                    season_type=season_type,
-                    date_from=today,
-                    date_to=today,
-                )
-            except Exception:
-                continue
-            _merge_game_rows(
-                games,
-                rows,
-                season=season,
-                season_type=season_type,
-                scraped_at=scraped_at,
-                team_abbreviations=_team_abbreviations(),
-            )
-
-    records = [
-        game for game in games.values() if game.get("home_team_id") and game.get("away_team_id")
-    ]
-    if not records:
-        logger.info("No scoreboard games from %s through +%s days", today, horizon)
-        return []
-
+    scrape_games(current_season(target))
     with get_session() as session:
-        upsert_rows(session, Game, records, ["game_id"])
-    finals = [game for game in records if _is_final_status(game.get("status"))]
-    logger.info(
-        "Upserted %s games (%s Final) for %s (Scoreboard +%s days plus season schedule)",
-        len(records),
-        len(finals),
-        today,
-        horizon,
-    )
-    return finals
-
-
-def _is_final_status(status: object) -> bool:
-    return str(status or "").lower() in {"final", "3"}
-
-
-def _schedule_seasons(today: date) -> list[str]:
-    """Seasons to pull from ScheduleLeagueV2.
-
-    October starts a new season. Before October, also pull the upcoming season
-    so the off-season slate is ingested.
-    """
-    current = current_season(today)
-    seasons = [current]
-    if today.month < 10:
-        upcoming = season_from_start_year(today.year)
-        if upcoming not in seasons:
-            seasons.append(upcoming)
-    return seasons
-
-
-def _normalize_game_status(status_id: int | None, status_text: str) -> str:
-    text = status_text or ""
-    if status_id == 3 or text.lower().startswith("final"):
-        return "Final"
-    if status_id == 1:
-        return "Scheduled"
-    return (text or "Scheduled")[:20]
-
-
-def _league_game_finder(
-    *,
-    season: str,
-    season_type: str,
-    team_id: int | None = None,
-    date_from: date | None = None,
-    date_to: date | None = None,
-) -> list[dict]:
-    from nba_api.stats.endpoints import leaguegamefinder
-
-    kwargs: dict = {
-        "player_or_team_abbreviation": "T",
-        "season_nullable": season,
-        "league_id_nullable": "00",
-        "season_type_nullable": season_type,
-        "timeout": NBA_REQUEST_TIMEOUT,
-    }
-    if team_id is not None:
-        kwargs["team_id_nullable"] = team_id
-    if date_from is not None:
-        kwargs["date_from_nullable"] = nba_date(date_from)
-    if date_to is not None:
-        kwargs["date_to_nullable"] = nba_date(date_to)
-
-    endpoint = nba_call(lambda: leaguegamefinder.LeagueGameFinder(**kwargs))
-    return dataset_rows(endpoint.get_normalized_dict(), "LeagueGameFinderResults")
-
-
-def _league_schedule(season: str) -> list[dict]:
-    from nba_api.stats.endpoints import scheduleleaguev2
-
-    endpoint = nba_call(
-        lambda: scheduleleaguev2.ScheduleLeagueV2(
-            league_id="00",
-            season=season,
-            timeout=NBA_REQUEST_TIMEOUT,
-        )
-    )
-    return dataset_rows(endpoint.get_normalized_dict(), "SeasonGames", "season_games")
-
-
-def _merge_league_schedule(
-    games: dict[str, dict],
-    *,
-    season: str,
-    scraped_at: datetime,
-    from_date: date | None = None,
-) -> None:
-    """Merge upcoming ScheduleLeagueV2 rows. Does not overwrite Scoreboard / Final keys."""
-    for row in _league_schedule(season):
-        game_id = to_str(row_get(row, "gameId", "GAME_ID"))
-        home_id = to_int(row_get(row, "homeTeam_teamId", "HOME_TEAM_ID"))
-        away_id = to_int(row_get(row, "awayTeam_teamId", "AWAY_TEAM_ID", "VISITOR_TEAM_ID"))
-        if not game_id or home_id is None or away_id is None:
-            continue
-        if _season_type_from_game_id(game_id) == "Pre Season":
-            continue
-        game_date_raw = row_get(row, "gameDateEst", "gameDate", "GAME_DATE_EST", "GAME_DATE")
-        try:
-            game_date = parse_game_date(str(game_date_raw)[:10])
-        except TypeError, ValueError:
-            continue
-        if from_date is not None and game_date < from_date:
-            continue
-        status_id = to_int(row_get(row, "gameStatus", "GAME_STATUS_ID"))
-        status_text = to_str(row_get(row, "gameStatusText", "GAME_STATUS_TEXT")) or ""
-        status = _normalize_game_status(status_id, status_text)
-        if _is_final_status(status):
-            continue
-        season_year = to_str(row_get(row, "seasonYear", "SEASON"))
-        if season_year and "-" in season_year:
-            game_season = season_year
-        else:
-            year = to_int(season_year)
-            game_season = season_from_start_year(year) if year is not None else season
-        games.setdefault(
-            game_id,
+        rows = session.query(Game).filter(Game.game_date == target, Game.status == "Final").all()
+        return [
             {
-                "game_id": game_id,
-                "season": game_season,
-                "season_type": _season_type_from_game_id(game_id),
-                "game_date": game_date,
-                "home_team_id": home_id,
-                "away_team_id": away_id,
-                "home_score": None,
-                "away_score": None,
-                "arena": to_str(row_get(row, "arenaName", "ARENA_NAME", "ARENA")),
-                "city": to_str(row_get(row, "arenaCity", "ARENA_CITY", "CITY")),
-                "state": to_str(row_get(row, "arenaState", "ARENA_STATE", "STATE")),
-                "status": status[:20],
-                "scraped_at": scraped_at,
-            },
-        )
+                "game_id": row.game_id,
+                "season": row.season,
+                "season_type": row.season_type,
+                "game_date": row.game_date,
+                "status": row.status,
+            }
+            for row in rows
+        ]
 
 
-def _merge_game_rows(
-    games: dict[str, dict],
-    rows: list[dict],
-    *,
-    season: str,
-    season_type: str,
-    scraped_at: datetime,
-    team_abbreviations: dict[int, str] | None = None,
-) -> None:
-    abbreviations = team_abbreviations or {}
-    for row in rows:
-        game_id = to_str(row_get(row, "GAME_ID"))
-        matchup = to_str(row_get(row, "MATCHUP")) or ""
-        team_id = to_int(row_get(row, "TEAM_ID"))
-        if not game_id or team_id is None:
-            continue
-        rec = games.setdefault(
-            game_id,
-            {
-                "game_id": game_id,
-                "season": season,
-                "season_type": season_type,
-                "game_date": parse_game_date(row_get(row, "GAME_DATE")),
-                "home_team_id": None,
-                "away_team_id": None,
-                "home_score": None,
-                "away_score": None,
-                "arena": to_str(row_get(row, "ARENA", "ARENA_NAME")),
-                "city": to_str(row_get(row, "ARENA_CITY", "CITY")),
-                "state": to_str(row_get(row, "ARENA_STATE", "STATE")),
-                "status": "Final",
-                "scraped_at": scraped_at,
-            },
-        )
-        pts = to_int(row_get(row, "PTS"))
-        team_abbr = to_str(row_get(row, "TEAM_ABBREVIATION", "TEAM_ABBREV")) or abbreviations.get(
-            team_id
-        )
-        if matchup_row_is_home(matchup, team_abbr):
-            rec["home_team_id"] = team_id
-            rec["home_score"] = pts
-        else:
-            rec["away_team_id"] = team_id
-            rec["away_score"] = pts
-
-
-def _merge_scoreboard(
-    games: dict[str, dict], today: date, *, season: str, scraped_at: datetime
-) -> None:
-    from nba_api.stats.endpoints import scoreboardv2
-
-    endpoint = nba_call(
-        lambda: scoreboardv2.ScoreboardV2(
-            game_date=today.strftime("%Y-%m-%d"),
-            timeout=NBA_REQUEST_TIMEOUT,
-        )
-    )
-    payload = endpoint.get_normalized_dict()
-    headers = dataset_rows(payload, "GameHeader")
-    lines = dataset_rows(payload, "LineScore")
-    scores: dict[tuple[str, int], int | None] = {}
-    for line in lines:
-        game_id = to_str(row_get(line, "GAME_ID"))
-        team_id = to_int(row_get(line, "TEAM_ID"))
-        if game_id and team_id is not None:
-            scores[(game_id, team_id)] = to_int(row_get(line, "PTS"))
-
-    for header in headers:
-        game_id = to_str(row_get(header, "GAME_ID"))
-        home_id = to_int(row_get(header, "HOME_TEAM_ID"))
-        away_id = to_int(row_get(header, "VISITOR_TEAM_ID", "AWAY_TEAM_ID"))
-        if not game_id or home_id is None or away_id is None:
-            continue
-        status_id = to_int(row_get(header, "GAME_STATUS_ID"))
-        status_text = to_str(row_get(header, "GAME_STATUS_TEXT")) or ""
-        status = _normalize_game_status(status_id, status_text)
-        season_year = to_int(row_get(header, "SEASON"))
-        game_season = season_from_start_year(season_year) if season_year is not None else season
-        game_date_raw = row_get(header, "GAME_DATE_EST", "GAME_DATE") or today
-        games[game_id] = {
-            "game_id": game_id,
-            "season": game_season,
-            "season_type": _season_type_from_game_id(game_id),
-            "game_date": parse_game_date(str(game_date_raw)[:10]),
-            "home_team_id": home_id,
-            "away_team_id": away_id,
-            "home_score": scores.get((game_id, home_id)),
-            "away_score": scores.get((game_id, away_id)),
-            "arena": to_str(row_get(header, "ARENA_NAME", "ARENA")),
-            "city": to_str(row_get(header, "ARENA_CITY", "CITY")),
-            "state": to_str(row_get(header, "ARENA_STATE", "STATE")),
-            "status": status,
-            "scraped_at": scraped_at,
-        }
-
-
-def _season_type_from_game_id(game_id: str) -> str:
-    """NBA game_id prefix: 001 preseason, 002 regular, 004 playoffs, 005 play-in."""
-    if len(game_id) >= 3:
-        prefix = game_id[2]
-        mapping = {"1": "Pre Season", "2": "Regular Season", "4": "Playoffs", "5": "PlayIn"}
-        return mapping.get(prefix, "Regular Season")
-    return "Regular Season"
+__all__ = [
+    "_is_final_status",
+    "parse_schedule_html",
+    "schedule_url",
+    "scrape_games",
+    "scrape_todays_games",
+]

@@ -1,7 +1,6 @@
 """Scrape remaining NBA player contracts from Basketball-Reference.
 
-stats.nba.com has no first-class salary/contract endpoint. Current source is
-team payroll HTML at ``https://www.basketball-reference.com/contracts/{TEAM}.html``
+Current source is team payroll HTML at ``https://www.basketball-reference.com/contracts/{TEAM}.html``
 (remaining multi-year salaries, not a historical paid-salary ledger).
 
 Be polite: BRef rate-limits aggressively. Included on season-active daily
@@ -11,16 +10,15 @@ Be polite: BRef rate-limits aggressively. Included on season-active daily
 from __future__ import annotations
 
 import logging
-import time
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-import requests
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
+from identity import BREF_PROVIDER, ensure_player, resolve_team_id, seed_team_catalog
 
 from db import get_session, upsert_rows
 from models import PlayerContract, TeamPayroll
+from scrapers import BREF_BASE_URL, bref_get
 from scrapers.contracts_parse import (
     BREF_TEAM_ABBREVIATIONS,
     parse_contracts_html,
@@ -28,61 +26,6 @@ from scrapers.contracts_parse import (
 )
 
 logger = logging.getLogger(__name__)
-
-BREF_BASE_URL = "https://www.basketball-reference.com"
-BREF_REQUEST_TIMEOUT = 60
-BREF_REQUEST_DELAY_SECONDS = 3.0
-BREF_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/126.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.basketball-reference.com/contracts/",
-}
-
-_last_bref_request_at = 0.0
-
-
-class BrefHTTPError(RuntimeError):
-    def __init__(self, status: int, url: str) -> None:
-        self.status = int(status)
-        self.url = url
-        super().__init__(f"Basketball-Reference HTTP {status} for {url}")
-
-
-def _is_retryable(exc: BaseException) -> bool:
-    if isinstance(exc, (KeyboardInterrupt, SystemExit, ValueError)):
-        return False
-    # 4xx other than 429 is a permanent client error; retrying cannot fix it.
-    return not (isinstance(exc, BrefHTTPError) and 400 <= exc.status < 500 and exc.status != 429)
-
-
-def bref_rate_limit() -> None:
-    global _last_bref_request_at
-    elapsed = time.monotonic() - _last_bref_request_at
-    if elapsed < BREF_REQUEST_DELAY_SECONDS:
-        time.sleep(BREF_REQUEST_DELAY_SECONDS - elapsed)
-    _last_bref_request_at = time.monotonic()
-
-
-@retry(
-    retry=retry_if_exception(_is_retryable),
-    wait=wait_exponential(multiplier=1, min=2, max=60),
-    stop=stop_after_attempt(5),
-    reraise=True,
-)
-def bref_get(url: str, *, get: Callable[..., Any] | None = None) -> str:
-    """Rate-limit and GET a Basketball-Reference URL with exponential backoff."""
-    bref_rate_limit()
-    http_get = get or requests.get
-    response = http_get(url, headers=BREF_HEADERS, timeout=BREF_REQUEST_TIMEOUT)
-    status = getattr(response, "status_code", None)
-    if status is not None and int(status) >= 400:
-        raise BrefHTTPError(int(status), url)
-    return str(response.text)
 
 
 def team_contracts_url(bref_team_abbreviation: str) -> str:
@@ -126,18 +69,56 @@ def scrape_contracts(
         )
 
     with get_session() as session:
+        seed_team_catalog(session, scraped_at=scraped_at)
+        canonical_players: list[dict[str, Any]] = []
+        for row in player_rows:
+            team_id = resolve_team_id(session, row["bref_team_abbreviation"])
+            if team_id is None:
+                logger.error("Unknown BRef team abbreviation %s", row["bref_team_abbreviation"])
+                continue
+            player_id = ensure_player(
+                session,
+                provider=BREF_PROVIDER,
+                external_id=row["bref_player_slug"],
+                full_name=row["player_name"],
+                source_url=row["source_url"],
+                team_id=team_id,
+                is_active=True,
+            )
+            canonical_players.append(
+                {
+                    "player_id": player_id,
+                    "team_id": team_id,
+                    "player_name": row["player_name"],
+                    "player_name_normalized": row["player_name_normalized"],
+                    "season": row["season"],
+                    "salary": row["salary"],
+                    "is_fully_guaranteed": row["is_fully_guaranteed"],
+                    "remaining_guaranteed": row["remaining_guaranteed"],
+                    "player_age": row["player_age"],
+                    "source_url": row["source_url"],
+                    "scraped_at": scraped_at,
+                }
+            )
+        canonical_payroll: list[dict[str, Any]] = []
+        for row in payroll_rows:
+            team_id = resolve_team_id(session, row["bref_team_abbreviation"])
+            if team_id is None:
+                continue
+            canonical_payroll.append(
+                {
+                    "team_id": team_id,
+                    "season": row["season"],
+                    "total_salary": row["total_salary"],
+                    "remaining_guaranteed": row["remaining_guaranteed"],
+                    "source_url": row["source_url"],
+                    "scraped_at": scraped_at,
+                }
+            )
         n_players = upsert_rows(
-            session,
-            PlayerContract,
-            player_rows,
-            ["bref_player_slug", "bref_team_abbreviation", "season"],
+            session, PlayerContract, canonical_players, ["player_id", "team_id", "season"]
         )
-        n_payroll = upsert_rows(
-            session,
-            TeamPayroll,
-            payroll_rows,
-            ["bref_team_abbreviation", "season"],
-        )
+        n_payroll = upsert_rows(session, TeamPayroll, canonical_payroll, ["team_id", "season"])
     logger.info(
         "Upserted %s player contracts and %s team payroll rows (teams=%s)",
         n_players,
@@ -149,9 +130,7 @@ def scrape_contracts(
 
 __all__ = [
     "BREF_TEAM_ABBREVIATIONS",
-    "BrefHTTPError",
     "bref_get",
-    "bref_rate_limit",
     "scrape_contracts",
     "team_contracts_url",
 ]

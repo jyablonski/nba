@@ -47,7 +47,7 @@ export default function PlayerProfilePage() {
 function PlayerProfile() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const playerId = Number(params.id);
+  const playerId = params.id;
   const { season } = useSeason();
   const [sortKey, setSortKey] = useState<SortKey>("game_date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -58,17 +58,17 @@ function PlayerProfile() {
   const playerQuery = useQuery({
     queryKey: ["player", playerId],
     queryFn: () => api.getPlayer(playerId),
-    enabled: Number.isFinite(playerId),
+    enabled: Boolean(playerId),
   });
   const b2bQuery = useQuery({
     queryKey: ["player", playerId, "b2b"],
     queryFn: () => api.getPlayerBackToBacks(playerId),
-    enabled: Number.isFinite(playerId),
+    enabled: Boolean(playerId),
   });
   const seasonStatsQuery = useQuery({
     queryKey: ["player", playerId, "season-stats"],
     queryFn: () => api.getPlayerSeasonStats(playerId),
-    enabled: Number.isFinite(playerId),
+    enabled: Boolean(playerId),
   });
   const selectedLogSeason = logSeason || season;
   const logQuery = useQuery({
@@ -82,7 +82,7 @@ function PlayerProfile() {
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
       }),
-    enabled: Number.isFinite(playerId),
+    enabled: Boolean(playerId),
   });
 
   const seasonPoints = useMemo(() => {
@@ -100,7 +100,7 @@ function PlayerProfile() {
     setSortDir("desc");
   }
 
-  if (!Number.isFinite(playerId)) {
+  if (!playerId) {
     return <ErrorState message="Invalid player id." />;
   }
 

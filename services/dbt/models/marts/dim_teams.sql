@@ -49,7 +49,7 @@ current_team_payroll as (
     inner join current_payroll_season
         on payroll.season = current_payroll_season.season
     inner join teams
-        on payroll.nba_team_abbreviation = teams.abbreviation
+        on payroll.team_id = teams.team_id
     left join cba_caps
         on payroll.season = cba_caps.season
 )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 from cube.client import CubeClient
 from cube.errors import CubeError
@@ -44,6 +45,17 @@ def _as_int(value: Any) -> int | None:
         return None
 
 
+def _as_uuid(value: Any) -> UUID | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, UUID):
+        return value
+    try:
+        return UUID(str(value))
+    except TypeError, ValueError, AttributeError:
+        return None
+
+
 def _as_float(value: Any) -> float | None:
     if value is None or value == "":
         return None
@@ -74,7 +86,7 @@ class CubeAnalytics:
         rows = self.client.load(search_players_query(name))
         return [_player_search_row(row) for row in rows]
 
-    def get_player(self, player_id: int) -> dict[str, Any] | None:
+    def get_player(self, player_id: UUID) -> dict[str, Any] | None:
         rows = self.client.load(player_profile_query(player_id))
         if not rows:
             return None
@@ -82,14 +94,14 @@ class CubeAnalytics:
 
     def get_player_game_log(
         self,
-        player_id: int,
+        player_id: UUID,
         season: str | None = None,
     ) -> list[dict[str, Any]]:
         return self.client.load(player_game_log_query(player_id, season))
 
     def get_back_to_back_stats(
         self,
-        player_id: int,
+        player_id: UUID,
         season: str | None = None,
     ) -> dict[str, Any]:
         player = self.get_player(player_id)
@@ -116,12 +128,12 @@ class CubeAnalytics:
 
     def get_player_back_to_backs(
         self,
-        player_id: int,
+        player_id: UUID,
         season: str | None = None,
     ) -> dict[str, Any]:
         return self.get_back_to_back_stats(player_id, season)
 
-    def get_career_stats(self, player_id: int) -> dict[str, Any] | None:
+    def get_career_stats(self, player_id: UUID) -> dict[str, Any] | None:
         player = self.get_player(player_id)
         if player is None:
             return None
@@ -144,7 +156,7 @@ class CubeAnalytics:
 
     def compare_players(
         self,
-        player_ids: list[int],
+        player_ids: list[UUID],
         stats: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         if len(player_ids) < 2:
@@ -152,7 +164,7 @@ class CubeAnalytics:
         rows = self.client.load(player_ids_query(player_ids))
         teams_rows = self.client.load(teams_played_query(player_ids))
         teams_by_id = {
-            _as_int(row.get("player_id")): _as_int(row.get("teams_played")) or 0
+            _as_uuid(row.get("player_id")): _as_int(row.get("teams_played")) or 0
             for row in teams_rows
         }
         enriched = []
@@ -161,7 +173,7 @@ class CubeAnalytics:
             games = _as_int(profile.get("career_games_played")) or 0
             ppg = _as_float(profile.get("career_ppg"))
             total_points = round(ppg * games) if ppg is not None else None
-            pid = _as_int(profile.get("player_id"))
+            pid = _as_uuid(profile.get("player_id"))
             enriched.append(
                 {
                     **profile,
@@ -184,7 +196,7 @@ class CubeAnalytics:
             return None
         row = rows[0]
         return {
-            "team_id": _as_int(row.get("team_id")),
+            "team_id": _as_uuid(row.get("team_id")),
             "abbreviation": row.get("abbreviation"),
             "team_name": row.get("team_name"),
             "current_season_payroll": _as_int(row.get("current_season_payroll")),
@@ -227,7 +239,7 @@ class CubeAnalytics:
         win_pct = round(wins / total, 3) if total else None
         abbreviation = summary.get("team_abbreviation") or team_abbreviation.upper()
         team_name = summary.get("team_name")
-        team_id = _as_int(summary.get("team_id"))
+        team_id = _as_uuid(summary.get("team_id"))
         if not team_name:
             team = self.find_team(abbreviation)
             if team:
@@ -247,7 +259,7 @@ class CubeAnalytics:
 
     def get_player_contract(
         self,
-        player_id: int,
+        player_id: UUID,
         season: str | None = None,
     ) -> dict[str, Any] | None:
         if season:
@@ -256,12 +268,12 @@ class CubeAnalytics:
                 return None
             row = rows[0]
             return {
-                "player_id": _as_int(row.get("player_id")) or player_id,
+                "player_id": _as_uuid(row.get("player_id")) or player_id,
                 "full_name": row.get("player_name"),
                 "current_contract_season": row.get("season") or season,
                 "current_season_salary": _as_int(row.get("salary")),
                 "current_remaining_guaranteed": _as_int(row.get("remaining_guaranteed")),
-                "nba_team_abbreviation": row.get("nba_team_abbreviation"),
+                "team_abbreviation": row.get("team_abbreviation"),
                 "match_method": row.get("match_method"),
                 "source": "player_contracts",
             }
@@ -270,7 +282,7 @@ class CubeAnalytics:
             return None
         row = rows[0]
         return {
-            "player_id": _as_int(row.get("player_id")) or player_id,
+            "player_id": _as_uuid(row.get("player_id")) or player_id,
             "full_name": row.get("full_name"),
             "current_contract_season": row.get("current_contract_season"),
             "current_season_salary": _as_int(row.get("current_season_salary")),
@@ -288,8 +300,8 @@ class CubeAnalytics:
                 return None
             row = rows[0]
             return {
-                "team_id": _as_int(row.get("team_id")),
-                "abbreviation": row.get("nba_team_abbreviation") or abbreviation.upper(),
+                "team_id": _as_uuid(row.get("team_id")),
+                "abbreviation": row.get("abbreviation") or abbreviation.upper(),
                 "team_name": row.get("team_name"),
                 "current_season_payroll": _as_int(row.get("total_salary")),
                 "current_remaining_guaranteed": _as_int(row.get("remaining_guaranteed")),
@@ -298,11 +310,11 @@ class CubeAnalytics:
             }
         return self.find_team(abbreviation)
 
-    def get_player_season_stats(self, player_id: int) -> list[dict[str, Any]]:
+    def get_player_season_stats(self, player_id: UUID) -> list[dict[str, Any]]:
         rows = self.client.load(player_season_stats_query(player_id))
         return [
             {
-                "player_id": _as_int(row.get("player_id")) or player_id,
+                "player_id": _as_uuid(row.get("player_id")) or player_id,
                 "full_name": row.get("full_name"),
                 "season": row.get("season"),
                 "games_played": _as_int(row.get("games_played")) or 0,
@@ -323,7 +335,7 @@ class CubeAnalytics:
 
     def get_game_predictions(
         self,
-        game_id: str | None = None,
+        game_id: UUID | None = None,
         upcoming: bool = False,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
@@ -333,7 +345,7 @@ class CubeAnalytics:
 
     def get_player_injuries(
         self,
-        player_id: int | None = None,
+        player_id: UUID | None = None,
         team_abbreviation: str | None = None,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
@@ -347,14 +359,14 @@ class CubeAnalytics:
 
     def get_game_odds(
         self,
-        game_id: str | None = None,
+        game_id: UUID | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         return self.client.load(game_odds_query(game_id=game_id, limit=limit))
 
     def get_play_by_play(
         self,
-        game_id: str,
+        game_id: UUID,
         limit: int | None = None,
     ) -> list[dict[str, Any]]:
         return self.client.load(play_by_play_query(game_id, limit))
@@ -392,7 +404,7 @@ class CubeAnalytics:
 
     def get_team_standing(
         self,
-        team_id: int,
+        team_id: UUID,
         season: str | None = None,
     ) -> dict[str, Any] | None:
         for row in self.list_standings(season=season, conference=None):
@@ -403,7 +415,7 @@ class CubeAnalytics:
 
 def _player_search_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
-        "player_id": _as_int(row.get("player_id")),
+        "player_id": _as_uuid(row.get("player_id")),
         "full_name": row.get("full_name"),
         "position": row.get("position"),
         "team": row.get("abbreviation"),
@@ -413,7 +425,7 @@ def _player_search_row(row: dict[str, Any]) -> dict[str, Any]:
 
 def _player_profile_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
-        "player_id": _as_int(row.get("player_id")),
+        "player_id": _as_uuid(row.get("player_id")),
         "full_name": row.get("full_name"),
         "position": row.get("position"),
         "is_active": row.get("is_active"),
@@ -441,7 +453,7 @@ def _standings_row(row: dict[str, Any]) -> dict[str, Any]:
         row.get("team_losses") if row.get("team_losses") is not None else row.get("losses")
     )
     return {
-        "team_id": _as_int(row.get("team_id")),
+        "team_id": _as_uuid(row.get("team_id")),
         "abbreviation": row.get("abbreviation"),
         "team_name": row.get("team_name"),
         "season": row.get("season"),
@@ -467,7 +479,7 @@ def _game_standings_row(row: dict[str, Any], season: str | None) -> dict[str, An
     games = _as_int(row.get("games")) or (wins + losses)
     win_pct = round(wins / games, 3) if games else None
     return {
-        "team_id": _as_int(row.get("team_id")),
+        "team_id": _as_uuid(row.get("team_id")),
         "abbreviation": row.get("team_abbreviation") or row.get("abbreviation"),
         "team_name": row.get("team_name"),
         "season": row.get("season") or season,

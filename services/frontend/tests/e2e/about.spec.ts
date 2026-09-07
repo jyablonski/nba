@@ -10,7 +10,6 @@ test("About lists ingest sources without salary jargon or 2010-11 copy", async (
   await expect(page.getByText("Working title, not final")).toHaveCount(0);
   await expect(page.getByText("Courtline")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Sources" })).toBeVisible();
-  await expect(about.getByText("NBA Stats")).toBeVisible();
   await expect(about.getByText("Basketball-Reference")).toBeVisible();
   await expect(about.getByText("The Odds API")).toBeVisible();
   await expect(about.getByText(/r\/nba posts/)).toBeVisible();

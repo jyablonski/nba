@@ -19,33 +19,14 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.execute("CREATE SCHEMA IF NOT EXISTS source")
-
-    op.execute(
-        """
-        CREATE TABLE source.players (
-            player_id       INTEGER PRIMARY KEY,
-            first_name      VARCHAR(100) NOT NULL,
-            last_name       VARCHAR(100) NOT NULL,
-            full_name       VARCHAR(200) NOT NULL,
-            is_active       BOOLEAN NOT NULL DEFAULT FALSE,
-            jersey_number   VARCHAR(10),
-            position        VARCHAR(20),
-            height          VARCHAR(10),
-            weight          INTEGER,
-            birth_date      DATE,
-            team_id         INTEGER,
-            from_year       INTEGER,
-            to_year         INTEGER,
-            scraped_at      TIMESTAMP NOT NULL DEFAULT NOW()
-        )
-        """
-    )
+    op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
 
     op.execute(
         """
         CREATE TABLE source.teams (
-            team_id         INTEGER PRIMARY KEY,
-            abbreviation    VARCHAR(5) NOT NULL,
+            team_id         UUID PRIMARY KEY,
+            canonical_slug  VARCHAR(80) NOT NULL UNIQUE,
+            abbreviation    VARCHAR(5) NOT NULL UNIQUE,
             full_name       VARCHAR(100) NOT NULL,
             city            VARCHAR(50) NOT NULL,
             nickname        VARCHAR(50) NOT NULL,
@@ -58,13 +39,34 @@ def upgrade() -> None:
 
     op.execute(
         """
+        CREATE TABLE source.players (
+            player_id       UUID PRIMARY KEY,
+            first_name      VARCHAR(100) NOT NULL,
+            last_name       VARCHAR(100) NOT NULL,
+            full_name       VARCHAR(200) NOT NULL,
+            is_active       BOOLEAN NOT NULL DEFAULT FALSE,
+            jersey_number   VARCHAR(10),
+            position        VARCHAR(20),
+            height          VARCHAR(10),
+            weight          INTEGER,
+            birth_date      DATE,
+            team_id         UUID REFERENCES source.teams(team_id),
+            from_year       INTEGER,
+            to_year         INTEGER,
+            scraped_at      TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+
+    op.execute(
+        """
         CREATE TABLE source.games (
-            game_id         VARCHAR(20) PRIMARY KEY,
+            game_id         UUID PRIMARY KEY,
             season          VARCHAR(10) NOT NULL,
             season_type     VARCHAR(20) NOT NULL,
             game_date       DATE NOT NULL,
-            home_team_id    INTEGER NOT NULL REFERENCES source.teams(team_id),
-            away_team_id    INTEGER NOT NULL REFERENCES source.teams(team_id),
+            home_team_id    UUID NOT NULL REFERENCES source.teams(team_id),
+            away_team_id    UUID NOT NULL REFERENCES source.teams(team_id),
             home_score      INTEGER,
             away_score      INTEGER,
             arena           VARCHAR(100),
@@ -84,9 +86,9 @@ def upgrade() -> None:
         """
         CREATE TABLE source.player_game_logs (
             id              SERIAL PRIMARY KEY,
-            player_id       INTEGER NOT NULL REFERENCES source.players(player_id),
-            game_id         VARCHAR(20) NOT NULL REFERENCES source.games(game_id),
-            team_id         INTEGER NOT NULL REFERENCES source.teams(team_id),
+            player_id       UUID NOT NULL REFERENCES source.players(player_id),
+            game_id         UUID NOT NULL REFERENCES source.games(game_id),
+            team_id         UUID NOT NULL REFERENCES source.teams(team_id),
             game_date       DATE NOT NULL,
             season          VARCHAR(10) NOT NULL,
             matchup         VARCHAR(20) NOT NULL,
@@ -122,11 +124,10 @@ def upgrade() -> None:
         """
         CREATE TABLE source.player_contracts (
             id                      SERIAL PRIMARY KEY,
-            bref_player_slug        VARCHAR(32) NOT NULL,
+            player_id               UUID NOT NULL REFERENCES source.players(player_id),
+            team_id                 UUID NOT NULL REFERENCES source.teams(team_id),
             player_name             VARCHAR(200) NOT NULL,
             player_name_normalized  VARCHAR(200) NOT NULL,
-            bref_team_abbreviation  VARCHAR(5) NOT NULL,
-            nba_team_abbreviation   VARCHAR(5) NOT NULL,
             season                  VARCHAR(10) NOT NULL,
             salary                  BIGINT,
             is_fully_guaranteed     BOOLEAN NOT NULL DEFAULT TRUE,
@@ -134,34 +135,110 @@ def upgrade() -> None:
             player_age              INTEGER,
             source_url              VARCHAR(300) NOT NULL,
             scraped_at              TIMESTAMP NOT NULL DEFAULT NOW(),
-            UNIQUE (bref_player_slug, bref_team_abbreviation, season)
+            UNIQUE (player_id, team_id, season)
         )
         """
     )
     op.execute("CREATE INDEX idx_player_contracts_season ON source.player_contracts(season)")
-    op.execute(
-        "CREATE INDEX idx_player_contracts_nba_team "
-        "ON source.player_contracts(nba_team_abbreviation)"
-    )
+    op.execute("CREATE INDEX idx_player_contracts_team ON source.player_contracts(team_id)")
 
     op.execute(
         """
         CREATE TABLE source.team_payroll (
             id                      SERIAL PRIMARY KEY,
-            bref_team_abbreviation  VARCHAR(5) NOT NULL,
-            nba_team_abbreviation   VARCHAR(5) NOT NULL,
+            team_id                 UUID NOT NULL REFERENCES source.teams(team_id),
             season                  VARCHAR(10) NOT NULL,
             total_salary            BIGINT,
             remaining_guaranteed    BIGINT,
             source_url              VARCHAR(300) NOT NULL,
             scraped_at              TIMESTAMP NOT NULL DEFAULT NOW(),
-            UNIQUE (bref_team_abbreviation, season)
+            UNIQUE (team_id, season)
         )
         """
     )
     op.execute("CREATE INDEX idx_team_payroll_season ON source.team_payroll(season)")
+    op.execute("CREATE INDEX idx_team_payroll_team ON source.team_payroll(team_id)")
+
     op.execute(
-        "CREATE INDEX idx_team_payroll_nba_team ON source.team_payroll(nba_team_abbreviation)"
+        """
+        CREATE TABLE source.player_external_ids (
+            player_id       UUID NOT NULL REFERENCES source.players(player_id) ON DELETE CASCADE,
+            provider        VARCHAR(50) NOT NULL,
+            external_id     VARCHAR(200) NOT NULL,
+            source_url      VARCHAR(500),
+            first_seen_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+            last_seen_at    TIMESTAMP NOT NULL DEFAULT NOW(),
+            metadata        JSONB,
+            PRIMARY KEY (provider, external_id)
+        )
+        """
+    )
+    op.execute(
+        "CREATE INDEX idx_player_external_ids_player ON source.player_external_ids(player_id)"
+    )
+    op.execute(
+        """
+        CREATE TABLE source.team_external_ids (
+            team_id         UUID NOT NULL REFERENCES source.teams(team_id) ON DELETE CASCADE,
+            provider        VARCHAR(50) NOT NULL,
+            external_id     VARCHAR(200) NOT NULL,
+            valid_from      DATE,
+            valid_to        DATE,
+            source_url      VARCHAR(500),
+            metadata        JSONB,
+            PRIMARY KEY (provider, external_id)
+        )
+        """
+    )
+    op.execute("CREATE INDEX idx_team_external_ids_team ON source.team_external_ids(team_id)")
+    op.execute(
+        """
+        CREATE TABLE source.game_external_ids (
+            game_id         UUID NOT NULL REFERENCES source.games(game_id) ON DELETE CASCADE,
+            provider        VARCHAR(50) NOT NULL,
+            external_id     VARCHAR(200) NOT NULL,
+            source_url      VARCHAR(500),
+            first_seen_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+            last_seen_at    TIMESTAMP NOT NULL DEFAULT NOW(),
+            metadata        JSONB,
+            PRIMARY KEY (provider, external_id)
+        )
+        """
+    )
+    op.execute("CREATE INDEX idx_game_external_ids_game ON source.game_external_ids(game_id)")
+    op.execute(
+        """
+        CREATE TABLE source.team_aliases (
+            id              SERIAL PRIMARY KEY,
+            team_id         UUID NOT NULL REFERENCES source.teams(team_id) ON DELETE CASCADE,
+            provider        VARCHAR(50),
+            alias           VARCHAR(200) NOT NULL,
+            valid_from      DATE,
+            valid_to        DATE,
+            UNIQUE (provider, alias)
+        )
+        """
+    )
+    op.execute("CREATE INDEX idx_team_aliases_team ON source.team_aliases(team_id)")
+    op.execute(
+        """
+        CREATE TABLE source.identity_review_queue (
+            id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            entity_type     VARCHAR(20) NOT NULL,
+            provider        VARCHAR(50) NOT NULL,
+            external_id     VARCHAR(200) NOT NULL,
+            candidate_name  VARCHAR(200),
+            reason          TEXT NOT NULL,
+            status          VARCHAR(20) NOT NULL DEFAULT 'open',
+            metadata        JSONB,
+            created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+            UNIQUE (entity_type, provider, external_id)
+        )
+        """
+    )
+    op.execute(
+        "CREATE INDEX idx_identity_review_queue_status ON source.identity_review_queue(status)"
     )
 
     op.execute(

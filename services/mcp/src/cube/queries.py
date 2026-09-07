@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Any
+from uuid import UUID
 
 DEFAULT_COMPARE_STATS = (
     "career_games_played",
@@ -167,7 +168,7 @@ def search_players_query(name: str) -> dict[str, Any]:
     }
 
 
-def player_profile_query(player_id: int) -> dict[str, Any]:
+def player_profile_query(player_id: UUID) -> dict[str, Any]:
     return {
         "dimensions": list(PLAYER_PROFILE_DIMENSIONS),
         "filters": [equals("players.player_id", player_id)],
@@ -175,7 +176,7 @@ def player_profile_query(player_id: int) -> dict[str, Any]:
     }
 
 
-def player_ids_query(player_ids: list[int]) -> dict[str, Any]:
+def player_ids_query(player_ids: list[UUID]) -> dict[str, Any]:
     return {
         "dimensions": list(PLAYER_COMPARE_DIMENSIONS),
         "filters": [
@@ -190,7 +191,7 @@ def player_ids_query(player_ids: list[int]) -> dict[str, Any]:
     }
 
 
-def player_salary_query(player_id: int) -> dict[str, Any]:
+def player_salary_query(player_id: UUID) -> dict[str, Any]:
     return {
         "dimensions": list(PLAYER_SALARY_DIMENSIONS),
         "filters": [equals("players.player_id", player_id)],
@@ -198,7 +199,7 @@ def player_salary_query(player_id: int) -> dict[str, Any]:
     }
 
 
-def player_game_log_query(player_id: int, season: str | None = None) -> dict[str, Any]:
+def player_game_log_query(player_id: UUID, season: str | None = None) -> dict[str, Any]:
     resolved = season or current_nba_season()
     return {
         "dimensions": list(PLAYER_GAME_LOG_DIMENSIONS),
@@ -211,7 +212,7 @@ def player_game_log_query(player_id: int, season: str | None = None) -> dict[str
     }
 
 
-def player_back_to_backs_query(player_id: int, season: str | None = None) -> dict[str, Any]:
+def player_back_to_backs_query(player_id: UUID, season: str | None = None) -> dict[str, Any]:
     filters: list[dict[str, Any]] = [equals("player_game_logs.player_id", player_id)]
     if season:
         filters.append(equals("player_game_logs.season", season))
@@ -229,7 +230,7 @@ def player_back_to_backs_query(player_id: int, season: str | None = None) -> dic
     }
 
 
-def teams_played_query(player_ids: list[int]) -> dict[str, Any]:
+def teams_played_query(player_ids: list[UUID]) -> dict[str, Any]:
     return {
         "measures": ["player_game_logs.teams_played"],
         "dimensions": ["player_game_logs.player_id"],
@@ -468,13 +469,13 @@ PLAYER_CONTRACT_SEASON_DIMENSIONS = [
     "player_contracts.season",
     "player_contracts.salary",
     "player_contracts.remaining_guaranteed",
-    "player_contracts.nba_team_abbreviation",
+    "player_contracts.team_abbreviation",
     "player_contracts.match_method",
 ]
 
 TEAM_PAYROLL_SEASON_DIMENSIONS = [
     "team_payroll.team_id",
-    "team_payroll.nba_team_abbreviation",
+    "team_payroll.abbreviation",
     "team_payroll.team_name",
     "team_payroll.season",
     "team_payroll.total_salary",
@@ -516,8 +517,7 @@ GAME_PREDICTIONS_DIMENSIONS = [
 PLAYER_INJURIES_DIMENSIONS = [
     "player_injuries.player_id",
     "player_injuries.player_name",
-    "player_injuries.nba_team_abbreviation",
-    "player_injuries.bref_team_abbreviation",
+    "player_injuries.team_abbreviation",
     "player_injuries.update_date",
     "player_injuries.description",
     "player_injuries.match_method",
@@ -579,7 +579,7 @@ def clamp_limit(value: int | None, default: int, maximum: int) -> int:
     return max(1, min(int(value), maximum))
 
 
-def player_season_stats_query(player_id: int) -> dict[str, Any]:
+def player_season_stats_query(player_id: UUID) -> dict[str, Any]:
     return {
         "dimensions": list(PLAYER_SEASON_STATS_DIMENSIONS),
         "filters": [equals("player_season_stats.player_id", player_id)],
@@ -588,7 +588,7 @@ def player_season_stats_query(player_id: int) -> dict[str, Any]:
     }
 
 
-def player_contract_season_query(player_id: int, season: str) -> dict[str, Any]:
+def player_contract_season_query(player_id: UUID, season: str) -> dict[str, Any]:
     return {
         "dimensions": list(PLAYER_CONTRACT_SEASON_DIMENSIONS),
         "filters": [
@@ -603,7 +603,7 @@ def team_payroll_season_query(abbreviation: str, season: str) -> dict[str, Any]:
     return {
         "dimensions": list(TEAM_PAYROLL_SEASON_DIMENSIONS),
         "filters": [
-            equals("team_payroll.nba_team_abbreviation", abbreviation.upper()),
+            equals("team_payroll.abbreviation", abbreviation.upper()),
             equals("team_payroll.season", season),
         ],
         "limit": 1,
@@ -629,7 +629,7 @@ def games_schedule_query(
 
 
 def game_predictions_query(
-    game_id: str | None = None,
+    game_id: UUID | None = None,
     upcoming: bool = False,
     limit: int = 50,
 ) -> dict[str, Any]:
@@ -653,7 +653,7 @@ def game_predictions_query(
 
 
 def player_injuries_query(
-    player_id: int | None = None,
+    player_id: UUID | None = None,
     team_abbreviation: str | None = None,
     limit: int = 50,
 ) -> dict[str, Any]:
@@ -661,7 +661,7 @@ def player_injuries_query(
     if player_id is not None:
         filters.append(equals("player_injuries.player_id", player_id))
     if team_abbreviation:
-        filters.append(equals("player_injuries.nba_team_abbreviation", team_abbreviation.upper()))
+        filters.append(equals("player_injuries.team_abbreviation", team_abbreviation.upper()))
     return {
         "dimensions": list(PLAYER_INJURIES_DIMENSIONS),
         "filters": filters,
@@ -670,7 +670,7 @@ def player_injuries_query(
     }
 
 
-def game_odds_query(game_id: str | None = None, limit: int = 100) -> dict[str, Any]:
+def game_odds_query(game_id: UUID | None = None, limit: int = 100) -> dict[str, Any]:
     filters: list[dict[str, Any]] = []
     if game_id:
         filters.append(equals("game_odds.game_id", game_id))
@@ -682,7 +682,7 @@ def game_odds_query(game_id: str | None = None, limit: int = 100) -> dict[str, A
     }
 
 
-def play_by_play_query(game_id: str, limit: int | None = None) -> dict[str, Any]:
+def play_by_play_query(game_id: UUID, limit: int | None = None) -> dict[str, Any]:
     return {
         "dimensions": list(PLAY_BY_PLAY_DIMENSIONS),
         "filters": [equals("play_by_play.game_id", game_id)],

@@ -1,3 +1,3 @@
-export function nbaTeamLogoUrl(teamId: number): string {
-  return `https://cdn.nba.com/logos/nba/${teamId}/primary/L/logo.svg`;
+export function teamLogoLabel(abbreviation: string | null | undefined): string {
+  return abbreviation?.trim().slice(0, 3).toUpperCase() || "NBA";
 }

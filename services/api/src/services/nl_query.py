@@ -174,7 +174,6 @@ _HIDDEN_ASK_KEYS = frozenset(
         "match_method",
         "source",
         "is_active",
-        "nba_team_abbreviation",
     }
 )
 _B2B_ASK_KEYS = (
@@ -423,7 +422,7 @@ class NaturalLanguageQueryService:
                 sql=None,
             )
         season = self._resolve_season(question, header_season)
-        stats = self.cube.get_back_to_back_stats(int(player["player_id"]), season)
+        stats = self.cube.get_back_to_back_stats(player["player_id"], season)
         payload = self._ask_row(
             {
                 "full_name": player["full_name"],
@@ -466,7 +465,7 @@ class NaturalLanguageQueryService:
                 data=[],
                 sql=None,
             )
-        rows = self.cube.get_player_season_stats(int(player["player_id"]))
+        rows = self.cube.get_player_season_stats(player["player_id"])
         if not rows:
             return QueryResponse(
                 answer=f"No season rows for {player['full_name']}.",
@@ -506,7 +505,7 @@ class NaturalLanguageQueryService:
                     sql=None,
                 )
             resolved.append(player)
-        ids = [int(p["player_id"]) for p in resolved]
+        ids = [p["player_id"] for p in resolved]
         compare_keys = self._compare_ask_keys(question)
         stat_keys = [key for key in compare_keys if key != "full_name"]
         rows = self.cube.compare_players(ids, stats=stat_keys)
@@ -621,7 +620,7 @@ class NaturalLanguageQueryService:
                     data=[],
                     sql=None,
                 )
-            row = self.cube.get_team_standing(int(team["team_id"]), season=season)
+            row = self.cube.get_team_standing(team["team_id"], season=season)
             if row is None:
                 return QueryResponse(
                     answer=f"No standings row for {team['team_name']}.",
@@ -683,7 +682,7 @@ class NaturalLanguageQueryService:
                 sql=None,
             )
         contract_season = self._extract_season(question)
-        player = self.cube.get_player_contract(int(listed["player_id"]), contract_season)
+        player = self.cube.get_player_contract(listed["player_id"], contract_season)
         if player is None:
             return QueryResponse(
                 answer=f"No player found matching '{names[0]}'.",

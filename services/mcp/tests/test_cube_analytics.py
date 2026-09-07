@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from uuid import UUID
 
 import pytest
 from cube.analytics import CubeAnalytics
@@ -47,14 +48,23 @@ class ScriptedCubeClient:
         return "## players\n"
 
 
+PLAYER_CURRY = UUID("00000000-0000-4000-8000-000000000001")
+PLAYER_LEBRON = UUID("00000000-0000-4000-8000-000000000002")
+PLAYER_KAWHI = UUID("00000000-0000-4000-8000-000000000003")
+TEAM_GSW = UUID("7bf8726a-a852-452d-b81f-14839127c5fb")
+TEAM_OKC = UUID("bc007f7f-f88d-4699-8325-e2f5a3e32183")
+TEAM_LAL = UUID("8cbd46d2-8092-4b1e-8b24-f31c7692cadd")
+GAME_ONE = UUID("00000000-0000-4000-8000-000000000101")
+
+
 @pytest.mark.unit
 def test_analytics_named_operations() -> None:
     client = ScriptedCubeClient(
         [
-            [{"player_id": 201939, "full_name": "Stephen Curry", "abbreviation": "GSW"}],
+            [{"player_id": PLAYER_CURRY, "full_name": "Stephen Curry", "abbreviation": "GSW"}],
             [
                 {
-                    "player_id": 201939,
+                    "player_id": PLAYER_CURRY,
                     "full_name": "Stephen Curry",
                     "career_games_played": 10,
                     "career_ppg": 30,
@@ -65,7 +75,7 @@ def test_analytics_named_operations() -> None:
             [{"teams_played": 1}],
             [
                 {
-                    "player_id": 201939,
+                    "player_id": PLAYER_CURRY,
                     "full_name": "Stephen Curry",
                     "career_games_played": 10,
                     "career_ppg": 30,
@@ -83,25 +93,25 @@ def test_analytics_named_operations() -> None:
             ],
             [
                 {
-                    "player_id": 2544,
+                    "player_id": PLAYER_LEBRON,
                     "full_name": "LeBron James",
                     "career_games_played": 20,
                     "career_ppg": 27,
                 },
                 {
-                    "player_id": 201939,
+                    "player_id": PLAYER_CURRY,
                     "full_name": "Stephen Curry",
                     "career_games_played": 10,
                     "career_ppg": 30,
                 },
             ],
             [
-                {"player_id": 2544, "teams_played": 2},
-                {"player_id": 201939, "teams_played": 1},
+                {"player_id": PLAYER_LEBRON, "teams_played": 2},
+                {"player_id": PLAYER_CURRY, "teams_played": 1},
             ],
             [
                 {
-                    "team_id": 1610612744,
+                    "team_id": TEAM_GSW,
                     "abbreviation": "GSW",
                     "team_name": "Golden State Warriors",
                     "current_season_payroll": 180000000,
@@ -109,7 +119,7 @@ def test_analytics_named_operations() -> None:
             ],
             [
                 {
-                    "team_id": 1610612744,
+                    "team_id": TEAM_GSW,
                     "team_abbreviation": "GSW",
                     "team_name": "Golden State Warriors",
                     "wins": 3,
@@ -117,11 +127,11 @@ def test_analytics_named_operations() -> None:
                     "games": 4,
                 }
             ],
-            [{"game_id": "1", "result": "W"}],
+            [{"game_id": GAME_ONE, "result": "W"}],
             [{"season": "2024-25"}],
             [
                 {
-                    "team_id": 1,
+                    "team_id": TEAM_OKC,
                     "abbreviation": "OKC",
                     "team_name": "Thunder",
                     "conference": "West",
@@ -135,7 +145,7 @@ def test_analytics_named_operations() -> None:
             [{"season": "2024-25"}],
             [
                 {
-                    "team_id": 1,
+                    "team_id": TEAM_OKC,
                     "abbreviation": "OKC",
                     "team_name": "Thunder",
                     "conference": "West",
@@ -150,18 +160,18 @@ def test_analytics_named_operations() -> None:
     )
     analytics = CubeAnalytics(client)
     assert analytics.search_players("Curry")[0]["full_name"] == "Stephen Curry"
-    career = analytics.get_career_stats(201939)
+    career = analytics.get_career_stats(PLAYER_CURRY)
     assert career is not None
     assert career["total_points"] == 300
     assert career["teams_played_for"] == 1
-    b2b = analytics.get_back_to_back_stats(201939, "2024-25")
+    b2b = analytics.get_back_to_back_stats(PLAYER_CURRY, "2024-25")
     assert b2b["total_back_to_backs"] == 3
     assert b2b["games_played_in_b2b"] == 2
     assert b2b["games_sat_in_b2b"] == 1
     assert b2b["avg_pts_b2b"] == 24.0
     assert "total_b2b_games" not in b2b
     assert "avg_pts_in_b2b" not in b2b
-    compared = analytics.compare_players([2544, 201939])
+    compared = analytics.compare_players([PLAYER_LEBRON, PLAYER_CURRY])
     assert compared[0]["full_name"] == "LeBron James"
     assert compared[0]["teams_played_for"] == 2
     team = analytics.find_team("GSW")
@@ -174,10 +184,10 @@ def test_analytics_named_operations() -> None:
     standings = analytics.list_standings()
     assert standings[0]["abbreviation"] == "OKC"
     assert standings[0]["wins"] == 50
-    assert analytics.get_team_standing(1)["abbreviation"] == "OKC"
-    assert analytics.get_player_game_log(1) == []
-    assert analytics.get_player(99) is None
-    assert analytics.get_career_stats(99) is None
+    assert analytics.get_team_standing(TEAM_OKC)["abbreviation"] == "OKC"
+    assert analytics.get_player_game_log(GAME_ONE) == []
+    assert analytics.get_player(PLAYER_KAWHI) is None
+    assert analytics.get_career_stats(PLAYER_KAWHI) is None
     with pytest.raises(ValueError):
         analytics.compare_players([1])
 
@@ -190,7 +200,7 @@ def test_team_record_fills_name_when_no_games() -> None:
             [],
             [
                 {
-                    "team_id": 1610612744,
+                    "team_id": TEAM_GSW,
                     "abbreviation": "GSW",
                     "team_name": "Golden State Warriors",
                 }
@@ -265,17 +275,19 @@ def test_query_builders() -> None:
     assert game_standings["filters"][1]["values"] == ["2026-27"]
     assert game_standings["filters"][2]["values"] == ["West"]
     assert team_games_seasons_query()["filters"][0]["values"] == ["Regular Season"]
-    rows = [{"player_id": 1, "full_name": "A", "career_ppg": 20, "career_games_played": 10}]
+    rows = [
+        {"player_id": PLAYER_CURRY, "full_name": "A", "career_ppg": 20, "career_games_played": 10}
+    ]
     projected = project_compare_stats(rows, ["ppg", "games", "ppg"])
     assert "career_ppg" in projected[0]
     defaulted = project_compare_stats(rows)
-    assert defaulted[0]["player_id"] == 1
-    compare_query = player_ids_query([2544, 201939])
+    assert defaulted[0]["player_id"] == PLAYER_CURRY
+    compare_query = player_ids_query([PLAYER_LEBRON, PLAYER_CURRY])
     assert compare_query["dimensions"] == list(PLAYER_COMPARE_DIMENSIONS)
     assert "players.height" not in compare_query["dimensions"]
-    salary_query = player_salary_query(201939)
+    salary_query = player_salary_query(PLAYER_CURRY)
     assert salary_query["dimensions"] == list(PLAYER_SALARY_DIMENSIONS)
-    season_query = player_season_stats_query(201939)
+    season_query = player_season_stats_query(PLAYER_CURRY)
     assert "players.full_name" in season_query["dimensions"]
     assert "player_season_stats.first_game_date" not in season_query["dimensions"]
 
@@ -284,10 +296,10 @@ def test_query_builders() -> None:
 def test_new_named_cube_operations() -> None:
     client = ScriptedCubeClient(
         [
-            [{"player_id": 201939, "season": "2024-25", "ppg": 24.5, "games_played": 70}],
+            [{"player_id": PLAYER_CURRY, "season": "2024-25", "ppg": 24.5, "games_played": 70}],
             [
                 {
-                    "player_id": 201939,
+                    "player_id": PLAYER_CURRY,
                     "player_name": "Stephen Curry",
                     "season": "2024-25",
                     "salary": "100",
@@ -296,24 +308,24 @@ def test_new_named_cube_operations() -> None:
             ],
             [
                 {
-                    "team_id": 1,
-                    "nba_team_abbreviation": "GSW",
+                    "team_id": TEAM_GSW,
+                    "team_abbreviation": "GSW",
                     "team_name": "Warriors",
                     "season": "2024-25",
                     "total_salary": 180000000,
                 }
             ],
-            [{"game_id": "1", "status": "Scheduled"}],
-            [{"game_id": "1", "model_wp": 0.58, "model_version": "elo-v0"}],
+            [{"game_id": GAME_ONE, "status": "Scheduled"}],
+            [{"game_id": GAME_ONE, "model_wp": 0.58, "model_version": "elo-v0"}],
             [{"player_name": "Kawhi Leonard", "description": "knee"}],
-            [{"game_id": "1", "market": "h2h"}],
-            [{"game_id": "1", "action_number": 1}],
+            [{"game_id": GAME_ONE, "market": "h2h"}],
+            [{"game_id": GAME_ONE, "action_number": 1}],
             [{"reddit_id": "abc", "title": "thread"}],
         ]
     )
     analytics = CubeAnalytics(client)
-    assert analytics.get_player_season_stats(201939)[0]["ppg"] == 24.5
-    contract = analytics.get_player_contract(201939, "2024-25")
+    assert analytics.get_player_season_stats(PLAYER_CURRY)[0]["ppg"] == 24.5
+    contract = analytics.get_player_contract(PLAYER_CURRY, "2024-25")
     assert contract is not None
     assert contract["source"] == "player_contracts"
     payroll = analytics.get_team_payroll("GSW", "2024-25")
@@ -323,7 +335,7 @@ def test_new_named_cube_operations() -> None:
     assert analytics.get_game_predictions(upcoming=True)[0]["model_wp"] == 0.58
     assert analytics.get_player_injuries(team_abbreviation="LAC")[0]["description"] == "knee"
     assert analytics.get_game_odds()[0]["market"] == "h2h"
-    assert analytics.get_play_by_play("1")[0]["action_number"] == 1
+    assert analytics.get_play_by_play(GAME_ONE)[0]["action_number"] == 1
     assert analytics.get_reddit_posts("thread")[0]["reddit_id"] == "abc"
 
 
@@ -333,7 +345,7 @@ def test_player_contract_snapshot_omits_profile_dims() -> None:
         [
             [
                 {
-                    "player_id": 201939,
+                    "player_id": PLAYER_CURRY,
                     "full_name": "Stephen Curry",
                     "current_contract_season": "2026-27",
                     "current_season_salary": 62587158,
@@ -343,9 +355,9 @@ def test_player_contract_snapshot_omits_profile_dims() -> None:
         ]
     )
     analytics = CubeAnalytics(client)
-    contract = analytics.get_player_contract(201939)
+    contract = analytics.get_player_contract(PLAYER_CURRY)
     assert contract == {
-        "player_id": 201939,
+        "player_id": PLAYER_CURRY,
         "full_name": "Stephen Curry",
         "current_contract_season": "2026-27",
         "current_season_salary": 62587158,
@@ -362,7 +374,7 @@ def test_list_standings_falls_back_to_team_games() -> None:
             [],
             [
                 {
-                    "team_id": 1610612760,
+                    "team_id": TEAM_OKC,
                     "team_abbreviation": "OKC",
                     "team_name": "Oklahoma City Thunder",
                     "season": "2026-27",
@@ -372,7 +384,7 @@ def test_list_standings_falls_back_to_team_games() -> None:
                     "games": 2,
                 },
                 {
-                    "team_id": 1610612747,
+                    "team_id": TEAM_LAL,
                     "team_abbreviation": "LAL",
                     "team_name": "Los Angeles Lakers",
                     "season": "2026-27",
@@ -410,7 +422,7 @@ def test_list_standings_resolves_season_from_team_games() -> None:
             [],
             [
                 {
-                    "team_id": 1,
+                    "team_id": TEAM_OKC,
                     "team_abbreviation": "OKC",
                     "team_name": "Thunder",
                     "season": "2026-27",

@@ -2,21 +2,17 @@ version: 2
 
 models:
   - name: int_player_injuries_matched
-    description: >
-      Current injury snapshot matched to NBA person_id. unique_name when the
-      normalized name is unique on stg_players; name_and_team when the name
-      is ambiguous but unique on that NBA team; unmatched otherwise.
+    description: Injuries after provider-key resolution at ingest.
     columns:
-      - name: player_name_normalized
+      - name: player_id
+        data_tests:
+          - not_null
+      - name: team_id
         data_tests:
           - not_null
       - name: match_method
         data_tests:
           - dbt_expectations.expect_column_values_to_be_in_set:
               arguments:
-                value_set: ["unique_name", "name_and_team", "unmatched"]
+                value_set: ["external_id"]
                 quote_values: true
-    data_tests:
-      - dbt_expectations.expect_compound_columns_to_be_unique:
-          arguments:
-            column_list: ["player_name_normalized", "bref_team_abbreviation"]

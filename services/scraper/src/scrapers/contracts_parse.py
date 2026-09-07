@@ -1,6 +1,6 @@
 """Parse Basketball-Reference team payroll HTML into player-season rows.
 
-Basketball-Reference (not stats.nba.com) publishes remaining multi-year
+Basketball-Reference publishes remaining multi-year
 contracts at ``/contracts/{TEAM}.html``. Tables may be live HTML or wrapped
 in comments; this module is HTTP-free so unit tests can use fixtures.
 """
@@ -19,13 +19,7 @@ PLAYER_HREF_RE = re.compile(r"/players/[a-z]/([a-z0-9]+)\.html", re.IGNORECASE)
 SUFFIX_RE = re.compile(r"\b(jr\.?|sr\.?|iii|ii|iv)\b", re.IGNORECASE)
 NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
 
-# BRef uses BRK/CHO/PHO; NBA Stats uses BKN/CHA/PHX.
-NBA_TO_BREF_ABBR: dict[str, str] = {
-    "BKN": "BRK",
-    "CHA": "CHO",
-    "PHX": "PHO",
-}
-BREF_TO_NBA_ABBR: dict[str, str] = {bref: nba for nba, bref in NBA_TO_BREF_ABBR.items()}
+TEAM_CODE_ALIASES: dict[str, str] = {"BKN": "BRK", "CHA": "CHO", "PHX": "PHO"}
 
 BREF_TEAM_ABBREVIATIONS: tuple[str, ...] = (
     "ATL",
@@ -70,14 +64,9 @@ def normalize_player_name(name: str) -> str:
     return " ".join(spaced.split())
 
 
-def nba_team_abbreviation(bref_abbr: str) -> str:
-    token = bref_abbr.strip().upper()
-    return BREF_TO_NBA_ABBR.get(token, token)
-
-
 def bref_team_abbreviation(nba_or_bref: str) -> str:
     token = nba_or_bref.strip().upper()
-    return NBA_TO_BREF_ABBR.get(token, token)
+    return TEAM_CODE_ALIASES.get(token, token)
 
 
 def parse_team_list(value: str | None) -> list[str]:
@@ -201,7 +190,6 @@ def parse_contracts_html(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Parse a team payroll page into player-season rows and team-season totals."""
     bref = bref_team_abbreviation.strip().upper()
-    nba = nba_team_abbreviation(bref)
     soup = BeautifulSoup(html, "html.parser")
     table = _find_contracts_table(soup)
     if table is None:
@@ -252,7 +240,6 @@ def parse_contracts_html(
                         "player_name": name,
                         "player_name_normalized": normalize_player_name(name),
                         "bref_team_abbreviation": bref,
-                        "nba_team_abbreviation": nba,
                         "season": season,
                         "salary": salary,
                         "is_fully_guaranteed": is_fully_guaranteed,
@@ -282,7 +269,6 @@ def parse_contracts_html(
             payroll_rows.append(
                 {
                     "bref_team_abbreviation": bref,
-                    "nba_team_abbreviation": nba,
                     "season": season,
                     "total_salary": total_salary,
                     "remaining_guaranteed": remaining_guaranteed,

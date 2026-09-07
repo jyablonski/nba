@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -62,15 +63,15 @@ class GamesRepository:
         rows = self.db.execute(LIST_SEASONS)
         return [row[0] for row in rows]
 
-    def game_exists(self, game_id: str) -> bool:
+    def game_exists(self, game_id: UUID) -> bool:
         value = self.db.execute(GAME_EXISTS, {"game_id": game_id}).scalar()
         return bool(value)
 
-    def list_play_by_play(self, game_id: str) -> list[dict]:
+    def list_play_by_play(self, game_id: UUID) -> list[dict]:
         rows = self.db.execute(LIST_PLAY_BY_PLAY, {"game_id": game_id})
         return [dict(row._mapping) for row in rows]
 
-    def get_game_flow(self, game_id: str) -> dict | None:
+    def get_game_flow(self, game_id: UUID) -> dict | None:
         row = self.db.execute(GET_GAME_FLOW, {"game_id": game_id}).first()
         if row is None:
             return None

@@ -55,10 +55,8 @@ describe("standings page", () => {
     await waitFor(() => {
       expect(screen.getByRole("link", { name: "BOS" })).toBeInTheDocument();
     });
-    expect(screen.getByRole("link", { name: "BOS" }).querySelector("img")).toHaveAttribute(
-      "src",
-      "https://cdn.nba.com/logos/nba/1610612738/primary/L/logo.svg"
-    );
+    expect(screen.getByRole("link", { name: "BOS" })).toHaveTextContent("BOS");
+    expect(screen.getByRole("link", { name: "BOS" }).querySelector("img")).toBeNull();
     expect(screen.queryByLabelText("Season")).not.toBeInTheDocument();
     expect(screen.getByText("56–26")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "BOS" }).closest("tr")).toHaveTextContent("1");

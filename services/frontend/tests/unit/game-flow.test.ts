@@ -17,6 +17,9 @@ import {
 } from "@/lib/game-flow";
 import type { ScoringPlay } from "@/lib/game-flow";
 
+const TEAM_HOME = "00000000-0000-4000-8000-000000000201";
+const TEAM_AWAY = "00000000-0000-4000-8000-000000000202";
+
 describe("parseIsoClockToSeconds", () => {
   it("parses V3 clocks", () => {
     expect(parseIsoClockToSeconds("PT11M32.00S")).toBe(692);
@@ -78,9 +81,9 @@ describe("biggest-run and matchup display", () => {
       formatMatchupTitle({
         away_team_abbreviation: "NYK",
         home_team_abbreviation: "SAS",
-        winning_team_id: 1,
-        home_team_id: 1,
-        away_team_id: 2,
+        winning_team_id: TEAM_HOME,
+        home_team_id: TEAM_HOME,
+        away_team_id: TEAM_AWAY,
       })
     ).toBe("NYK @ SAS (W)");
   });
@@ -147,9 +150,13 @@ describe("biggest-run and matchup display", () => {
   });
 
   it("falls back when names are missing and uses winning_team_id", () => {
-    expect(formatMatchupTitle({ away_team_id: 2, home_team_id: 1, winning_team_id: 2 })).toBe(
-      "Away (W) @ Home"
-    );
+    expect(
+      formatMatchupTitle({
+        away_team_id: TEAM_AWAY,
+        home_team_id: TEAM_HOME,
+        winning_team_id: TEAM_AWAY,
+      })
+    ).toBe("Away (W) @ Home");
     expect(formatBiggestRunCaption({ biggest_run_team_abbreviation: "NYK" })).toBeNull();
   });
 });

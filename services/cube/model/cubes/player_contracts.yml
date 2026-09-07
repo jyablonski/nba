@@ -1,21 +1,17 @@
 cubes:
   - name: player_contracts
     sql_table: gold.fct_player_contracts
-    description: Basketball-Reference remaining-year player-season salary (player_id null when unmatched)
+    description: Basketball-Reference remaining-year player-season salary keyed by canonical UUIDs.
 
     dimensions:
       - name: id
-        sql: "bref_player_slug || '-' || COALESCE(bref_team_abbreviation, '') || '-' || season"
+        sql: "CAST(player_id AS VARCHAR) || '-' || CAST(team_id AS VARCHAR) || '-' || season"
         type: string
         primary_key: true
 
-      - name: bref_player_slug
-        sql: bref_player_slug
-        type: string
-
       - name: player_id
         sql: player_id
-        type: number
+        type: string
 
       - name: player_name
         sql: player_name
@@ -27,14 +23,10 @@ cubes:
 
       - name: team_id
         sql: team_id
-        type: number
-
-      - name: bref_team_abbreviation
-        sql: bref_team_abbreviation
         type: string
 
-      - name: nba_team_abbreviation
-        sql: nba_team_abbreviation
+      - name: team_abbreviation
+        sql: team_abbreviation
         type: string
 
       - name: season

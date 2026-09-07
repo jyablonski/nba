@@ -2,22 +2,19 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { TeamAbbrLink, TeamLogo } from "@/components/team-logo";
-import { nbaTeamLogoUrl } from "@/lib/team-logo";
+import { teamLogoLabel } from "@/lib/team-logo";
 
-describe("nbaTeamLogoUrl", () => {
-  it("uses the public NBA CDN path", () => {
-    expect(nbaTeamLogoUrl(1610612738)).toBe(
-      "https://cdn.nba.com/logos/nba/1610612738/primary/L/logo.svg"
-    );
+describe("teamLogoLabel", () => {
+  it("uses the canonical abbreviation as a neutral local label", () => {
+    expect(teamLogoLabel(" warriors ")).toBe("WAR");
+    expect(teamLogoLabel(null)).toBe("NBA");
   });
 });
 
 describe("TeamLogo", () => {
-  it("renders a decorative CDN image", () => {
-    render(<TeamLogo teamId={1610612738} />);
-    const image = screen.getByRole("presentation");
-    expect(image).toHaveAttribute("src", nbaTeamLogoUrl(1610612738));
-    expect(image).toHaveAttribute("alt", "");
+  it("renders a decorative local badge", () => {
+    render(<TeamLogo teamId="7bf8726a-a852-452d-b81f-14839127c5fb" abbreviation="GSW" />);
+    expect(screen.getByText("GSW")).toBeInTheDocument();
   });
 
   it("skips missing team ids", () => {
@@ -28,9 +25,13 @@ describe("TeamLogo", () => {
 
 describe("TeamAbbrLink", () => {
   it("keeps the abbreviation as the accessible name", () => {
-    render(<TeamAbbrLink teamId={1610612738} abbreviation="BOS" href="/teams/1610612738" />);
-    const link = screen.getByRole("link", { name: "BOS" });
-    expect(link).toHaveAttribute("href", "/teams/1610612738");
-    expect(link.querySelector("img")).toHaveAttribute("src", nbaTeamLogoUrl(1610612738));
+    render(
+      <TeamAbbrLink
+        teamId="7bf8726a-a852-452d-b81f-14839127c5fb"
+        abbreviation="GSW"
+        href="/teams/7bf8726a-a852-452d-b81f-14839127c5fb"
+      />
+    );
+    expect(screen.getByRole("link", { name: "GSW" })).toBeInTheDocument();
   });
 });

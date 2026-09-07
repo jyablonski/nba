@@ -1,11 +1,12 @@
 from datetime import date
 
 import pytest
+from ids import TEAM_BOS, TEAM_CHI, TEAM_DET, TEAM_GSW, TEAM_LAC, TEAM_NYK, TEAM_OKC
 
 
 def _standing_row(**overrides) -> dict:
     row = {
-        "team_id": 1610612744,
+        "team_id": TEAM_GSW,
         "abbreviation": "GSW",
         "team_name": "Golden State Warriors",
         "season": "2024-25",
@@ -36,7 +37,7 @@ def test_list_standings(client, session, mapping_row, query_result) -> None:
                 mapping_row(_standing_row()),
                 mapping_row(
                     _standing_row(
-                        team_id=1610612746,
+                        team_id=TEAM_LAC,
                         abbreviation="LAC",
                         team_name="LA Clippers",
                         conference_rank=2,
@@ -72,7 +73,7 @@ def test_list_standings_conference_case_insensitive(
             [
                 mapping_row(
                     _standing_row(
-                        team_id=1610612741,
+                        team_id=TEAM_CHI,
                         abbreviation="CHI",
                         team_name="Chicago Bulls",
                         conference="East",
@@ -119,7 +120,7 @@ def test_list_standings_game_record_overlay(client, session, mapping_row, query_
             [
                 mapping_row(
                     {
-                        "team_id": 1610612738,
+                        "team_id": TEAM_BOS,
                         "abbreviation": "BOS",
                         "team_name": "Boston Celtics",
                         "season": "2025-26",
@@ -161,7 +162,7 @@ def test_apply_derived_ranks_orders_by_record() -> None:
     rows = apply_derived_ranks(
         [
             {
-                "team_id": 1,
+                "team_id": TEAM_DET,
                 "abbreviation": "DET",
                 "team_name": "Detroit Pistons",
                 "conference": "East",
@@ -173,7 +174,7 @@ def test_apply_derived_ranks_orders_by_record() -> None:
                 "record_source": "games",
             },
             {
-                "team_id": 2,
+                "team_id": TEAM_NYK,
                 "abbreviation": "NYK",
                 "team_name": "New York Knicks",
                 "conference": "East",
@@ -185,7 +186,7 @@ def test_apply_derived_ranks_orders_by_record() -> None:
                 "record_source": "games",
             },
             {
-                "team_id": 3,
+                "team_id": TEAM_OKC,
                 "abbreviation": "OKC",
                 "team_name": "Oklahoma City Thunder",
                 "conference": "West",
@@ -224,7 +225,7 @@ def test_apply_derived_ranks_keeps_official_values() -> None:
     rows = apply_derived_ranks(
         [
             {
-                "team_id": 1,
+                "team_id": TEAM_BOS,
                 "team_name": "Boston Celtics",
                 "conference": "East",
                 "wins": 50,

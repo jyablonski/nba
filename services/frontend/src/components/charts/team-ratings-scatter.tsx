@@ -15,7 +15,6 @@ import {
 } from "recharts";
 
 import { formatStat } from "@/lib/format";
-import { nbaTeamLogoUrl } from "@/lib/team-logo";
 import {
   leagueRatingAverages,
   paddedDomain,
@@ -63,13 +62,10 @@ export function TeamLogoMarker({
   return (
     <g>
       <a href={`/teams/${payload.team_id}`}>
-        <image
-          href={nbaTeamLogoUrl(payload.team_id)}
-          x={cx - size / 2}
-          y={cy - size / 2}
-          width={size}
-          height={size}
-        />
+        <circle cx={cx} cy={cy} r={size / 2} fill="#E8E4DA" stroke="#8C8577" />
+        <text x={cx} y={cy + 4} textAnchor="middle" fontSize={8} fontWeight={700} fill="#5C574F">
+          {payload.abbreviation}
+        </text>
       </a>
     </g>
   );

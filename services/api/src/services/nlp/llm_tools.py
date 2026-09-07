@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 from cube.analytics import CubeAnalytics
 from cube.errors import CubeError, UnknownMemberError
@@ -63,7 +64,7 @@ def named_tool_schemas() -> list[dict[str, Any]]:
             "get_player_game_log",
             "Game-by-game box scores for a player via Cube player_game_logs.",
             {
-                "player_id": {"type": "integer"},
+                "player_id": {"type": "string"},
                 "season": {"type": "string"},
             },
             ["player_id"],
@@ -72,7 +73,7 @@ def named_tool_schemas() -> list[dict[str, Any]]:
             "get_player_back_to_backs",
             "Back-to-back volume and scoring splits for a player via Cube.",
             {
-                "player_id": {"type": "integer"},
+                "player_id": {"type": "string"},
                 "season": {"type": "string"},
             },
             ["player_id"],
@@ -80,14 +81,14 @@ def named_tool_schemas() -> list[dict[str, Any]]:
         _function_schema(
             "get_career_stats",
             "Career totals and averages for a player via Cube players.",
-            {"player_id": {"type": "integer"}},
+            {"player_id": {"type": "string"}},
             ["player_id"],
         ),
         _function_schema(
             "compare_players",
             "Side-by-side career rows for two or more players via Cube.",
             {
-                "player_ids": {"type": "array", "items": {"type": "integer"}},
+                "player_ids": {"type": "array", "items": {"type": "string"}},
                 "stats": {"type": "array", "items": {"type": "string"}},
             },
             ["player_ids"],
@@ -109,7 +110,7 @@ def named_tool_schemas() -> list[dict[str, Any]]:
             "get_player_contract",
             "Remaining-season salary snapshot via Cube players, or player_contracts when season is set.",
             {
-                "player_id": {"type": "integer"},
+                "player_id": {"type": "string"},
                 "season": {"type": "string"},
             },
             ["player_id"],
@@ -134,7 +135,7 @@ def named_tool_schemas() -> list[dict[str, Any]]:
         _function_schema(
             "get_player_season_stats",
             "Per-season PPG / RPG / APG for a player via Cube player_season_stats.",
-            {"player_id": {"type": "integer"}},
+            {"player_id": {"type": "string"}},
             ["player_id"],
         ),
         _function_schema(
@@ -157,7 +158,7 @@ def named_tool_schemas() -> list[dict[str, Any]]:
             "get_player_injuries",
             "Current Basketball-Reference injury snapshot via Cube player_injuries.",
             {
-                "player_id": {"type": "integer"},
+                "player_id": {"type": "string"},
                 "team_abbreviation": {"type": "string"},
             },
         ),
@@ -246,21 +247,21 @@ class NamedToolExecutor:
         return {"ok": True, "rows": self.cube.search_players(name)}
 
     def _game_log(self, args: dict[str, Any]) -> dict[str, Any]:
-        rows = self.cube.get_player_game_log(int(args["player_id"]), args.get("season"))
+        rows = self.cube.get_player_game_log(UUID(str(args["player_id"])), args.get("season"))
         return {"ok": True, "rows": rows}
 
     def _back_to_backs(self, args: dict[str, Any]) -> dict[str, Any]:
-        stats = self.cube.get_back_to_back_stats(int(args["player_id"]), args.get("season"))
+        stats = self.cube.get_back_to_back_stats(UUID(str(args["player_id"])), args.get("season"))
         return {"ok": True, "row": stats}
 
     def _career_stats(self, args: dict[str, Any]) -> dict[str, Any]:
-        player = self.cube.get_career_stats(int(args["player_id"]))
+        player = self.cube.get_career_stats(UUID(str(args["player_id"])))
         if player is None:
             return {"ok": False, "error": "Player not found."}
         return {"ok": True, "row": player}
 
     def _compare(self, args: dict[str, Any]) -> dict[str, Any]:
-        ids = [int(pid) for pid in (args.get("player_ids") or [])]
+        ids = [UUID(str(pid)) for pid in (args.get("player_ids") or [])]
         stats = args.get("stats")
         rows = self.cube.compare_players(ids, stats)
         return {"ok": True, "rows": rows}
@@ -281,7 +282,7 @@ class NamedToolExecutor:
         return {"ok": True, "row": record}
 
     def _player_contract(self, args: dict[str, Any]) -> dict[str, Any]:
-        player = self.cube.get_player_contract(int(args["player_id"]), args.get("season"))
+        player = self.cube.get_player_contract(UUID(str(args["player_id"])), args.get("season"))
         if player is None:
             return {"ok": False, "error": "Player not found."}
         return {"ok": True, "row": player}
@@ -301,7 +302,7 @@ class NamedToolExecutor:
         return {"ok": True, "rows": rows}
 
     def _season_stats(self, args: dict[str, Any]) -> dict[str, Any]:
-        rows = self.cube.get_player_season_stats(int(args["player_id"]))
+        rows = self.cube.get_player_season_stats(UUID(str(args["player_id"])))
         return {"ok": True, "rows": rows}
 
     def _games_schedule(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -313,7 +314,7 @@ class NamedToolExecutor:
 
     def _game_predictions(self, args: dict[str, Any]) -> dict[str, Any]:
         rows = self.cube.get_game_predictions(
-            game_id=args.get("game_id"),
+            game_id=UUID(str(args["game_id"])) if args.get("game_id") else None,
             upcoming=bool(args.get("upcoming")),
         )
         return {"ok": True, "rows": rows}
@@ -321,17 +322,19 @@ class NamedToolExecutor:
     def _player_injuries(self, args: dict[str, Any]) -> dict[str, Any]:
         player_id = args.get("player_id")
         rows = self.cube.get_player_injuries(
-            player_id=int(player_id) if player_id is not None else None,
+            player_id=UUID(str(player_id)) if player_id is not None else None,
             team_abbreviation=args.get("team_abbreviation"),
         )
         return {"ok": True, "rows": rows}
 
     def _game_odds(self, args: dict[str, Any]) -> dict[str, Any]:
-        rows = self.cube.get_game_odds(game_id=args.get("game_id"))
+        rows = self.cube.get_game_odds(
+            game_id=UUID(str(args["game_id"])) if args.get("game_id") else None
+        )
         return {"ok": True, "rows": rows}
 
     def _play_by_play(self, args: dict[str, Any]) -> dict[str, Any]:
-        rows = self.cube.get_play_by_play(str(args["game_id"]), args.get("limit"))
+        rows = self.cube.get_play_by_play(UUID(str(args["game_id"])), args.get("limit"))
         return {"ok": True, "rows": rows}
 
     def _reddit_posts(self, args: dict[str, Any]) -> dict[str, Any]:

@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys
 from functools import lru_cache
 from pathlib import Path
+from uuid import UUID
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
@@ -25,7 +26,8 @@ from cube.client import CubeClient
 from cube.errors import CubeError
 
 load_dotenv()
-load_dotenv(_SRC_DIR.parents[2] / ".env")
+for parent in _SRC_DIR.parents:
+    load_dotenv(parent / ".env")
 
 EXAMPLE_QUESTIONS = """# Example Questions
 
@@ -35,22 +37,22 @@ These questions use named Cube tools or query_cube (Cube query JSON only):
    → Use get_player_back_to_backs(player_id, season)
 
 2. **Player comparison**: "Who has more career games, LeBron or Curry?"
-   → Use compare_players([2544, 201939], stats=["games"])
+   → Use compare_players([player_uuid_a, player_uuid_b], stats=["games"])
 
 3. **Team record by city**: "What is the Warriors' win percentage in Chicago?"
    → Use get_team_record("GSW", arena_city="Chicago")
 
 4. **Game log**: "Show me LeBron's last 10 games"
-   → Use get_player_game_log(2544)
+   → Use get_player_game_log(player_uuid)
 
 5. **Career stats**: "What are Stephen Curry's career averages?"
-   → Use get_career_stats(201939)
+   → Use get_career_stats(player_uuid)
 
 6. **Ad-hoc Cube query**: "Which team has the most wins this season?"
    → Use query_cube with measures/dimensions from nba://schema (not SQL)
 
 7. **Salary**: "What is Curry's salary?"
-   → Use get_player_contract(201939)
+   → Use get_player_contract(player_uuid)
 
 8. **Payroll**: "What is the Warriors payroll?"
    → Use get_team_payroll("GSW")
@@ -59,7 +61,7 @@ These questions use named Cube tools or query_cube (Cube query JSON only):
    → Use get_standings(conference="West")
 
 10. **Season averages**: "Curry PPG by season"
-   → Use get_player_season_stats(201939)
+   → Use get_player_season_stats(player_uuid)
 
 11. **Schedule / Elo WP / injuries / odds / PBP / reddit**: named tools or query_cube
 """
@@ -164,7 +166,7 @@ def search_players(name: str) -> list[dict]:
 
 @mcp.tool()
 def get_player_game_log(
-    player_id: int,
+    player_id: UUID,
     season: str | None = None,
 ) -> list[dict]:
     """Get game-by-game stats for a player. If season is omitted, returns
@@ -174,7 +176,7 @@ def get_player_game_log(
 
 @mcp.tool()
 def get_player_back_to_backs(
-    player_id: int,
+    player_id: UUID,
     season: str | None = None,
 ) -> dict:
     """Get back-to-back game stats: total_back_to_backs, games_played_in_b2b,
@@ -186,7 +188,7 @@ def get_player_back_to_backs(
 
 
 @mcp.tool()
-def get_career_stats(player_id: int) -> dict:
+def get_career_stats(player_id: UUID) -> dict:
     """Career totals and averages: total_games, total_points, ppg, rpg, apg,
     seasons_played, teams_played_for."""
     row = get_analytics().get_career_stats(player_id)
@@ -197,7 +199,7 @@ def get_career_stats(player_id: int) -> dict:
 
 @mcp.tool()
 def compare_players(
-    player_ids: list[int],
+    player_ids: list[UUID],
     stats: list[str] | None = None,
 ) -> list[dict]:
     """Compare career stats for 2+ players side by side."""
@@ -233,7 +235,7 @@ def get_team_record(
 
 
 @mcp.tool()
-def get_player_contract(player_id: int, season: str | None = None) -> dict:
+def get_player_contract(player_id: UUID, season: str | None = None) -> dict:
     """Remaining-contract snapshot. Without season this is the dim remaining-year
     row. With season it reads player_contracts for that remaining-year slice
     (BRef snapshot, not a paid ledger)."""
@@ -254,7 +256,7 @@ def get_team_payroll(team_abbreviation: str, season: str | None = None) -> dict:
 
 
 @mcp.tool()
-def get_player_season_stats(player_id: int) -> list[dict]:
+def get_player_season_stats(player_id: UUID) -> list[dict]:
     """Per-season PPG / RPG / APG from Cube player_season_stats."""
     return get_analytics().get_player_season_stats(player_id)
 
@@ -270,7 +272,7 @@ def get_games_schedule(
 
 @mcp.tool()
 def get_game_predictions(
-    game_id: str | None = None,
+    game_id: UUID | None = None,
     upcoming: bool = False,
 ) -> list[dict]:
     """Elo pregame home win probability (model_wp, as_of, model_version).
@@ -280,7 +282,7 @@ def get_game_predictions(
 
 @mcp.tool()
 def get_player_injuries(
-    player_id: int | None = None,
+    player_id: UUID | None = None,
     team_abbreviation: str | None = None,
 ) -> list[dict]:
     """Current Basketball-Reference injury snapshot. Optional player or team filter."""
@@ -291,13 +293,13 @@ def get_player_injuries(
 
 
 @mcp.tool()
-def get_game_odds(game_id: str | None = None) -> list[dict]:
+def get_game_odds(game_id: UUID | None = None) -> list[dict]:
     """Current Odds API upcoming-slate snapshot. Market snapshot, not a book."""
     return get_analytics().get_game_odds(game_id=game_id)
 
 
 @mcp.tool()
-def get_play_by_play(game_id: str, limit: int | None = None) -> list[dict]:
+def get_play_by_play(game_id: UUID, limit: int | None = None) -> list[dict]:
     """Play-by-play actions for one game. Season-scoped ingest; default limit 200."""
     return get_analytics().get_play_by_play(game_id, limit)
 

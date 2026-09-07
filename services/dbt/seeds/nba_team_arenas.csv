@@ -1,31 +1,31 @@
 team_id,abbreviation,arena_name,arena_city,arena_state,arena_latitude,arena_longitude
-1610612737,ATL,State Farm Arena,Atlanta,GA,33.75722,-84.39639
-1610612738,BOS,TD Garden,Boston,MA,42.36639,-71.06222
-1610612739,CLE,Rocket Mortgage FieldHouse,Cleveland,OH,41.49639,-81.68806
-1610612740,NOP,Smoothie King Center,New Orleans,LA,29.94889,-90.08194
-1610612741,CHI,United Center,Chicago,IL,41.88056,-87.67417
-1610612742,DAL,American Airlines Center,Dallas,TX,32.79056,-96.81028
-1610612743,DEN,Ball Arena,Denver,CO,39.74861,-105.00750
-1610612744,GSW,Chase Center,San Francisco,CA,37.76806,-122.38750
-1610612745,HOU,Toyota Center,Houston,TX,29.75083,-95.36222
-1610612746,LAC,Intuit Dome,Inglewood,CA,33.94510,-118.34310
-1610612747,LAL,Crypto.com Arena,Los Angeles,CA,34.04306,-118.26722
-1610612748,MIA,Kaseya Center,Miami,FL,25.78139,-80.18806
-1610612749,MIL,Fiserv Forum,Milwaukee,WI,43.04500,-87.91806
-1610612750,MIN,Target Center,Minneapolis,MN,44.97972,-93.27611
-1610612751,BKN,Barclays Center,Brooklyn,NY,40.68265,-73.97523
-1610612752,NYK,Madison Square Garden,New York,NY,40.75056,-73.99361
-1610612753,ORL,Kia Center,Orlando,FL,28.53917,-81.38389
-1610612754,IND,Gainbridge Fieldhouse,Indianapolis,IN,39.76400,-86.15556
-1610612755,PHI,Xfinity Mobile Arena,Philadelphia,PA,39.90111,-75.17194
-1610612756,PHX,PHX Arena,Phoenix,AZ,33.44583,-112.07139
-1610612757,POR,Moda Center,Portland,OR,45.53167,-122.66667
-1610612758,SAC,Golden 1 Center,Sacramento,CA,38.58028,-121.49972
-1610612759,SAS,Frost Bank Center,San Antonio,TX,29.42694,-98.43750
-1610612760,OKC,Paycom Center,Oklahoma City,OK,35.46333,-97.51500
-1610612761,TOR,Scotiabank Arena,Toronto,ON,43.64333,-79.37917
-1610612762,UTA,Delta Center,Salt Lake City,UT,40.76833,-111.90111
-1610612763,MEM,FedExForum,Memphis,TN,35.13833,-90.05056
-1610612764,WAS,Capital One Arena,Washington,DC,38.89806,-77.02083
-1610612765,DET,Little Caesars Arena,Detroit,MI,42.34111,-83.05500
-1610612766,CHA,Spectrum Center,Charlotte,NC,35.22528,-80.83917
+b154a5db-abac-4bfe-84c0-490444d2b9a5,ATL,State Farm Arena,Atlanta,GA,33.75722,-84.39639
+7927412c-868d-4650-b329-bdc07b20358c,BOS,TD Garden,Boston,MA,42.36639,-71.06222
+69ed0cf0-df80-4f50-bdeb-4101c2d592f5,CLE,Rocket Mortgage FieldHouse,Cleveland,OH,41.49639,-81.68806
+79f6aacb-d37c-4132-8fce-dfbbcaa5bc5d,NOP,Smoothie King Center,New Orleans,LA,29.94889,-90.08194
+a96f53b4-0f5c-4cb6-8b88-21ba05224cae,CHI,United Center,Chicago,IL,41.88056,-87.67417
+a4ce9ddd-c621-4ccf-b7e5-95354cf42f25,DAL,American Airlines Center,Dallas,TX,32.79056,-96.81028
+dee9acef-9d8a-4438-9a0d-fefcaf7cfe1a,DEN,Ball Arena,Denver,CO,39.74861,-105.00750
+7bf8726a-a852-452d-b81f-14839127c5fb,GSW,Chase Center,San Francisco,CA,37.76806,-122.38750
+79f68dde-8f09-44c0-b908-b0c6e0df0410,HOU,Toyota Center,Houston,TX,29.75083,-95.36222
+a79dabb2-26c5-443c-bbb4-cabdd8db5958,LAC,Intuit Dome,Inglewood,CA,33.94510,-118.34310
+8cbd46d2-8092-4b1e-8b24-f31c7692cadd,LAL,Crypto.com Arena,Los Angeles,CA,34.04306,-118.26722
+5d6c5618-db91-412a-ada6-96d11e73302f,MIA,Kaseya Center,Miami,FL,25.78139,-80.18806
+2d787da9-01c7-4504-878e-8a5b0ec74609,MIL,Fiserv Forum,Milwaukee,WI,43.04500,-87.91806
+3cd9c269-597b-4eab-acb3-2d434f8b1280,MIN,Target Center,Minneapolis,MN,44.97972,-93.27611
+087804fc-096a-4432-b3cc-f20e5e37b1e7,BKN,Barclays Center,Brooklyn,NY,40.68265,-73.97523
+3cbdd44d-e2b2-458a-81cd-b3008d5ebb5b,NYK,Madison Square Garden,New York,NY,40.75056,-73.99361
+afb5d7dd-df1e-47e0-b247-d1ace6475959,ORL,Kia Center,Orlando,FL,28.53917,-81.38389
+a4fcbfee-d36c-40d1-be34-51e75aa925af,IND,Gainbridge Fieldhouse,Indianapolis,IN,39.76400,-86.15556
+8ea71a5c-0ade-41c4-8558-1e1f76990f9c,PHI,Xfinity Mobile Arena,Philadelphia,PA,39.90111,-75.17194
+811b221e-1e3e-4c60-ae9e-837b1572d757,PHX,PHX Arena,Phoenix,AZ,33.44583,-112.07139
+250898d8-76ce-4f54-88de-ebcca751231d,POR,Moda Center,Portland,OR,45.53167,-122.66667
+6d5835b4-ab01-42bc-a478-9cf95d39133b,SAC,Golden 1 Center,Sacramento,CA,38.58028,-121.49972
+1a24da7b-0a03-4b6a-a230-5732dbeb9d96,SAS,Frost Bank Center,San Antonio,TX,29.42694,-98.43750
+bc007f7f-f88d-4699-8325-e2f5a3e32183,OKC,Paycom Center,Oklahoma City,OK,35.46333,-97.51500
+8f941860-dc83-4289-8ed8-7ea9417d53b8,TOR,Scotiabank Arena,Toronto,ON,43.64333,-79.37917
+241af2e1-5322-427d-a549-9b318bba9cbf,UTA,Delta Center,Salt Lake City,UT,40.76833,-111.90111
+1036a395-f3a5-472e-b95f-ebe2e8202e9f,MEM,FedExForum,Memphis,TN,35.13833,-90.05056
+9094a6ee-648a-494a-8c30-bf303c22ceb6,WAS,Capital One Arena,Washington,DC,38.89806,-77.02083
+df5b8036-7d77-44a4-80dc-fd39d7fd092b,DET,Little Caesars Arena,Detroit,MI,42.34111,-83.05500
+c1ff54f0-83f2-4cbc-996d-abf7bda33c66,CHA,Spectrum Center,Charlotte,NC,35.22528,-80.83917

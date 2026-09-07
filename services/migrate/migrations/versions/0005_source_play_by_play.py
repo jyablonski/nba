@@ -1,10 +1,10 @@
-"""Add source.play_by_play (NBA Stats PlayByPlayV3 ingest).
+"""Add source.play_by_play (provider-neutral event ingest).
 
 Revision ID: 0005_source_play_by_play
 Revises: 0004_source_ml_ingest
 Create Date: 2026-09-05
 
-Grain is one row per V3 action for a game (unique on game_id + action_number).
+Grain is one row per Basketball-Reference action for a game (unique on game_id + action_number + action_id).
 Opt-in scrape only; not on scrape-all / scrape-daily / pipeline.
 """
 
@@ -25,7 +25,7 @@ def upgrade() -> None:
         """
         CREATE TABLE source.play_by_play (
             id              SERIAL PRIMARY KEY,
-            game_id         VARCHAR(20) NOT NULL REFERENCES source.games(game_id),
+            game_id         UUID NOT NULL REFERENCES source.games(game_id),
             season          VARCHAR(10) NOT NULL,
             action_number   INTEGER NOT NULL,
             action_id       INTEGER,
@@ -33,14 +33,14 @@ def upgrade() -> None:
             clock           VARCHAR(32),
             score_home      INTEGER,
             score_away      INTEGER,
-            team_id         INTEGER,
-            player_id       INTEGER,
+            team_id         UUID REFERENCES source.teams(team_id),
+            player_id       UUID REFERENCES source.players(player_id),
             action_type     VARCHAR(50),
             sub_type        VARCHAR(80),
             description     TEXT,
             extras          JSONB,
             scraped_at      TIMESTAMP NOT NULL DEFAULT NOW(),
-            UNIQUE (game_id, action_number)
+            UNIQUE (game_id, action_number, action_id)
         )
         """
     )

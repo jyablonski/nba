@@ -8,15 +8,15 @@ Keep service boundaries honest: the browser never opens Postgres, scrape jobs ne
 
 ## Runtime groups
 
-Compose default (`make up` / Tilt, `DOCKER_TARGET=development`): **postgres**, one-shot **migrate**, **cube**, **api**, **frontend**.
+Compose default (`make up` / Tilt, `DOCKER_TARGET=development`): **postgres**, one-shot **migrate**, **cube**, **api**, **frontend**, **mcp**.
 
-| Profile | Services                               | Always-on?                                                         |
-| ------- | -------------------------------------- | ------------------------------------------------------------------ |
-| (none)  | postgres, migrate, cube, api, frontend | yes (migrate exits)                                                |
-| `tools` | scraper, dbt, ml, mcp                  | no — `compose run`                                                 |
-| `cron`  | `refresh-daily` container              | no; scrape-only entrypoint — prefer [operations.md](operations.md) |
+| Profile | Services                                    | Always-on?                                                         |
+| ------- | ------------------------------------------- | ------------------------------------------------------------------ |
+| (none)  | postgres, migrate, cube, api, frontend, mcp | yes (migrate exits)                                                |
+| `tools` | scraper, dbt, ml                            | no — `compose run`                                                 |
+| `cron`  | `refresh-daily` container                   | no; scrape-only entrypoint — prefer [operations.md](operations.md) |
 
-Production overlay (`docker-compose.prod.yml`) is postgres + api + frontend + Caddy. MCP, Cube, Tilt, and profile `cron` stay off. Ask/MCP then fail clearly without `CUBE_API_URL`. Go-live still needs a VM; see [plans/oci-caddy-hosting.md](plans/oci-caddy-hosting.md).
+Production overlay (`docker-compose.prod.yml`) is postgres + api + frontend + MCP + Caddy. Cube, Tilt, and profile `cron` stay off. Ask/MCP then fail clearly without `CUBE_API_URL`. Go-live still needs a VM; see [plans/oci-caddy-hosting.md](plans/oci-caddy-hosting.md).
 
 Images use target `runtime` or `development`. There is no Compose `platform:` pin.
 
@@ -24,11 +24,11 @@ Images use target `runtime` or `development`. There is no Compose `platform:` pi
 
 `db/init.sql` creates empty `source`, `silver`, and `gold`. Alembic in `services/migrate` owns **source** DDL (`make db-migrate`). dbt in `services/dbt` owns silver/gold. The scraper does not bootstrap tables.
 
-| Writer  | Schema                    | Notes                                                                                       |
-| ------- | ------------------------- | ------------------------------------------------------------------------------------------- |
-| scraper | `source`                  | NBA Stats, BRef contracts/injuries, optional Odds / Reddit. CLI help only on compose start. |
-| ml      | `source.game_predictions` | Elo v0 after gold Finals + schedule exist. See [ml.md](ml.md).                              |
-| dbt     | `silver`, `gold`          | Reads `source`. Downstream never queries `source` for product.                              |
+| Writer  | Schema                    | Notes                                                                                                                                                          |
+| ------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| scraper | `source`                  | Basketball-Reference schedules, rosters, box scores, standings, contracts, injuries, and play-by-play; optional Odds / Reddit. CLI help only on compose start. |
+| ml      | `source.game_predictions` | Elo v0 after gold Finals + schedule exist. See [ml.md](ml.md).                                                                                                 |
+| dbt     | `silver`, `gold`          | Reads `source`. Downstream never queries `source` for product.                                                                                                 |
 
 API REST reads **gold**. Ask and MCP read gold only through Cube (`/load`, `/meta`). Frontend does not call Cube.
 

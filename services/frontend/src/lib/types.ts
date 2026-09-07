@@ -20,7 +20,7 @@ export type ApiErrorBody = {
 };
 
 export type PlayerSummary = {
-  player_id: number;
+  player_id: string;
   full_name: string;
   position: string | null;
   team_abbreviation: string | null;
@@ -38,7 +38,7 @@ export type PlayerDetail = PlayerSummary & {
   weight: number | null;
   birth_date: string | null;
   jersey_number?: string | null;
-  team_id?: number | null;
+  team_id?: string | null;
   career_games_played: number;
   seasons_played: number;
   first_season?: string | null;
@@ -70,7 +70,7 @@ export type GameLogEntry = {
 };
 
 export type BackToBackStats = {
-  player_id: number;
+  player_id: string;
   player_name: string;
   season: string | null;
   total_back_to_backs: number;
@@ -81,7 +81,7 @@ export type BackToBackStats = {
 };
 
 export type PlayerComparison = {
-  player_id: number;
+  player_id: string;
   full_name: string;
   team_abbreviation?: string | null;
   position?: string | null;
@@ -96,7 +96,7 @@ export type PlayerComparison = {
 };
 
 export type PlayerSeasonStats = {
-  player_id: number;
+  player_id: string;
   season: string;
   games_played: number;
   ppg: number | null;
@@ -105,7 +105,7 @@ export type PlayerSeasonStats = {
 };
 
 export type HeadToHeadPlayerAverages = {
-  player_id: number;
+  player_id: string;
   full_name: string;
   games: number;
   mpg: number | null;
@@ -116,7 +116,7 @@ export type HeadToHeadPlayerAverages = {
 };
 
 export type HeadToHeadGameLine = {
-  player_id: number;
+  player_id: string;
   full_name: string;
   team_abbreviation: string;
   opponent_abbreviation: string;
@@ -147,7 +147,7 @@ export type HeadToHeadComparison = {
 };
 
 export type TeamSummary = {
-  team_id: number;
+  team_id: string;
   abbreviation: string;
   team_name: string;
   conference: string;
@@ -180,7 +180,7 @@ export type StandingSummary = {
 };
 
 export type StandingRow = StandingSummary & {
-  team_id: number;
+  team_id: string;
   abbreviation: string;
   team_name: string;
   season_type: string;
@@ -223,7 +223,7 @@ export type TeamDetail = TeamSummary & {
 };
 
 export type TeamRecord = {
-  team_id: number;
+  team_id: string;
   team_name: string;
   wins: number;
   losses: number;
@@ -237,15 +237,15 @@ export type TeamGame = {
   season: string;
   season_type?: string;
   game_date: string;
-  opponent_team_id?: number | null;
+  opponent_team_id?: string | null;
   opponent_abbreviation?: string | null;
   opponent_name?: string | null;
   location?: string | null;
   result?: string | null;
   team_score?: number | null;
   opponent_score?: number | null;
-  home_team_id?: number;
-  away_team_id?: number;
+  home_team_id?: string;
+  away_team_id?: string;
   home_team_abbreviation?: string;
   away_team_abbreviation?: string;
   home_team_name?: string;
@@ -263,8 +263,8 @@ export type LeagueGame = {
   season: string;
   season_type?: string | null;
   game_date: string;
-  home_team_id?: number;
-  away_team_id?: number;
+  home_team_id?: string;
+  away_team_id?: string;
   home_team_abbreviation?: string;
   away_team_abbreviation?: string;
   home_team_name?: string;
@@ -274,7 +274,7 @@ export type LeagueGame = {
   arena?: string | null;
   arena_city?: string | null;
   score_margin?: number | null;
-  winning_team_id?: number | null;
+  winning_team_id?: string | null;
 };
 
 export type SeasonInfo = {
@@ -299,7 +299,7 @@ export type NlpQueryResponse = {
 export type SearchPlayersParams = {
   search?: string;
   active?: boolean;
-  team_id?: number;
+  team_id?: string;
   limit?: number;
   offset?: number;
 };
@@ -315,7 +315,7 @@ export type GameLogParams = {
 
 export type TeamGamesParams = {
   season?: string;
-  opponent_team_id?: number;
+  opponent_team_id?: string;
   location?: "home" | "away";
   since_season?: string;
   arena_city?: string;
@@ -325,7 +325,7 @@ export type TeamGamesParams = {
 };
 
 export type TeamRecordParams = {
-  opponent_team_id?: number;
+  opponent_team_id?: string;
   location?: "home" | "away";
   since_season?: string;
   season?: string;
@@ -355,8 +355,8 @@ export type ScheduledGame = {
   season_type?: string | null;
   game_date: string;
   status: string;
-  home_team_id: number;
-  away_team_id: number;
+  home_team_id: string;
+  away_team_id: string;
   home_team_abbreviation?: string | null;
   away_team_abbreviation?: string | null;
   home_team_name?: string | null;
@@ -388,8 +388,8 @@ export type PlayByPlayEvent = {
   away_points?: number | null;
   points_scored?: number | null;
   scoring_side?: string | null;
-  team_id?: number | null;
-  player_id?: number | null;
+  team_id?: string | null;
+  player_id?: string | null;
   player_name?: string | null;
   action_type?: string | null;
   sub_type?: string | null;
@@ -400,19 +400,19 @@ export type GameFlow = {
   game_id: string;
   season: string;
   game_date: string;
-  home_team_id: number;
+  home_team_id: string;
   home_team_abbreviation?: string | null;
   home_team_name?: string | null;
   home_primary_color?: string | null;
   home_alternate_color?: string | null;
   home_score?: number | null;
-  away_team_id: number;
+  away_team_id: string;
   away_team_abbreviation?: string | null;
   away_team_name?: string | null;
   away_primary_color?: string | null;
   away_alternate_color?: string | null;
   away_score?: number | null;
-  winning_team_id?: number | null;
+  winning_team_id?: string | null;
   winning_team_abbreviation?: string | null;
   winner_location?: string | null;
   has_play_by_play: boolean;

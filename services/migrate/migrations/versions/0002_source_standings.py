@@ -22,7 +22,7 @@ def upgrade() -> None:
         """
         CREATE TABLE source.standings (
             id                  SERIAL PRIMARY KEY,
-            team_id             INTEGER NOT NULL REFERENCES source.teams(team_id),
+            team_id             UUID NOT NULL REFERENCES source.teams(team_id),
             season              VARCHAR(10) NOT NULL,
             season_type         VARCHAR(20) NOT NULL DEFAULT 'Regular Season',
             as_of_date          DATE NOT NULL,

@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/with-timestamps.mjs next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/with-timestamps.mjs next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit -p tsconfig.json",
     "format": "prettier --write .",

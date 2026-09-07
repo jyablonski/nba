@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from schemas.standing import StandingSummary
@@ -6,7 +8,7 @@ from schemas.standing import StandingSummary
 class TeamSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    team_id: int
+    team_id: UUID
     abbreviation: str
     team_name: str
     conference: str
@@ -22,7 +24,7 @@ class TeamSummary(BaseModel):
 
 
 class TeamRecord(BaseModel):
-    team_id: int
+    team_id: UUID
     team_name: str
     wins: int
     losses: int

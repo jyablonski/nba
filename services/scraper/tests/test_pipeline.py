@@ -376,6 +376,7 @@ def test_run_pipeline_scrape_success_and_skip_do_not_notify(
     session.execute.return_value.one.return_value = _row()
     session.execute.return_value.scalar_one.return_value = 9
     monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.missing_reddit_env_names", lambda: ["REDDIT_CLIENT_ID"])
     monkeypatch.setattr("pipeline.execute_scrape", lambda action, config, alert=None: (3, "ok"))
     posted: list[object] = []
     monkeypatch.setattr("notify.notify_sync_failures", lambda *args, **kwargs: posted.append(1))

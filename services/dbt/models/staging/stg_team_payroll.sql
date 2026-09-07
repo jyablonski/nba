@@ -3,8 +3,7 @@ with source as (
 )
 
 select
-    source.bref_team_abbreviation,
-    source.nba_team_abbreviation,
+    source.team_id,
     source.season,
     source.total_salary,
     source.remaining_guaranteed,

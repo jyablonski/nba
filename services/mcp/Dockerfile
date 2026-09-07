@@ -20,7 +20,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
-CMD ["python", "server.py"]
+CMD ["python", "src/server.py"]
 
 FROM builder AS development
 COPY --from=ghcr.io/astral-sh/uv:0.12.9 /uv /usr/local/bin/uv
@@ -28,4 +28,4 @@ WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH=/app/src \
     PYTHONUNBUFFERED=1
-CMD ["python", "server.py"]
+CMD ["python", "src/server.py"]

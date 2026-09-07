@@ -16,7 +16,7 @@ cubes:
 
       - name: player_id
         sql: player_id
-        type: number
+        type: string
 
       - name: game_id
         sql: game_id
@@ -28,7 +28,7 @@ cubes:
 
       - name: team_id
         sql: team_id
-        type: number
+        type: string
 
       - name: team_abbreviation
         sql: team_abbreviation

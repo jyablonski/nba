@@ -1,7 +1,7 @@
 cubes:
   - name: play_by_play
     sql_table: gold.fct_play_by_play
-    description: Season-scoped PlayByPlayV3 actions (one row per game_id + action_number + action_id). No joins — do not cartesian.
+    description: Season-scoped Basketball-Reference actions (one row per game_id + action_number + action_id). No joins — do not cartesian.
 
     dimensions:
       - name: id
@@ -43,11 +43,11 @@ cubes:
 
       - name: team_id
         sql: team_id
-        type: number
+        type: string
 
       - name: player_id
         sql: player_id
-        type: number
+        type: string
 
       - name: action_type
         sql: action_type

@@ -38,7 +38,7 @@ prod-config: ## Validate prod overlay
 	$(COMPOSE_PROD) config
 
 prod-up: ## Runtime images + caddy (needs DOCKER_TARGET=runtime)
-	DOCKER_TARGET=runtime $(COMPOSE_PROD) up -d postgres api frontend caddy
+	DOCKER_TARGET=runtime $(COMPOSE_PROD) up -d postgres api frontend mcp caddy
 
 prod-migrate: ## Alembic upgrade head via prod overlay (one-shot; does not recreate postgres)
 	DOCKER_TARGET=runtime $(COMPOSE_PROD) run --rm --no-deps migrate alembic upgrade head
@@ -70,10 +70,10 @@ prod-release: $(PROD_IMAGES) ## Images, migrate, up, caddy reload, health gate, 
 
 # `--parallel 1` keeps the Next.js build (2-4GB peak) from racing the others.
 prod-build: ## Build runtime images on this machine (on-box deploy path)
-	DOCKER_TARGET=runtime $(COMPOSE_PROD) build --parallel 1 api frontend migrate
+	DOCKER_TARGET=runtime $(COMPOSE_PROD) build --parallel 1 api frontend migrate mcp
 
 prod-pull: ## Pull prebuilt runtime images (registry deploy path; needs IMAGE_PREFIX)
-	$(COMPOSE_PROD) pull postgres caddy migrate api frontend
+	$(COMPOSE_PROD) pull postgres caddy migrate api frontend mcp
 
 # Probe from inside the compose network: a deploy must not depend on public DNS
 # or on Caddy already holding a cert. Caddy's alpine image ships busybox wget.

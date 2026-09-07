@@ -1,4 +1,5 @@
 from datetime import date
+from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
@@ -10,19 +11,25 @@ from schemas.standing import StandingRow
 from schemas.status import WarehouseStatus
 from schemas.team import TeamDetail, TeamRecord
 
+PLAYER_LEBRON = UUID("00000000-0000-4000-8000-000000000001")
+TEAM_GSW = UUID("7bf8726a-a852-452d-b81f-14839127c5fb")
+TEAM_LAL = UUID("8cbd46d2-8092-4b1e-8b24-f31c7692cadd")
+GAME_ONE = UUID("00000000-0000-4000-8000-000000000101")
+GAME_TWO = UUID("00000000-0000-4000-8000-000000000102")
+
 
 @pytest.mark.unit
 def test_player_summary_from_attributes() -> None:
     player = PlayerSummary.model_validate(
         {
-            "player_id": 2544,
+            "player_id": PLAYER_LEBRON,
             "full_name": "LeBron James",
             "position": "F",
             "team_abbreviation": "LAL",
             "is_active": True,
         }
     )
-    assert player.player_id == 2544
+    assert player.player_id == PLAYER_LEBRON
     assert player.is_active is True
 
 
@@ -35,20 +42,20 @@ def test_query_request_requires_question() -> None:
 @pytest.mark.unit
 def test_game_result_and_season_list() -> None:
     game = GameResult(
-        game_id="0022400001",
+        game_id=GAME_ONE,
         season="2024-25",
         game_date=date(2024, 10, 22),
-        home_team_id=1610612747,
-        away_team_id=1610612744,
+        home_team_id=TEAM_LAL,
+        away_team_id=TEAM_GSW,
     )
-    assert game.home_team_id == 1610612747
+    assert game.home_team_id == TEAM_LAL
     scheduled = ScheduledGame(
-        game_id="0022600100",
+        game_id=GAME_TWO,
         season="2026-27",
         game_date=date(2026, 10, 22),
         status="Scheduled",
-        home_team_id=1610612744,
-        away_team_id=1610612747,
+        home_team_id=TEAM_GSW,
+        away_team_id=TEAM_LAL,
     )
     assert scheduled.status == "Scheduled"
     payload = SeasonListResponse(data=["2024-25"])
@@ -58,7 +65,7 @@ def test_game_result_and_season_list() -> None:
 @pytest.mark.unit
 def test_game_flow_and_play_by_play_event() -> None:
     event = PlayByPlayEvent(
-        game_id="0042500405",
+        game_id=GAME_ONE,
         action_number=12,
         elapsed_seconds=28,
         score_home=2,
@@ -67,11 +74,11 @@ def test_game_flow_and_play_by_play_event() -> None:
     )
     assert event.scoring_side is None
     flow = GameFlow(
-        game_id="0042500405",
+        game_id=GAME_ONE,
         season="2025-26",
         game_date=date(2026, 6, 13),
-        home_team_id=1,
-        away_team_id=2,
+        home_team_id=TEAM_GSW,
+        away_team_id=TEAM_LAL,
         has_play_by_play=False,
     )
     assert flow.biggest_run_label is None
@@ -83,7 +90,7 @@ def test_game_flow_and_play_by_play_event() -> None:
 @pytest.mark.unit
 def test_team_record_defaults() -> None:
     record = TeamRecord(
-        team_id=1,
+        team_id=TEAM_GSW,
         team_name="Warriors",
         wins=10,
         losses=5,
@@ -97,7 +104,7 @@ def test_team_record_defaults() -> None:
 @pytest.mark.unit
 def test_team_detail_arena_coords() -> None:
     team = TeamDetail(
-        team_id=1610612744,
+        team_id=TEAM_GSW,
         abbreviation="GSW",
         team_name="Golden State Warriors",
         conference="West",
@@ -111,7 +118,7 @@ def test_team_detail_arena_coords() -> None:
     assert team.arena_longitude == -122.3875
     assert (
         TeamDetail(
-            team_id=1,
+            team_id=UUID("00000000-0000-4000-8000-000000000201"),
             abbreviation="XXX",
             team_name="Unknown",
             conference="East",
@@ -126,7 +133,7 @@ def test_team_detail_arena_coords() -> None:
 @pytest.mark.unit
 def test_standing_row() -> None:
     row = StandingRow(
-        team_id=1610612744,
+        team_id=TEAM_GSW,
         abbreviation="GSW",
         team_name="Golden State Warriors",
         season="2024-25",
@@ -147,7 +154,7 @@ def test_standing_row() -> None:
     assert row.conference_rank == 1
     assert row.games_back == 0
     overlay = StandingRow(
-        team_id=1610612738,
+        team_id=UUID("7927412c-868d-4650-b329-bdc07b20358c"),
         abbreviation="BOS",
         team_name="Boston Celtics",
         season="2025-26",
@@ -180,6 +187,11 @@ def test_warehouse_status_defaults() -> None:
 
 @pytest.mark.unit
 def test_player_season_stats() -> None:
-    row = PlayerSeasonStats(player_id=202695, season="2024-25", games_played=3, ppg=27.3)
+    row = PlayerSeasonStats(
+        player_id=UUID("00000000-0000-4000-8000-000000000003"),
+        season="2024-25",
+        games_played=3,
+        ppg=27.3,
+    )
     assert row.rpg is None
     assert row.games_played == 3

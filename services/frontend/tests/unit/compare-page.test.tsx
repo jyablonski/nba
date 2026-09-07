@@ -5,7 +5,11 @@ const getPlayer = vi.fn();
 const comparePlayers = vi.fn();
 const comparePlayersHeadToHead = vi.fn();
 
-let search = new URLSearchParams("ids=201939");
+const CURRY_ID = "11111111-1111-4111-8111-111111111111";
+const DURANT_ID = "22222222-2222-4222-8222-222222222222";
+const LEONARD_ID = "33333333-3333-4333-8333-333333333333";
+
+let search = new URLSearchParams(`ids=${CURRY_ID}`);
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/players/compare",
@@ -27,30 +31,30 @@ import ComparePlayersPage from "@/app/players/compare/page";
 import { Providers } from "@/components/providers";
 
 const PLAYERS: Record<
-  number,
-  { player_id: number; full_name: string; position: string; team_abbreviation: string }
+  string,
+  { player_id: string; full_name: string; position: string; team_abbreviation: string }
 > = {
-  201939: {
-    player_id: 201939,
+  [CURRY_ID]: {
+    player_id: CURRY_ID,
     full_name: "Stephen Curry",
     position: "G",
     team_abbreviation: "GSW",
   },
-  202331: {
-    player_id: 202331,
+  [DURANT_ID]: {
+    player_id: DURANT_ID,
     full_name: "Kevin Durant",
     position: "F",
     team_abbreviation: "PHX",
   },
-  202695: {
-    player_id: 202695,
+  [LEONARD_ID]: {
+    player_id: LEONARD_ID,
     full_name: "Kawhi Leonard",
     position: "F",
     team_abbreviation: "LAC",
   },
 };
 
-function careerRow(id: number, extras: Record<string, number | null>) {
+function careerRow(id: string, extras: Record<string, number | null>) {
   const player = PLAYERS[id];
   return {
     ...player,
@@ -73,11 +77,11 @@ function renderPage() {
 
 describe("compare page", () => {
   beforeEach(() => {
-    search = new URLSearchParams("ids=201939");
+    search = new URLSearchParams(`ids=${CURRY_ID}`);
     getPlayer.mockReset();
     comparePlayers.mockReset();
     comparePlayersHeadToHead.mockReset();
-    getPlayer.mockImplementation(async (id: number) => ({
+    getPlayer.mockImplementation(async (id: string) => ({
       ...PLAYERS[id],
       is_active: true,
       first_name: PLAYERS[id]?.full_name.split(" ")[0],
@@ -100,20 +104,20 @@ describe("compare page", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(getPlayer).toHaveBeenCalledWith(201939);
+      expect(getPlayer).toHaveBeenCalledWith(CURRY_ID);
     });
     expect(await screen.findByText("Stephen Curry")).toBeInTheDocument();
-    expect(screen.queryByText("#201939")).not.toBeInTheDocument();
+    expect(screen.queryByText(`#${CURRY_ID}`)).not.toBeInTheDocument();
     expect(comparePlayers).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Head-to-head" })).not.toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Compare mode" })).not.toBeInTheDocument();
   });
 
   it("hides the head-to-head toggle when three players are selected", async () => {
-    search = new URLSearchParams("ids=201939,202331,202695");
+    search = new URLSearchParams(`ids=${CURRY_ID},${DURANT_ID},${LEONARD_ID}`);
     comparePlayers.mockResolvedValue({
       data: [
-        careerRow(202331, {
+        careerRow(DURANT_ID, {
           games: 79,
           seasons: 1,
           ppg: 25.9,
@@ -121,7 +125,7 @@ describe("compare page", () => {
           apg: 4.8,
           plus_minus: 4.1,
         }),
-        careerRow(201939, {
+        careerRow(CURRY_ID, {
           games: 45,
           seasons: 1,
           ppg: 26.5,
@@ -129,7 +133,7 @@ describe("compare page", () => {
           apg: 4.7,
           plus_minus: 3.2,
         }),
-        careerRow(202695, {
+        careerRow(LEONARD_ID, {
           games: 40,
           seasons: 1,
           ppg: 24.1,
@@ -151,10 +155,10 @@ describe("compare page", () => {
   });
 
   it("shows the toggle for two players and keeps career aggregates by default", async () => {
-    search = new URLSearchParams("ids=201939,202331");
+    search = new URLSearchParams(`ids=${CURRY_ID},${DURANT_ID}`);
     comparePlayers.mockResolvedValue({
       data: [
-        careerRow(202331, {
+        careerRow(DURANT_ID, {
           games: 79,
           seasons: 1,
           ppg: 25.9,
@@ -162,7 +166,7 @@ describe("compare page", () => {
           apg: 4.8,
           plus_minus: 4.1,
         }),
-        careerRow(201939, {
+        careerRow(CURRY_ID, {
           games: 45,
           seasons: 1,
           ppg: 26.5,
@@ -190,10 +194,10 @@ describe("compare page", () => {
   });
 
   it("renders career +/- as an em dash when the average is missing", async () => {
-    search = new URLSearchParams("ids=201939,202331");
+    search = new URLSearchParams(`ids=${CURRY_ID},${DURANT_ID}`);
     comparePlayers.mockResolvedValue({
       data: [
-        careerRow(202331, {
+        careerRow(DURANT_ID, {
           games: 79,
           seasons: 1,
           ppg: 25.9,
@@ -201,7 +205,7 @@ describe("compare page", () => {
           apg: 4.8,
           plus_minus: 4.1,
         }),
-        careerRow(201939, {
+        careerRow(CURRY_ID, {
           games: 45,
           seasons: 1,
           ppg: 26.5,
@@ -225,10 +229,10 @@ describe("compare page", () => {
   });
 
   it("renders head-to-head averages and game logs after toggling", async () => {
-    search = new URLSearchParams("ids=201939,202331");
+    search = new URLSearchParams(`ids=${CURRY_ID},${DURANT_ID}`);
     comparePlayers.mockResolvedValue({
       data: [
-        careerRow(202331, {
+        careerRow(DURANT_ID, {
           games: 79,
           seasons: 1,
           ppg: 25.9,
@@ -236,7 +240,7 @@ describe("compare page", () => {
           apg: 4.8,
           plus_minus: 4.1,
         }),
-        careerRow(201939, {
+        careerRow(CURRY_ID, {
           games: 45,
           seasons: 1,
           ppg: 26.5,
@@ -251,7 +255,7 @@ describe("compare page", () => {
       games_played: 1,
       players: [
         {
-          player_id: 201939,
+          player_id: CURRY_ID,
           full_name: "Stephen Curry",
           games: 1,
           mpg: 36.0,
@@ -261,7 +265,7 @@ describe("compare page", () => {
           plus_minus: 10.0,
         },
         {
-          player_id: 202331,
+          player_id: DURANT_ID,
           full_name: "Kevin Durant",
           games: 1,
           mpg: 38.0,
@@ -279,7 +283,7 @@ describe("compare page", () => {
           matchup: "GSW vs. PHX",
           lines: [
             {
-              player_id: 201939,
+              player_id: CURRY_ID,
               full_name: "Stephen Curry",
               team_abbreviation: "GSW",
               opponent_abbreviation: "PHX",
@@ -292,7 +296,7 @@ describe("compare page", () => {
               plus_minus: 10,
             },
             {
-              player_id: 202331,
+              player_id: DURANT_ID,
               full_name: "Kevin Durant",
               team_abbreviation: "PHX",
               opponent_abbreviation: "GSW",
@@ -314,7 +318,7 @@ describe("compare page", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Head-to-head" }));
 
     await waitFor(() => {
-      expect(comparePlayersHeadToHead).toHaveBeenCalledWith([201939, 202331]);
+      expect(comparePlayersHeadToHead).toHaveBeenCalledWith([CURRY_ID, DURANT_ID]);
     });
     expect(await screen.findByText("GSW vs. PHX")).toBeInTheDocument();
     expect(screen.getByText("2024-25")).toBeInTheDocument();
@@ -330,12 +334,12 @@ describe("compare page", () => {
   });
 
   it("shows an empty state when two players have no head-to-head meetings", async () => {
-    search = new URLSearchParams("ids=201939,202331&view=h2h");
+    search = new URLSearchParams(`ids=${CURRY_ID},${DURANT_ID}&view=h2h`);
     comparePlayersHeadToHead.mockResolvedValue({
       games_played: 0,
       players: [
         {
-          player_id: 201939,
+          player_id: CURRY_ID,
           full_name: "Stephen Curry",
           games: 0,
           mpg: null,
@@ -345,7 +349,7 @@ describe("compare page", () => {
           plus_minus: null,
         },
         {
-          player_id: 202331,
+          player_id: DURANT_ID,
           full_name: "Kevin Durant",
           games: 0,
           mpg: null,

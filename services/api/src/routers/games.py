@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -58,7 +59,7 @@ def list_recent_games(
 
 @router.get("/{game_id}/play-by-play", response_model=PaginatedResponse[PlayByPlayEvent])
 def get_game_play_by_play(
-    game_id: str,
+    game_id: UUID,
     repo: GamesRepository = Depends(get_games_repository),
 ) -> PaginatedResponse[PlayByPlayEvent]:
     if not repo.game_exists(game_id):
@@ -73,7 +74,7 @@ def get_game_play_by_play(
 
 @router.get("/{game_id}/flow", response_model=ItemResponse[GameFlow])
 def get_game_flow(
-    game_id: str,
+    game_id: UUID,
     repo: GamesRepository = Depends(get_games_repository),
 ) -> ItemResponse[GameFlow]:
     row = repo.get_game_flow(game_id)

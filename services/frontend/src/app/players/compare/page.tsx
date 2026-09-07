@@ -29,6 +29,8 @@ const STAT_OPTIONS = [
   { value: "plus_minus", label: "+/-" },
 ];
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export default function ComparePlayersPage() {
   return (
     <Suspense fallback={<LoadingState label="Loading comparison…" />}>
@@ -53,8 +55,8 @@ function ComparePlayers() {
     () =>
       idsParam
         .split(",")
-        .map((part) => Number(part.trim()))
-        .filter((id) => Number.isFinite(id) && id > 0),
+        .map((part) => part.trim())
+        .filter((id) => UUID_RE.test(id)),
     [idsParam]
   );
 
@@ -84,7 +86,7 @@ function ComparePlayers() {
   });
 
   const rows = compareQuery.data?.data ?? [];
-  const chipNames = new Map<number, string>();
+  const chipNames = new Map<string, string>();
   for (const row of rows) {
     chipNames.set(row.player_id, row.full_name);
   }
@@ -92,7 +94,7 @@ function ComparePlayers() {
     if (result.data) chipNames.set(result.data.player_id, result.data.full_name);
   }
 
-  function replaceIds(next: number[], nextStat = stat, nextView: CompareView = view) {
+  function replaceIds(next: string[], nextStat = stat, nextView: CompareView = view) {
     const params = new URLSearchParams();
     if (next.length) params.set("ids", next.join(","));
     params.set("stat", nextStat);
@@ -105,13 +107,13 @@ function ComparePlayers() {
     replaceIds(ids, stat, next);
   }
 
-  function removeId(id: number) {
+  function removeId(id: string) {
     const next = ids.filter((item) => item !== id);
     if (next.length !== 2) setView("career");
     replaceIds(next);
   }
 
-  function addId(id: number) {
+  function addId(id: string) {
     if (ids.includes(id)) return;
     replaceIds([...ids, id]);
     setAddSearch("");
@@ -129,7 +131,7 @@ function ComparePlayers() {
           return (
             <Chip
               key={id}
-              label={chipNames.get(id) ?? `#${id}`}
+              label={chipNames.get(id) ?? "Loading player"}
               subtitle={subtitle}
               onRemove={() => removeId(id)}
             />

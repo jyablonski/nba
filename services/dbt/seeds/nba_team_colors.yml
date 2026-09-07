@@ -4,18 +4,18 @@ seeds:
   - name: nba_team_colors
     description: >
       Versioned lookup of each current NBA franchise's primary and alternate brand hex colors.
-      Grain is one row per team_id. Hex values follow published NBA brand palettes (same family of sources as teamcolorcodes / official style guides).
-      The NBA Stats API does not expose team hex colors, so this is not scraped into source.
+      Grain is one row per canonical team UUID. Hex values follow published NBA brand palettes (same family of sources as teamcolorcodes / official style guides).
+      Brand colors are repo-owned reference data, not scraped identity data.
       Update this seed when a franchise rebrands; do not invent colors at scrape time.
     config:
       column_types:
-        team_id: integer
+        team_id: varchar(36)
         abbreviation: varchar(5)
         primary_color: varchar(7)
         alternate_color: varchar(7)
     columns:
       - name: team_id
-        description: NBA Stats team_id; matches source.teams / dim_teams.
+        description: Canonical team UUID; matches source.teams / dim_teams.
         data_tests:
           - unique
           - not_null

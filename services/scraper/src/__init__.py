@@ -1,1 +1,1 @@
-"""NBA Stats scraper service."""
+"""Basketball-Reference scraper service."""

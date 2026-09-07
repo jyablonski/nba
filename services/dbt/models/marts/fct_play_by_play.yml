@@ -3,7 +3,7 @@ version: 2
 models:
   - name: fct_play_by_play
     description: >
-      Thin gold pass-through of PlayByPlayV3 actions. Grain is game_id x
+      Thin gold pass-through of Basketball-Reference actions. Grain is game_id x
       action_number x action_id. Season-scoped ingest; do not assume a full-history backfill.
     columns:
       - name: game_id

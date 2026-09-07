@@ -4,14 +4,13 @@ seeds:
   - name: nba_team_arenas
     description: >
       Versioned lookup of each current NBA franchise's home arena.
-      Grain is one row per team_id (2025-26 homes). Coordinates are
-      WGS84 from published venue locations (Wikipedia / OpenStreetMap),
-      not the NBA Stats API, which exposes arena name and city on
-      games but not latitude or longitude. Update this seed when a
+      Grain is one row per canonical team UUID (current homes). Coordinates are
+      WGS84 from published venue locations (Wikipedia / OpenStreetMap).
+      Update this seed when a
       team moves buildings; do not geocode at scrape time.
     config:
       column_types:
-        team_id: integer
+        team_id: varchar(36)
         abbreviation: varchar(5)
         arena_name: varchar(100)
         arena_city: varchar(50)
@@ -20,7 +19,7 @@ seeds:
         arena_longitude: numeric(9, 6)
     columns:
       - name: team_id
-        description: NBA Stats team_id; matches source.teams / dim_teams.
+        description: Canonical team UUID; matches source.teams / dim_teams.
         data_tests:
           - unique
           - not_null

@@ -49,7 +49,6 @@ DECLARE
   gsw_lon numeric;
   curry_salary bigint;
   gsw_payroll bigint;
-  unmatched_count integer;
   contract_count integer;
   standings_count integer;
   gsw_rank integer;
@@ -74,7 +73,7 @@ BEGIN
   WHERE is_back_to_back IS TRUE;
   SELECT career_games_played INTO kawhi_games
   FROM gold.dim_players
-  WHERE player_id = 202695;
+  WHERE player_id = '22222222-2222-4222-8222-222222222222';
 
   IF team_count < 3 THEN
     RAISE EXCEPTION 'expected >= 3 teams, got %', team_count;
@@ -97,21 +96,21 @@ BEGIN
 
   SELECT arena_latitude, arena_longitude INTO gsw_lat, gsw_lon
   FROM gold.dim_teams
-  WHERE team_id = 1610612744;
+  WHERE team_id = '7bf8726a-a852-452d-b81f-14839127c5fb';
   IF gsw_lat IS NULL OR gsw_lon IS NULL THEN
-    RAISE EXCEPTION 'expected GSW arena_latitude/arena_longitude from nba_team_arenas seed';
+    RAISE EXCEPTION 'expected GSW arena_latitude/arena_longitude from team arena seed';
   END IF;
 
   SELECT current_season_salary INTO curry_salary
   FROM gold.dim_players
-  WHERE player_id = 201939;
+  WHERE player_id = '11111111-1111-4111-8111-111111111111';
   IF curry_salary IS DISTINCT FROM 50000000 THEN
     RAISE EXCEPTION 'expected Curry current_season_salary=50000000, got %', curry_salary;
   END IF;
 
   SELECT current_season_payroll INTO gsw_payroll
   FROM gold.dim_teams
-  WHERE team_id = 1610612744;
+  WHERE team_id = '7bf8726a-a852-452d-b81f-14839127c5fb';
   IF gsw_payroll IS DISTINCT FROM 51000000 THEN
     RAISE EXCEPTION 'expected GSW current_season_payroll=51000000, got %', gsw_payroll;
   END IF;
@@ -121,13 +120,6 @@ BEGIN
     RAISE EXCEPTION 'expected >= 4 player contracts, got %', contract_count;
   END IF;
 
-  SELECT count(*) INTO unmatched_count
-  FROM gold.fct_player_contracts
-  WHERE match_method = 'unmatched';
-  IF unmatched_count < 1 THEN
-    RAISE EXCEPTION 'expected >= 1 unmatched contract row, got %', unmatched_count;
-  END IF;
-
   SELECT count(*) INTO standings_count FROM gold.fct_standings;
   IF standings_count < 3 THEN
     RAISE EXCEPTION 'expected >= 3 standings rows, got %', standings_count;
@@ -135,7 +127,7 @@ BEGIN
 
   SELECT conference_rank, games_back INTO gsw_rank, gsw_gb
   FROM gold.fct_standings
-  WHERE team_id = 1610612744
+  WHERE team_id = '7bf8726a-a852-452d-b81f-14839127c5fb'
     AND season = '2024-25'
     AND season_type = 'Regular Season';
   IF gsw_rank IS DISTINCT FROM 1 THEN
@@ -164,7 +156,7 @@ BEGIN
 
   SELECT count(*) INTO injury_matched
   FROM silver.int_player_injuries_matched
-  WHERE match_method = 'unique_name';
+  WHERE match_method = 'external_id';
   IF injury_matched < 1 THEN
     RAISE EXCEPTION 'expected >= 1 matched injury row, got %', injury_matched;
   END IF;

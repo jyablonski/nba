@@ -16,7 +16,7 @@ cubes:
 
       - name: player_id
         sql: player_id
-        type: number
+        type: string
 
       - name: season
         sql: season

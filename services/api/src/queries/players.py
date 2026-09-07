@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from sqlalchemy import bindparam, text
 
 COMPARE_STAT_COLUMNS = {
@@ -272,10 +274,10 @@ def _mean(values: list[float | int | None]) -> float | None:
 def build_head_to_head(
     players: list[dict],
     logs: list[dict],
-    player_ids: list[int],
+    player_ids: list[UUID],
 ) -> dict:
     names = {row["player_id"]: row["full_name"] for row in players}
-    by_player: dict[int, list[dict]] = {player_id: [] for player_id in player_ids}
+    by_player: dict[UUID, list[dict]] = {player_id: [] for player_id in player_ids}
     games: list[dict] = []
     grouped: dict[str, dict] = {}
 

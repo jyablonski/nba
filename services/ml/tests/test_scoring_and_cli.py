@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from datetime import date, datetime
 from unittest.mock import MagicMock
+from uuid import UUID, uuid5
 
 import pytest
 from click.testing import CliRunner
@@ -24,6 +25,14 @@ from scoring import (
     score_and_persist,
 )
 
+TEAM_HOME = UUID("00000000-0000-4000-8000-000000000201")
+TEAM_AWAY = UUID("00000000-0000-4000-8000-000000000202")
+GAME_NAMESPACE = UUID("00000000-0000-0000-0000-000000000001")
+
+
+def _id(value: str) -> UUID:
+    return uuid5(GAME_NAMESPACE, value)
+
 
 @contextmanager
 def _session(mock_session):
@@ -32,11 +41,11 @@ def _session(mock_session):
 
 def _game(season: str, home_won: bool | None, game_id: str = "1") -> GameRow:
     return GameRow(
-        game_id=game_id,
+        game_id=_id(game_id),
         game_date=date(2024, 10, 22),
         season=season,
-        home_team_id=1,
-        away_team_id=2,
+        home_team_id=TEAM_HOME,
+        away_team_id=TEAM_AWAY,
         home_won=home_won,
     )
 
@@ -74,7 +83,7 @@ def test_build_prediction_rows_attaches_market_wp() -> None:
     rows = build_prediction_rows(
         upcoming,
         [0.61],
-        {"002": 0.55},
+        {_id("002"): 0.55},
         as_of=datetime(2024, 10, 26, 12, 0, 0),
     )
     assert rows[0]["model_wp"] == 0.61
@@ -87,11 +96,11 @@ def test_load_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     session = MagicMock()
     session.execute.return_value.mappings.return_value.all.return_value = [
         {
-            "game_id": "002",
+            "game_id": _id("002"),
             "game_date": date(2024, 10, 22),
             "season": "2024-25",
-            "home_team_id": 1,
-            "away_team_id": 2,
+            "home_team_id": TEAM_HOME,
+            "away_team_id": TEAM_AWAY,
             "winner_location": "home",
         }
     ]
@@ -99,20 +108,20 @@ def test_load_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     assert finals[0].home_won is True
     session.execute.return_value.mappings.return_value.all.return_value = [
         {
-            "game_id": "003",
+            "game_id": _id("003"),
             "game_date": date(2024, 10, 27),
             "season": "2024-25",
-            "home_team_id": 1,
-            "away_team_id": 2,
+            "home_team_id": TEAM_HOME,
+            "away_team_id": TEAM_AWAY,
         }
     ]
     upcoming = load_upcoming_games(session)
     assert upcoming[0].home_won is None
     session.execute.return_value.mappings.return_value.all.return_value = [
-        {"game_id": "003", "market_wp": 0.58},
-        {"game_id": "004", "market_wp": None},
+        {"game_id": _id("003"), "market_wp": 0.58},
+        {"game_id": _id("004"), "market_wp": None},
     ]
-    assert load_market_wp(session) == {"003": 0.58}
+    assert load_market_wp(session) == {_id("003"): 0.58}
 
 
 @pytest.mark.unit
@@ -123,7 +132,7 @@ def test_score_and_persist_and_evaluate(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr("scoring.get_session", lambda: _session(session))
     monkeypatch.setattr("scoring.load_regular_season_finals", lambda sess: history)
     monkeypatch.setattr("scoring.load_upcoming_games", lambda sess: upcoming)
-    monkeypatch.setattr("scoring.load_market_wp", lambda sess: {"u1": 0.52})
+    monkeypatch.setattr("scoring.load_market_wp", lambda sess: {_id("u1"): 0.52})
     monkeypatch.setattr("scoring.upsert_rows", lambda *args, **kwargs: 1)
     result = score_and_persist(as_of=datetime(2024, 10, 26, 8, 0, 0))
     assert result["written"] == 1

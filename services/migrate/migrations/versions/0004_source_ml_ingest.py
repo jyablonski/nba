@@ -30,22 +30,19 @@ def upgrade() -> None:
         """
         CREATE TABLE source.player_injuries (
             id                      SERIAL PRIMARY KEY,
+            player_id               UUID NOT NULL REFERENCES source.players(player_id),
+            team_id                 UUID NOT NULL REFERENCES source.teams(team_id),
             player_name             VARCHAR(200) NOT NULL,
             player_name_normalized  VARCHAR(200) NOT NULL,
-            bref_player_slug        VARCHAR(32),
-            bref_team_abbreviation  VARCHAR(5) NOT NULL,
-            nba_team_abbreviation   VARCHAR(5) NOT NULL,
             update_date             DATE,
             description             TEXT NOT NULL,
             source_url              VARCHAR(300) NOT NULL,
             scraped_at              TIMESTAMP NOT NULL DEFAULT NOW(),
-            UNIQUE (player_name_normalized, bref_team_abbreviation)
+            UNIQUE (player_id, team_id)
         )
         """
     )
-    op.execute(
-        "CREATE INDEX idx_player_injuries_nba_team ON source.player_injuries(nba_team_abbreviation)"
-    )
+    op.execute("CREATE INDEX idx_player_injuries_team ON source.player_injuries(team_id)")
     op.execute("CREATE INDEX idx_player_injuries_scraped_at ON source.player_injuries(scraped_at)")
 
     op.execute(
@@ -56,7 +53,7 @@ def upgrade() -> None:
             commence_time       TIMESTAMP NOT NULL,
             home_team_name      VARCHAR(100) NOT NULL,
             away_team_name      VARCHAR(100) NOT NULL,
-            game_id             VARCHAR(20),
+            game_id             UUID REFERENCES source.games(game_id),
             bookmaker           VARCHAR(50) NOT NULL,
             market              VARCHAR(20) NOT NULL,
             home_price          INTEGER,
@@ -78,12 +75,12 @@ def upgrade() -> None:
         """
         CREATE TABLE source.game_predictions (
             id              SERIAL PRIMARY KEY,
-            game_id         VARCHAR(20) NOT NULL REFERENCES source.games(game_id),
+            game_id         UUID NOT NULL REFERENCES source.games(game_id),
             as_of           TIMESTAMP NOT NULL,
             model_name      VARCHAR(50) NOT NULL,
             model_version   VARCHAR(50) NOT NULL,
-            home_team_id    INTEGER NOT NULL REFERENCES source.teams(team_id),
-            away_team_id    INTEGER NOT NULL REFERENCES source.teams(team_id),
+            home_team_id    UUID NOT NULL REFERENCES source.teams(team_id),
+            away_team_id    UUID NOT NULL REFERENCES source.teams(team_id),
             model_wp        REAL NOT NULL,
             market_wp       REAL,
             scraped_at      TIMESTAMP NOT NULL DEFAULT NOW(),

@@ -1,9 +1,9 @@
-# Production overlay for docker-compose.yml. Do not start tools / cube / cron.
+# Production overlay for docker-compose.yml. Do not start scraper / dbt / ml / cube / cron.
 # IMAGE_PREFIX/IMAGE_TAG select prebuilt registry images; unset means the local
 # `nba-*:latest` this box built. Set PUBLIC_URL to move off baseline.jyablonski.dev
 # (the Caddyfile hardcodes the same host separately — ACME needs it there).
 # Cube is on the local Tilt stack but stays off here (12GB VM). Ask/MCP need CUBE_API_URL; without Cube they fail clearly (no gold SQL fallback). REST over gold still works.
-# Usage: DOCKER_TARGET=runtime docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres api frontend caddy
+# Usage: DOCKER_TARGET=runtime docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres api frontend mcp caddy
 # `ports: !reset []` (not a bare `[]`) is required so Compose drops the base file's published ports.
 services:
   postgres:
@@ -45,6 +45,7 @@ services:
 
   mcp:
     volumes: !reset []
+    mem_limit: 512m
 
   caddy:
     image: caddy:2-alpine

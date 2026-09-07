@@ -1,4 +1,5 @@
 from datetime import date
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
@@ -6,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 class StandingRow(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    team_id: int
+    team_id: UUID
     abbreviation: str
     team_name: str
     season: str

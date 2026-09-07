@@ -5,7 +5,7 @@ run should scrape NBA daily, scrape r/nba, no-op (off-season / no flags),
 or skip (disabled). Default is safe: enabled=false until an operator
 enables the pipeline.
 
-NBA Stats / BRef / odds daily follows ``enabled`` + ``season_active`` (and
+BRef / odds daily follows ``enabled`` + ``season_active`` (and
 the season window when set): schedule, Finals logs, those games' PBP,
 standings, injuries, remaining-year contracts, odds-if-keyed.
 

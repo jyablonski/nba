@@ -10,6 +10,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
+from uuid import UUID
 
 INITIAL_RATING = 1500.0
 K_FACTOR = 20.0
@@ -21,11 +22,11 @@ MODEL_VERSION = "elo-v0"
 
 @dataclass(frozen=True)
 class GameRow:
-    game_id: str
+    game_id: UUID
     game_date: date
     season: str
-    home_team_id: int
-    away_team_id: int
+    home_team_id: UUID
+    away_team_id: UUID
     home_won: bool | None = None
 
 
@@ -38,7 +39,7 @@ def clip_probability(value: float) -> float:
     return min(1.0 - 1e-6, max(1e-6, value))
 
 
-def regress_ratings(ratings: dict[int, float]) -> dict[int, float]:
+def regress_ratings(ratings: dict[UUID, float]) -> dict[UUID, float]:
     """Move each rating toward INITIAL_RATING at a season boundary."""
     return {
         team_id: rating * (1.0 - SEASON_REGRESS) + INITIAL_RATING * SEASON_REGRESS
@@ -47,10 +48,10 @@ def regress_ratings(ratings: dict[int, float]) -> dict[int, float]:
 
 
 def update_ratings(
-    ratings: dict[int, float],
+    ratings: dict[UUID, float],
     *,
-    home_team_id: int,
-    away_team_id: int,
+    home_team_id: UUID,
+    away_team_id: UUID,
     home_won: bool,
     expected: float,
 ) -> None:
@@ -63,14 +64,14 @@ def walk_forward(
     games: Sequence[GameRow],
     *,
     update: bool = True,
-) -> tuple[list[float], dict[int, float]]:
+) -> tuple[list[float], dict[UUID, float]]:
     """Predict each game from ratings entering the night, then update.
 
     Games must already be sorted by (game_date, game_id). Season changes
     regress ratings toward the mean. Games with home_won is None are
     scored but do not update ratings.
     """
-    ratings: dict[int, float] = {}
+    ratings: dict[UUID, float] = {}
     preds: list[float] = []
     current_season: str | None = None
     for game in games:
@@ -94,12 +95,12 @@ def walk_forward(
     return preds, ratings
 
 
-def fit_ratings(games: Sequence[GameRow]) -> dict[int, float]:
+def fit_ratings(games: Sequence[GameRow]) -> dict[UUID, float]:
     _preds, ratings = walk_forward(games, update=True)
     return ratings
 
 
-def score_games(games: Sequence[GameRow], ratings: dict[int, float]) -> list[float]:
+def score_games(games: Sequence[GameRow], ratings: dict[UUID, float]) -> list[float]:
     preds: list[float] = []
     for game in games:
         home = ratings.get(game.home_team_id, INITIAL_RATING)
@@ -124,11 +125,11 @@ def game_row_from_mapping(row: Any) -> GameRow:
     else:
         home_won = bool(home_won_raw)
     return GameRow(
-        game_id=str(_get(row, "game_id")),
+        game_id=UUID(str(_get(row, "game_id"))),
         game_date=_get(row, "game_date"),
         season=str(_get(row, "season")),
-        home_team_id=int(_get(row, "home_team_id")),
-        away_team_id=int(_get(row, "away_team_id")),
+        home_team_id=UUID(str(_get(row, "home_team_id"))),
+        away_team_id=UUID(str(_get(row, "away_team_id"))),
         home_won=home_won,
     )
 

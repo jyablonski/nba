@@ -24,6 +24,20 @@ import TeamsPage from "@/app/teams/page";
 import { Providers } from "@/components/providers";
 import type { TeamSummary } from "@/lib/types";
 
+const TEAM_IDS = {
+  BKN: "087804fc-096a-4432-b3cc-f20e5e37b1e7",
+  BOS: "7927412c-868d-4650-b329-bdc07b20358c",
+  DEN: "dee9acef-9d8a-4438-9a0d-fefcaf7cfe1a",
+  GSW: "7bf8726a-a852-452d-b81f-14839127c5fb",
+  MIN: "3cd9c269-597b-4eab-acb3-2d434f8b1280",
+  NYK: "3cbdd44d-e2b2-458a-81cd-b3008d5ebb5b",
+  OKC: "bc007f7f-f88d-4699-8325-e2f5a3e32183",
+  PHI: "8ea71a5c-0ade-41c4-8558-1e1f76990f9c",
+  POR: "250898d8-76ce-4f54-88de-ebcca751231d",
+  TOR: "8f941860-dc83-4289-8ed8-7ea9417d53b8",
+  UTA: "241af2e1-5322-427d-a549-9b318bba9cbf",
+};
+
 function team(
   partial: Partial<TeamSummary> & Pick<TeamSummary, "team_id" | "abbreviation" | "team_name">
 ): TeamSummary {
@@ -38,7 +52,8 @@ function abbreviationOrder() {
   return screen
     .getAllByRole("link")
     .map((link) => link.textContent)
-    .filter((text): text is string => Boolean(text && /^[A-Z]{3}$/.test(text)));
+    .map((text) => text?.trim().match(/[A-Z]{3}/)?.[0])
+    .filter((text): text is string => Boolean(text));
 }
 
 describe("teams directory", () => {
@@ -46,7 +61,7 @@ describe("teams directory", () => {
     listTeams.mockResolvedValue({
       data: [
         {
-          team_id: 1610612738,
+          team_id: TEAM_IDS.BOS,
           abbreviation: "BOS",
           team_name: "Boston Celtics",
           conference: "East",
@@ -68,10 +83,8 @@ describe("teams directory", () => {
     await waitFor(() => {
       expect(screen.getByRole("link", { name: "BOS" })).toBeInTheDocument();
     });
-    expect(screen.getByRole("link", { name: "BOS" }).querySelector("img")).toHaveAttribute(
-      "src",
-      "https://cdn.nba.com/logos/nba/1610612738/primary/L/logo.svg"
-    );
+    expect(screen.getByRole("link", { name: "BOS" })).toHaveTextContent("BOS");
+    expect(screen.getByRole("link", { name: "BOS" }).querySelector("img")).toBeNull();
     expect(listTeams).toHaveBeenCalledWith({ season: "2025-26" });
     expect(screen.queryByLabelText("Season")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Teams" })).toBeInTheDocument();
@@ -94,7 +107,7 @@ describe("teams directory", () => {
     listTeams.mockResolvedValue({
       data: [
         {
-          team_id: 1610612738,
+          team_id: TEAM_IDS.BOS,
           abbreviation: "BOS",
           team_name: "Boston Celtics",
           conference: "East",
@@ -123,7 +136,7 @@ describe("teams directory", () => {
     listTeams.mockResolvedValue({
       data: [
         team({
-          team_id: 1610612751,
+          team_id: TEAM_IDS.BKN,
           abbreviation: "BKN",
           team_name: "Brooklyn Nets",
           nickname: "Nets",
@@ -132,7 +145,7 @@ describe("teams directory", () => {
           win_pct: 0.244,
         }),
         team({
-          team_id: 1610612738,
+          team_id: TEAM_IDS.BOS,
           abbreviation: "BOS",
           team_name: "Boston Celtics",
           nickname: "Celtics",
@@ -141,7 +154,7 @@ describe("teams directory", () => {
           win_pct: 0.683,
         }),
         team({
-          team_id: 1610612752,
+          team_id: TEAM_IDS.NYK,
           abbreviation: "NYK",
           team_name: "New York Knicks",
           nickname: "Knicks",
@@ -150,7 +163,7 @@ describe("teams directory", () => {
           win_pct: 0.642,
         }),
         team({
-          team_id: 1610612755,
+          team_id: TEAM_IDS.PHI,
           abbreviation: "PHI",
           team_name: "Philadelphia 76ers",
           nickname: "76ers",
@@ -159,7 +172,7 @@ describe("teams directory", () => {
           win_pct: 0.549,
         }),
         team({
-          team_id: 1610612761,
+          team_id: TEAM_IDS.TOR,
           abbreviation: "TOR",
           team_name: "Toronto Raptors",
           nickname: "Raptors",
@@ -168,7 +181,7 @@ describe("teams directory", () => {
           win_pct: 0.561,
         }),
         team({
-          team_id: 1610612743,
+          team_id: TEAM_IDS.DEN,
           abbreviation: "DEN",
           team_name: "Denver Nuggets",
           conference: "West",
@@ -179,7 +192,7 @@ describe("teams directory", () => {
           win_pct: 0.659,
         }),
         team({
-          team_id: 1610612750,
+          team_id: TEAM_IDS.MIN,
           abbreviation: "MIN",
           team_name: "Minnesota Timberwolves",
           conference: "West",
@@ -190,7 +203,7 @@ describe("teams directory", () => {
           win_pct: 0.598,
         }),
         team({
-          team_id: 1610612760,
+          team_id: TEAM_IDS.OKC,
           abbreviation: "OKC",
           team_name: "Oklahoma City Thunder",
           conference: "West",
@@ -201,7 +214,7 @@ describe("teams directory", () => {
           win_pct: 0.79,
         }),
         team({
-          team_id: 1610612757,
+          team_id: TEAM_IDS.POR,
           abbreviation: "POR",
           team_name: "Portland Trail Blazers",
           conference: "West",
@@ -212,7 +225,7 @@ describe("teams directory", () => {
           win_pct: 0.512,
         }),
         team({
-          team_id: 1610612762,
+          team_id: TEAM_IDS.UTA,
           abbreviation: "UTA",
           team_name: "Utah Jazz",
           conference: "West",
@@ -251,7 +264,7 @@ describe("teams directory", () => {
     listTeams.mockResolvedValue({
       data: [
         team({
-          team_id: 1,
+          team_id: TEAM_IDS.BOS,
           abbreviation: "BOS",
           team_name: "Boston Celtics",
           nickname: "Celtics",
@@ -261,7 +274,7 @@ describe("teams directory", () => {
           division_rank: 2,
         }),
         team({
-          team_id: 2,
+          team_id: TEAM_IDS.NYK,
           abbreviation: "NYK",
           team_name: "New York Knicks",
           nickname: "Knicks",
@@ -288,7 +301,7 @@ describe("teams directory", () => {
     listTeams.mockResolvedValue({
       data: [
         team({
-          team_id: 1610612738,
+          team_id: TEAM_IDS.BOS,
           abbreviation: "BOS",
           team_name: "Boston Celtics",
           nickname: "Celtics",
@@ -299,7 +312,7 @@ describe("teams directory", () => {
           pts_allowed_avg: 109.2,
         }),
         team({
-          team_id: 1610612744,
+          team_id: TEAM_IDS.GSW,
           abbreviation: "GSW",
           team_name: "Golden State Warriors",
           conference: "West",

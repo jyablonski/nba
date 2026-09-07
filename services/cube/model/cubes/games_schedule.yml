@@ -39,7 +39,7 @@ cubes:
 
       - name: home_team_id
         sql: home_team_id
-        type: number
+        type: string
 
       - name: home_team
         sql: home_team_abbreviation
@@ -55,7 +55,7 @@ cubes:
 
       - name: away_team_id
         sql: away_team_id
-        type: number
+        type: string
 
       - name: away_team
         sql: away_team_abbreviation
