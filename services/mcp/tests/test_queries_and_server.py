@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date
 
 import pytest
@@ -133,6 +134,20 @@ def test_server_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     assert client.base_url == "http://localhost:4000"
     server.get_settings.cache_clear()
     server.get_cube_client.cache_clear()
+
+
+@pytest.mark.unit
+def test_mcp_transport_auth() -> None:
+    stdio = server.Settings(mcp_transport="stdio")
+    assert server.mcp_auth(stdio) is None
+
+    with pytest.raises(RuntimeError, match="MCP_API_TOKEN"):
+        server.mcp_auth(server.Settings(mcp_transport="streamable-http", mcp_api_token=None))
+
+    http = server.mcp_auth(server.Settings(mcp_transport="streamable-http", mcp_api_token="token"))
+    assert http is not None
+    assert asyncio.run(http.verify_token("token")) is not None
+    assert asyncio.run(http.verify_token("wrong")) is None
 
 
 @pytest.mark.unit

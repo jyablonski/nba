@@ -59,19 +59,18 @@ export function TeamLogoMarker({
   payload?: TeamRatingPoint;
 }) {
   if (cx == null || cy == null || payload == null) return null;
-  const size = 34;
+  const size = 42.5;
   const logoUrl = teamLogoUrl(payload.abbreviation);
   return (
     <g>
       <a href={`/teams/${payload.team_id}`}>
-        <circle cx={cx} cy={cy} r={size / 2} fill="#E8E4DA" stroke="#8C8577" />
         {logoUrl ? (
           <image
             href={logoUrl}
-            x={cx - 12}
-            y={cy - 12}
-            width={24}
-            height={24}
+            x={cx - size / 2}
+            y={cy - size / 2}
+            width={size}
+            height={size}
             preserveAspectRatio="xMidYMid meet"
           />
         ) : (

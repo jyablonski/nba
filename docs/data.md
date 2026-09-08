@@ -76,6 +76,6 @@ Cube YAML (Ask/MCP): `players` (incl. height/weight/birth_date/first_season/last
 
 Elo after gold Finals + schedule: [ml.md](ml.md). No public predictions API.
 
-Cube: local Tilt/`make up` starts `:4000` (depends on postgres/migrate). Ask + MCP query `/cubejs-api/v1/load` and `/meta` with `CUBEJS_API_SECRET`. REST list/detail stays on gold. `GET /api/v1/schedule` is the Courtline upcoming slate (`fct_games_schedule`, not Final, date ≥ today). `/api/v1/games` stays Final-only `fct_team_game_results`. Off on the 12GB production overlay — Ask/MCP then fail clearly; do not add a gold SQL fallback. Cube SQL API and pre-aggregates are not current.
+Cube: local Tilt/`make up` and the production Compose stack start Cube (depends on postgres/migrate). Ask + MCP query `/cubejs-api/v1/load` and `/meta` with `CUBEJS_API_SECRET`; production keeps Cube internal and does not publish port 4000. REST list/detail stays on gold. `GET /api/v1/schedule` is the Courtline upcoming slate (`fct_games_schedule`, not Final, date ≥ today). `/api/v1/games` stays Final-only `fct_team_game_results`. Cube down → Ask/MCP fail clearly; do not add a gold SQL fallback. Cube SQL API and pre-aggregates are not current.
 
 `make db-migrate` — Alembic `upgrade head`. `db/init.sql` only creates empty schemas. Wipe old `raw` / `ops` / `analytics` volumes with `docker compose down -v` (deletes data).

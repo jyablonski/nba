@@ -48,7 +48,7 @@ def _tables(soup: BeautifulSoup) -> list[Tag]:
         return direct
     found: list[Tag] = []
     for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
-        if "box-score" not in comment:
+        if "box-score" not in comment:  # ty: ignore[unsupported-operator]
             continue
         nested = BeautifulSoup(str(comment), "html.parser")
         found.extend(
@@ -192,7 +192,7 @@ def _scrape_games(
     stamp = datetime.now()
     with get_session() as session:
         seed_team_catalog(session, scraped_at=stamp)
-        external_ids = _game_external_ids(session, games)
+        external_ids = _game_external_ids(session, games)  # ty: ignore[invalid-argument-type]
         canonical_games = {game.game_id: game for game in games}
         total_games = len(external_ids)
         checkpoint = max(1, total_games // 10)

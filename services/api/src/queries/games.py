@@ -118,7 +118,18 @@ GET_GAME_FLOW = text(
         flow.biggest_run_opponent_points,
         flow.biggest_run_start_seconds,
         flow.biggest_run_end_seconds,
-        flow.biggest_run_label
+        flow.biggest_run_label,
+        flow.final_period,
+        flow.overtime_periods,
+        flow.went_to_overtime,
+        flow.largest_lead_blown,
+        flow.blown_lead_team_abbreviation,
+        flow.comeback_team_abbreviation,
+        flow.blown_lead_period,
+        flow.blown_lead_elapsed_seconds,
+        flow.is_wire_to_wire,
+        flow.winner_halftime_margin,
+        flow.winner_margin_entering_fourth
     FROM gold.fct_team_game_results AS games
     LEFT JOIN gold.fct_game_flow AS flow
         ON flow.game_id = games.game_id
@@ -193,5 +204,34 @@ LIST_SEASONS = text(
     ) seasons
     WHERE season IS NOT NULL
     ORDER BY season DESC
+    """
+)
+
+
+# "Collapse of the season": the biggest lead a team held and still lost, most
+# painful first. largest_lead_blown is 0 for wire-to-wire games, so those are
+# excluded rather than ranked last.
+LIST_BIGGEST_COLLAPSES = text(
+    """
+    SELECT
+        flow.game_id,
+        flow.season,
+        flow.game_date,
+        flow.home_team_abbreviation,
+        flow.home_score,
+        flow.away_team_abbreviation,
+        flow.away_score,
+        flow.largest_lead_blown,
+        flow.blown_lead_team_abbreviation,
+        flow.comeback_team_abbreviation,
+        flow.blown_lead_period,
+        flow.winner_margin_entering_fourth,
+        flow.lead_changes,
+        flow.overtime_periods
+    FROM gold.fct_game_flow AS flow
+    WHERE flow.largest_lead_blown > 0
+      AND (:season IS NULL OR flow.season = :season)
+    ORDER BY flow.largest_lead_blown DESC, flow.game_date DESC
+    LIMIT :limit
     """
 )

@@ -13,6 +13,7 @@ cubes:
         sql: player_id
         type: string
         primary_key: true
+        public: true
 
       - name: full_name
         sql: full_name

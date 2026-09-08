@@ -8,6 +8,10 @@ models:
       scoring-play windows with team_pts + opp_pts under 25, ranked by net then
       net/scored (e.g. 21-2 over 31-15 or a 79-59 marathon). Either team. Courtline
       recomputes the highlight from the same PBP series it plots. Not live win probability.
+      Also carries the comeback story: largest_lead_blown is the biggest lead the losing
+      team ever held (0 when the winner never trailed), with the period and elapsed second
+      it peaked, plus the winner's margin at halftime and entering the fourth, and
+      overtime period counts.
     columns:
       - name: game_id
         data_tests:
@@ -68,3 +72,34 @@ models:
                 min_value: 0
                 max_value: 23
                 row_condition: "biggest_run_opponent_points is not null"
+      - name: largest_lead_blown
+        description: Largest lead the losing team held at any point; 0 when the winner never trailed.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 100
+      - name: is_wire_to_wire
+        description: True when the losing team never led, i.e. largest_lead_blown is 0.
+        data_tests:
+          - not_null
+      - name: blown_lead_period
+        description: Period in which the losing team's largest lead peaked; null when wire-to-wire.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 10
+                row_condition: "blown_lead_period is not null"
+      - name: overtime_periods
+        description: Number of overtime periods; 0 for a regulation game.
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 6
+      - name: went_to_overtime
+        data_tests:
+          - not_null

@@ -8,6 +8,7 @@ cubes:
         sql: "CAST(player_id AS VARCHAR) || '-' || CAST(team_id AS VARCHAR) || '-' || season"
         type: string
         primary_key: true
+        public: true
 
       - name: player_id
         sql: player_id

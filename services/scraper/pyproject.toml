@@ -16,9 +16,10 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "pytest==9.1.1",
     "pytest-cov==7.1.0",
+    "pytest==9.1.1",
     "testcontainers[postgres]==4.15.0",
+    "ty==0.0.78",
 ]
 
 [tool.uv]
@@ -50,3 +51,16 @@ markers = [
     "unit: Unit tests that don't require external dependencies",
     "integration: Tests that require Docker / Testcontainers Postgres",
 ]
+
+# Anchors ty to this service so it does not walk up and type-check the whole
+# repo against this venv. Mirrors pytest's pythonpath = ["src"].
+# The `# ty: ignore` comments in src/scrapers are BeautifulSoup stub
+# imprecision: find_all/find are typed as returning PageElement, but the
+# parsers only reach them on Tag. Not runtime bugs.
+[tool.ty.environment]
+extra-paths = ["src"]
+
+# Check shipped code only: tests pass duck-typed doubles where a concrete class
+# is annotated, which is intentional.
+[tool.ty.src]
+include = ["src"]

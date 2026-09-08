@@ -2,6 +2,7 @@ import type {
   BackToBackStats,
   GameLogEntry,
   GameLogParams,
+  GameCollapse,
   GameFlow,
   HeadToHeadComparison,
   LeagueGame,
@@ -293,6 +294,16 @@ export const api = {
           from_date: params.from_date,
           limit: params.limit ?? 50,
           offset: params.offset,
+        })}`
+      )
+    ),
+
+  listBiggestCollapses: async (params: { season?: string; limit?: number } = {}) =>
+    asPaginated<GameCollapse>(
+      await fetchApi(
+        `/api/v1/games/collapses${buildQuery({
+          season: params.season,
+          limit: params.limit ?? 10,
         })}`
       )
     ),

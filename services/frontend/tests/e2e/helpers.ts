@@ -66,7 +66,7 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
             ? []
             : [
                 {
-                  player_id: 202695,
+                  player_id: "00000000-0000-4000-8000-000000202695",
                   season: "2025-26",
                   games_played: 74,
                   ppg: 23.4,
@@ -102,7 +102,7 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
       if (url.includes("/back-to-backs")) {
         return json({
           data: {
-            player_id: 202695,
+            player_id: "00000000-0000-4000-8000-000000202695",
             player_name: "Kawhi Leonard",
             total_back_to_backs: 12,
             games_played_in_b2b: 10,
@@ -128,7 +128,7 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
             ? []
             : [
                 {
-                  player_id: 202695,
+                  player_id: "00000000-0000-4000-8000-000000202695",
                   full_name: "Kawhi Leonard",
                   team_abbreviation: "LAC",
                   position: "F",
@@ -141,7 +141,7 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
                   career_apg: 3.0,
                 },
                 {
-                  player_id: 201939,
+                  player_id: "00000000-0000-4000-8000-000000201939",
                   full_name: "Stephen Curry",
                   team_abbreviation: "GSW",
                   position: "G",
@@ -158,10 +158,11 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
         });
       }
 
-      const playerMatch = url.match(/\/players\/(\d+)/);
+      // Player ids are UUIDs since the provider-independent identity migration.
+      const playerMatch = url.match(/\/players\/([0-9a-f-]{36})/i);
       if (playerMatch) {
-        const playerId = Number(playerMatch[1]);
-        const curry = playerId === 201939;
+        const playerId = playerMatch[1];
+        const curry = playerId === "00000000-0000-4000-8000-000000201939";
         return json({
           data: {
             player_id: playerId,
@@ -191,7 +192,7 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
             ? []
             : [
                 {
-                  player_id: 202695,
+                  player_id: "00000000-0000-4000-8000-000000202695",
                   full_name: "Kawhi Leonard",
                   position: "F",
                   team_abbreviation: "LAC",
@@ -200,7 +201,7 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
                   career_ppg: 19.2,
                 },
                 {
-                  player_id: 201939,
+                  player_id: "00000000-0000-4000-8000-000000201939",
                   full_name: "Stephen Curry",
                   position: "G",
                   team_abbreviation: "GSW",
@@ -415,6 +416,33 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
             away_team_abbreviation: "LAL",
             has_play_by_play: false,
           },
+        });
+      }
+
+      // Must precede the generic /games branch.
+      if (url.includes("/games/collapses")) {
+        return json({
+          data: empty
+            ? []
+            : [
+                {
+                  game_id: "0022400002",
+                  season: "2025-26",
+                  game_date: "2024-11-02",
+                  home_team_abbreviation: "BOS",
+                  away_team_abbreviation: "MIA",
+                  home_score: 118,
+                  away_score: 115,
+                  largest_lead_blown: 21,
+                  blown_lead_team_abbreviation: "MIA",
+                  comeback_team_abbreviation: "BOS",
+                  blown_lead_period: 3,
+                  winner_margin_entering_fourth: -9,
+                  lead_changes: 4,
+                  overtime_periods: 0,
+                },
+              ],
+          meta: { total: empty ? 0 : 1, limit: 10, offset: 0 },
         });
       }
 

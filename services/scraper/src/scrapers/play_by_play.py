@@ -15,8 +15,8 @@ from identity import BREF_PROVIDER, ensure_player, resolve_team_id, seed_team_ca
 from sqlalchemy import select
 
 from db import get_session, upsert_rows
-from models import Game, GameExternalId, PlayByPlay, Team
-from scrapers import BREF_BASE_URL, bref_get, current_season, to_int, to_str
+from models import Game, GameExternalId, PlayByPlay, Player, Team
+from scrapers import BREF_BASE_URL, bref_get, current_season, repair_mojibake, to_int, to_str
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ def _find_table(soup: BeautifulSoup) -> Tag | None:
     if isinstance(table, Tag):
         return table
     for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
-        if 'id="pbp"' not in comment and "id='pbp'" not in comment:
+        if 'id="pbp"' not in comment and "id='pbp'" not in comment:  # ty: ignore[unsupported-operator]
             continue
         nested = BeautifulSoup(str(comment), "html.parser")
         table = nested.find("table", id="pbp")
@@ -67,20 +67,29 @@ def _text(row: Tag, *stats: str) -> str | None:
     return str(value).strip() or None
 
 
-def _linked_identity(row: Tag) -> tuple[str | None, str | None, str | None]:
-    player_external_id: str | None = None
-    player_name: str | None = None
+def _linked_identity(row: Tag) -> tuple[list[tuple[str, str]], str | None]:
+    """Linked players in document order, plus any linked team.
+
+    BRef always writes the primary actor first ("X makes 2-pt layup (assist by
+    Y)", "Turnover by X (steal by Y)", "Shooting foul by X (drawn by Y)", "X
+    enters the game for Y"), so index 0 is the player the event is credited to
+    and index 1 is the assister / stealer / blocker / fouled / subbed-out player.
+    Taking the last link instead would credit the wrong player on every one of
+    those events.
+    """
+    players: list[tuple[str, str]] = []
     team_abbreviation: str | None = None
     for link in row.find_all("a"):
-        href = str(link.get("href") or "")
+        href = str(link.get("href") or "")  # ty: ignore[unresolved-attribute]
         player = re.search(r"/players/[a-z]/([a-z0-9]+)\.html", href, re.IGNORECASE)
         if player:
-            player_external_id = player.group(1).lower()
-            player_name = link.get_text(" ", strip=True) or None
+            name = link.get_text(" ", strip=True)
+            if name:
+                players.append((player.group(1).lower(), name))
         team = re.search(r"/teams/([A-Z]{3})/", href, re.IGNORECASE)
         if team:
             team_abbreviation = team.group(1).upper()
-    return player_external_id, player_name, team_abbreviation
+    return players, team_abbreviation
 
 
 def _live_score(value: str | None) -> tuple[int | None, int | None]:
@@ -112,7 +121,7 @@ def parse_play_by_play_html(
             period = int(match.group(1)) if match else period
             continue
         cells = row.find_all(["th", "td"], recursive=False)
-        live_layout = not any(cell.get("data-stat") for cell in cells)
+        live_layout = not any(cell.get("data-stat") for cell in cells)  # ty: ignore[unresolved-attribute]
         team: str | None = None
         if live_layout:
             if not cells or cells[0].get_text(" ", strip=True).casefold() == "time":
@@ -122,9 +131,9 @@ def parse_play_by_play_html(
                 candidates = [
                     (cells[1], away_bref_abbreviation),
                     (cells[5], home_bref_abbreviation),
-                ]
+                ]  # ty: ignore[invalid-assignment]
             elif len(cells) >= 2:
-                candidates = [(cells[1], None)]
+                candidates = [(cells[1], None)]  # ty: ignore[invalid-assignment]
             descriptions = [cell.get_text(" ", strip=True) for cell, _ in candidates]
             description = " | ".join(text for text in descriptions if text)
             for cell, candidate_team in candidates:
@@ -145,8 +154,12 @@ def parse_play_by_play_html(
 
         if not description:
             continue
-        player_external_id, player_name, linked_team = _linked_identity(row)
+        linked_players, linked_team = _linked_identity(row)
         team = linked_team or team
+        player_external_id, player_name = linked_players[0] if linked_players else (None, None)
+        secondary_external_id, secondary_name = (
+            linked_players[1] if len(linked_players) > 1 else (None, None)
+        )
         rows.append(
             {
                 "game_id": game_id,
@@ -160,6 +173,8 @@ def parse_play_by_play_html(
                 "team_bref_abbreviation": team,
                 "player_external_id": player_external_id,
                 "player_name": player_name,
+                "secondary_player_external_id": secondary_external_id,
+                "secondary_player_name": secondary_name,
                 "action_type": None,
                 "sub_type": None,
                 "description": description,
@@ -186,6 +201,7 @@ def map_play_by_play_action(
         "score_away": to_int(raw.get("score_away")),
         "team_id": raw.get("team_id"),
         "player_id": raw.get("player_id"),
+        "secondary_player_id": raw.get("secondary_player_id"),
         "action_type": to_str(raw.get("action_type")),
         "sub_type": to_str(raw.get("sub_type")),
         "description": to_str(raw.get("description")),
@@ -233,6 +249,7 @@ def scrape_play_by_play(
     season: str | None = None,
     *,
     game_ids: Sequence[UUID | str] | None = None,
+    refresh: bool = False,
     fetch_actions: Callable[[str], list[dict[str, Any]]] | None = None,
 ) -> int:
     target = season or current_season()
@@ -244,7 +261,7 @@ def scrape_play_by_play(
             .filter(Game.game_id.in_(list(game_ids)), Game.status == "Final")
             .all()
         )
-        games = queried_games if game_ids is None else _snapshot_games(session, queried_games)
+        games = queried_games if game_ids is None else _snapshot_games(session, queried_games)  # ty: ignore[invalid-argument-type]
         if not games:
             if game_ids is not None and not game_ids:
                 return 0
@@ -258,12 +275,16 @@ def scrape_play_by_play(
             )
         ).all()
         external_ids = {row.game_id: row.external_id for row in external_rows}
-        existing_game_ids = set(
-            session.scalars(
-                select(PlayByPlay.game_id)
-                .where(PlayByPlay.game_id.in_([game.game_id for game in games]))
-                .distinct()
-            ).all()
+        existing_game_ids: set[UUID] = (
+            set()
+            if refresh
+            else set(
+                session.scalars(
+                    select(PlayByPlay.game_id)
+                    .where(PlayByPlay.game_id.in_([game.game_id for game in games]))
+                    .distinct()
+                ).all()
+            )
         )
 
     def fetch(external_id: str, game: GameReference) -> list[dict[str, Any]]:
@@ -307,7 +328,7 @@ def scrape_play_by_play(
                 failed += 1
                 continue
             try:
-                raw_rows = fetch(external_id, game)
+                raw_rows = fetch(external_id, game)  # ty: ignore[invalid-argument-type]
             except Exception:
                 failed += 1
                 logger.exception("BRef play-by-play scrape failed for %s", external_id)
@@ -341,6 +362,19 @@ def scrape_play_by_play(
                             full_name=player_name,
                             source_url=play_by_play_url(external_id),
                             team_id=team_id,
+                            is_active=True,
+                        )
+                    secondary_external_id = raw.pop("secondary_player_external_id", None)
+                    secondary_name = raw.pop("secondary_player_name", None)
+                    if secondary_external_id and secondary_name:
+                        # No team_id: the second player is often the opponent
+                        # (stealer, blocker, fouled), so team must not be inferred here.
+                        raw["secondary_player_id"] = ensure_player(
+                            session,
+                            provider=BREF_PROVIDER,
+                            external_id=secondary_external_id,
+                            full_name=secondary_name,
+                            source_url=play_by_play_url(external_id),
                             is_active=True,
                         )
                     row = map_play_by_play_action(
@@ -379,11 +413,42 @@ def scrape_play_by_play(
     return total
 
 
+def repair_encoded_text() -> tuple[int, int]:
+    """Repair player names and action descriptions stored as latin-1-decoded UTF-8.
+
+    Rows ingested before the fetch layer pinned UTF-8 hold mojibake (JokiÄ‡).
+    This is a pure string round-trip, so it does not need any BRef traffic;
+    rows that are already clean are left untouched.
+    """
+    players_fixed = 0
+    actions_fixed = 0
+    with get_session() as session:
+        for player in session.query(Player).all():
+            repaired = repair_mojibake(player.full_name or "")
+            if repaired and repaired != player.full_name:
+                player.full_name = repaired
+                first, last = (repaired.split(" ", 1) + [""])[:2]
+                player.first_name, player.last_name = first, last or None  # ty: ignore[invalid-assignment]
+                players_fixed += 1
+        for action in session.query(PlayByPlay).filter(PlayByPlay.description.isnot(None)).all():
+            repaired = repair_mojibake(action.description or "")
+            if repaired != action.description:
+                action.description = repaired
+                actions_fixed += 1
+    logger.info(
+        "Encoding repair: %s player name(s), %s play-by-play description(s)",
+        players_fixed,
+        actions_fixed,
+    )
+    return players_fixed, actions_fixed
+
+
 __all__ = [
     "GameReference",
     "NoFinalGamesError",
     "map_play_by_play_action",
     "parse_play_by_play_html",
     "play_by_play_url",
+    "repair_encoded_text",
     "scrape_play_by_play",
 ]

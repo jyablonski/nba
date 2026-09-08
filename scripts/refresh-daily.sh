@@ -15,6 +15,8 @@
 # need `compose build` (Tilt live_update also never rewrites `compose run`
 # images). Rebuild only for Dockerfile / lockfile / package changes:
 #   BUILD=1 ./scripts/refresh-daily.sh
+# Production callers set COMPOSE to the prod overlay so these jobs use the
+# registry-tagged, baked images and the production environment.
 # Do not `compose up postgres` from here — recreating on an existing
 # pgdata volume does not re-run init.sql.
 #

@@ -126,7 +126,7 @@ def _find_contracts_table(soup: BeautifulSoup) -> Tag | None:
     if isinstance(table, Tag):
         return table
     for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
-        if "id=" not in comment or "contracts" not in comment:
+        if "id=" not in comment or "contracts" not in comment:  # ty: ignore[unsupported-operator]
             continue
         nested = BeautifulSoup(str(comment), "html.parser")
         found = nested.find("table", id="contracts")
@@ -137,7 +137,7 @@ def _find_contracts_table(soup: BeautifulSoup) -> Tag | None:
 
 def _header_row(table: Tag) -> Tag | None:
     thead = table.find("thead")
-    rows: Iterable[Tag] = thead.find_all("tr") if isinstance(thead, Tag) else table.find_all("tr")
+    rows: Iterable[Tag] = thead.find_all("tr") if isinstance(thead, Tag) else table.find_all("tr")  # ty: ignore[invalid-assignment]
     for row in rows:
         if row.find("th", attrs={"data-stat": "player"}):
             seasons = [
@@ -157,7 +157,7 @@ def _season_columns(header_row: Tag) -> list[tuple[str, str]]:
         label = cell.get_text(strip=True)
         if not SEASON_HEADER_RE.match(label):
             continue
-        stat = cell.get("data-stat")
+        stat = cell.get("data-stat")  # ty: ignore[unresolved-attribute]
         if not stat:
             continue
         columns.append((str(stat), label))
@@ -210,9 +210,9 @@ def parse_contracts_html(
         if not isinstance(body, Tag):
             continue
         for row in body.find_all("tr"):
-            if row.get("class") and "thead" in row.get("class", []):
+            if row.get("class") and "thead" in row.get("class", []):  # ty: ignore[unresolved-attribute]
                 continue
-            player_cell = row.find(["th", "td"], attrs={"data-stat": "player"})
+            player_cell = row.find(["th", "td"], attrs={"data-stat": "player"})  # ty: ignore[unresolved-attribute]
             if not isinstance(player_cell, Tag):
                 continue
             label = player_cell.get_text(strip=True)
@@ -221,16 +221,16 @@ def parse_contracts_html(
             slug, name = _player_slug_and_name(player_cell)
             if not slug or not name or name.lower() == "team totals":
                 continue
-            age_cell = row.find(["th", "td"], attrs={"data-stat": "age_today"})
+            age_cell = row.find(["th", "td"], attrs={"data-stat": "age_today"})  # ty: ignore[unresolved-attribute]
             player_age = parse_salary_text(
                 age_cell.get_text() if isinstance(age_cell, Tag) else None
             )
-            guaranteed_cell = row.find(["th", "td"], attrs={"data-stat": "remain_gtd"})
+            guaranteed_cell = row.find(["th", "td"], attrs={"data-stat": "remain_gtd"})  # ty: ignore[unresolved-attribute]
             remaining_guaranteed, _ = _cell_salary(
                 guaranteed_cell if isinstance(guaranteed_cell, Tag) else None
             )
             for stat, season in season_columns:
-                cell = row.find(["th", "td"], attrs={"data-stat": stat})
+                cell = row.find(["th", "td"], attrs={"data-stat": stat})  # ty: ignore[unresolved-attribute]
                 salary, is_fully_guaranteed = _cell_salary(cell if isinstance(cell, Tag) else None)
                 if salary is None:
                     continue
@@ -252,17 +252,17 @@ def parse_contracts_html(
     footer = table.find("tfoot")
     footer_rows = footer.find_all("tr") if isinstance(footer, Tag) else []
     for row in footer_rows:
-        player_cell = row.find(["th", "td"], attrs={"data-stat": "player"})
+        player_cell = row.find(["th", "td"], attrs={"data-stat": "player"})  # ty: ignore[unresolved-attribute]
         if not isinstance(player_cell, Tag):
             continue
         if player_cell.get_text(strip=True).lower() != "team totals":
             continue
-        guaranteed_cell = row.find(["th", "td"], attrs={"data-stat": "remain_gtd"})
+        guaranteed_cell = row.find(["th", "td"], attrs={"data-stat": "remain_gtd"})  # ty: ignore[unresolved-attribute]
         remaining_guaranteed, _ = _cell_salary(
             guaranteed_cell if isinstance(guaranteed_cell, Tag) else None
         )
         for stat, season in season_columns:
-            cell = row.find(["th", "td"], attrs={"data-stat": stat})
+            cell = row.find(["th", "td"], attrs={"data-stat": stat})  # ty: ignore[unresolved-attribute]
             total_salary, _ = _cell_salary(cell if isinstance(cell, Tag) else None)
             if total_salary is None:
                 continue

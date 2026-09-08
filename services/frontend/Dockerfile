@@ -19,7 +19,11 @@ FROM node:20.20.2-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+# Baked at build time: next inlines NEXT_PUBLIC_* into the client bundle, so the
+# running container cannot pick this up from the environment later.
+ARG NEXT_PUBLIC_GIT_SHA=dev
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_GIT_SHA=$NEXT_PUBLIC_GIT_SHA \
     NEXT_TELEMETRY_DISABLED=1 \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 COPY --from=deps /app/node_modules ./node_modules
@@ -46,7 +50,9 @@ FROM node:20.20.2-alpine AS development
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_GIT_SHA=dev
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_GIT_SHA=$NEXT_PUBLIC_GIT_SHA \
     NEXT_TELEMETRY_DISABLED=1 \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     WATCHPACK_POLLING=true

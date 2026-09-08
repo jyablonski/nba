@@ -65,9 +65,11 @@ def upsert_rows(
 
     skip_update = set(conflict_columns) | {"id"}
     update_cols = [
-        column.name for column in model.__table__.columns if column.name not in skip_update
+        column.name
+        for column in model.__table__.columns  # ty: ignore[unresolved-attribute]
+        if column.name not in skip_update
     ]
-    column_count = len(model.__table__.columns)
+    column_count = len(model.__table__.columns)  # ty: ignore[unresolved-attribute]
 
     written = 0
     for batch in iter_upsert_batches(rows, batch_size=batch_size, column_count=column_count):

@@ -1,8 +1,8 @@
-# Frontend + Python unit tests, pre-commit, and optional OCI deploy.
-# Does not run make test-dbt, Playwright, or Testcontainers.
+# Frontend + Python unit tests, pre-commit, both e2e suites, and optional OCI deploy.
+# Does not run Testcontainers (make test-integration).
 # images + deploy run only when ENABLE_OCI_DEPLOY=true and not on pull_request.
 # images builds native arm64 on GitHub's free-for-public-repos ARM runner and
-# pushes to GHCR; the VM only pulls, so no Next.js build ever runs on the 12GB box.
+# pushes all repo-built production/job images to GHCR; the VM only pulls, so no Next.js build ever runs on the 12GB box.
 name: ci
 
 on:
@@ -40,6 +40,27 @@ jobs:
           cache-dependency-path: services/frontend/package-lock.json
       - run: make test-frontend
 
+  frontend-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: services/frontend/package-lock.json
+      # Playwright starts its own dev server on :3100 against a mocked API,
+      # so this needs no database or running API.
+      - run: make test-frontend-e2e
+
+  dbt-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Builds the migrate + dbt images and seeds an ephemeral Postgres via
+      # docker-compose.e2e.yml; the target tears the stack down afterwards.
+      - run: make test-dbt
+
   python:
     runs-on: ubuntu-latest
     strategy:
@@ -59,7 +80,7 @@ jobs:
   # ubuntu-latest and qemu-emulate — the Next.js build takes ~10x longer.
   images:
     if: vars.ENABLE_OCI_DEPLOY == 'true' && github.event_name != 'pull_request'
-    needs: [quality, frontend, python]
+    needs: [quality, frontend, frontend-e2e, dbt-e2e, python]
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
@@ -77,13 +98,14 @@ jobs:
       # GHCR rejects uppercase path segments; owner casing is not guaranteed.
       - id: prefix
         run: echo "value=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/" >> "$GITHUB_OUTPUT"
-      - name: Bake and push api / frontend / migrate
+      - name: Bake and push production images
         run: docker buildx bake --file docker-bake.hcl --push prod
         env:
           DOCKER_TARGET: runtime
           PLATFORMS: linux/arm64
           IMAGE_PREFIX: ${{ steps.prefix.outputs.value }}
           IMAGE_TAG: ${{ github.sha }}
+          GIT_SHA: ${{ github.sha }}
           NEXT_PUBLIC_API_URL: https://baseline.jyablonski.dev
 
   deploy:

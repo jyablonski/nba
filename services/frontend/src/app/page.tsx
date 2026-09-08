@@ -17,6 +17,7 @@ import {
   formatWinPctPlain,
 } from "@/lib/format";
 import { withSeason } from "@/lib/nav";
+import { cn } from "@/lib/utils";
 import type { LeagueGame, StandingRow } from "@/lib/types";
 
 export default function HomePage() {
@@ -51,10 +52,9 @@ function HomeDesk() {
   const coverageSeason = status?.last_season ?? season ?? "—";
   const players = statusQuery.isError ? "—" : formatNumber(status?.player_count);
   const games = statusQuery.isError ? "—" : formatNumber(status?.game_count);
-  const seasonCount = statusQuery.isError ? "—" : formatNumber(status?.season_count);
 
-  const east = topConference(standingsQuery.data?.data ?? [], "east", 8);
-  const west = topConference(standingsQuery.data?.data ?? [], "west", 8);
+  const east = topConference(standingsQuery.data?.data ?? [], "east");
+  const west = topConference(standingsQuery.data?.data ?? [], "west");
 
   return (
     <div className="flex flex-col gap-[34px]">
@@ -65,7 +65,6 @@ function HomeDesk() {
           <Fact label="Coverage" value={coverageSeason} />
           <Fact label="Players in directory" value={statusQuery.isPending ? "—" : players} />
           <Fact label="Games" value={statusQuery.isPending ? "—" : games} />
-          <Fact label="Seasons" value={statusQuery.isPending ? "—" : seasonCount} />
         </dl>
       </section>
 
@@ -203,6 +202,11 @@ function GameRow({ game, season }: { game: LeagueGame; season: string }) {
   );
 }
 
+// Fixed team column: an auto-width one lets a wider abbreviation shove the
+// record out of line with the rows above it.
+const SNAPSHOT_GRID =
+  "grid grid-cols-[1.2rem_4.25rem_1fr_2.75rem] items-center gap-1 px-0.5 tabular";
+
 function SnapshotColumn({
   title,
   rows,
@@ -215,22 +219,23 @@ function SnapshotColumn({
   return (
     <div>
       <p className="type-eyebrow mb-2">{title}</p>
+      <div className={cn(SNAPSHOT_GRID, "type-eyebrow mb-1 text-muted-foreground")}>
+        <span />
+        <span />
+        <span>W–L</span>
+        <span className="text-right">Win %</span>
+      </div>
       <ol className="space-y-1.5 text-sm">
         {rows.map((row) => (
-          <li
-            key={row.team_id}
-            className="grid grid-cols-[1.2rem_auto_1fr_auto] items-center gap-1 px-0.5 hover:bg-row-hover"
-          >
-            <span className="tabular text-muted-foreground">{row.conference_rank ?? "—"}</span>
+          <li key={row.team_id} className={cn(SNAPSHOT_GRID, "hover:bg-row-hover")}>
+            <span className="text-muted-foreground">{row.conference_rank ?? "—"}</span>
             <TeamAbbrLink
               teamId={row.team_id}
               abbreviation={row.abbreviation}
               href={withSeason(`/teams/${row.team_id}`, season)}
             />
-            <span className="tabular text-muted-foreground">
-              {formatRecord(row.wins, row.losses)}
-            </span>
-            <span className="tabular">{formatWinPctPlain(row.win_pct)}</span>
+            <span className="text-muted-foreground">{formatRecord(row.wins, row.losses)}</span>
+            <span className="text-right">{formatWinPctPlain(row.win_pct)}</span>
           </li>
         ))}
       </ol>
@@ -238,11 +243,10 @@ function SnapshotColumn({
   );
 }
 
-function topConference(rows: StandingRow[], prefix: string, limit: number) {
+function topConference(rows: StandingRow[], prefix: string) {
   return rows
     .filter((row) => row.conference.toLowerCase().startsWith(prefix))
-    .sort(compareSnapshotRows)
-    .slice(0, limit);
+    .sort(compareSnapshotRows);
 }
 
 function compareSnapshotRows(a: StandingRow, b: StandingRow) {

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from contextlib import suppress
 from datetime import date, datetime
 from typing import Any
 
@@ -58,6 +59,12 @@ def bref_get(url: str, *, get: Callable[..., Any] | None = None) -> str:
     status = getattr(response, "status_code", None)
     if status is not None and int(status) >= 400:
         raise BrefHTTPError(int(status), url)
+    # BRef pages are UTF-8 but do not always declare a charset; requests then falls
+    # back to latin-1 per RFC 2616 and mangles accented names (Jokic -> JokiÄ‡).
+    content_type = str(getattr(response, "headers", None) or {}).lower()
+    if "charset=" not in content_type:
+        with suppress(AttributeError):
+            response.encoding = "utf-8"
     return str(response.text)
 
 
@@ -142,10 +149,22 @@ def to_float(value: Any) -> float | None:
         return None
 
 
+def repair_mojibake(value: str) -> str:
+    """Undo UTF-8 bytes that were decoded as latin-1 (JokiÄ‡ -> Jokic with acute).
+
+    Round-trips only when the string is fully latin-1 encodable *and* valid UTF-8
+    when re-decoded, so correctly decoded text and plain ASCII pass through as-is.
+    """
+    try:
+        return value.encode("latin-1").decode("utf-8")
+    except UnicodeEncodeError, UnicodeDecodeError:
+        return value
+
+
 def to_str(value: Any) -> str | None:
     if value is None:
         return None
-    text = str(value).strip()
+    text = repair_mojibake(str(value)).strip()
     return text or None
 
 
@@ -184,6 +203,7 @@ __all__ = [
     "BREF_REQUEST_DELAY_SECONDS",
     "BrefHTTPError",
     "bref_get",
+    "repair_mojibake",
     "bref_rate_limit",
     "current_season",
     "dataset_rows",

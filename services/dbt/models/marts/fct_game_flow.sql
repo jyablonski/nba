@@ -237,6 +237,110 @@ ranked_runs as (
     from run_candidates
 ),
 
+loser_margins as (
+    select
+        scoring.game_id,
+        scoring.period,
+        scoring.action_number,
+        scoring.elapsed_seconds,
+        case
+            when games.winning_team_id = games.home_team_id then -scoring.score_differential
+            when games.winning_team_id = games.away_team_id then scoring.score_differential
+        end as loser_margin
+    from scoring
+    inner join games
+        on scoring.game_id = games.game_id
+),
+
+ranked_loser_margins as (
+    select
+        loser_margins.game_id,
+        loser_margins.period,
+        loser_margins.elapsed_seconds,
+        loser_margins.loser_margin,
+        row_number() over (
+            partition by loser_margins.game_id
+            order by loser_margins.loser_margin desc, loser_margins.action_number asc
+        ) as margin_rank
+    from loser_margins
+    where loser_margins.loser_margin is not null
+),
+
+blown_lead as (
+    select
+        ranked_loser_margins.game_id,
+        greatest(ranked_loser_margins.loser_margin, 0) as largest_lead_blown,
+        case
+            when ranked_loser_margins.loser_margin > 0 then ranked_loser_margins.period
+        end as blown_lead_period,
+        case
+            when ranked_loser_margins.loser_margin > 0 then ranked_loser_margins.elapsed_seconds
+        end as blown_lead_elapsed_seconds
+    from ranked_loser_margins
+    where ranked_loser_margins.margin_rank = 1
+),
+
+period_end_ranks as (
+    select
+        scoring.game_id,
+        scoring.period,
+        scoring.score_differential,
+        row_number() over (
+            partition by scoring.game_id, scoring.period
+            order by scoring.action_number desc
+        ) as reverse_period_order
+    from scoring
+    where scoring.period between 1 and 4
+),
+
+period_end_margins as (
+    select
+        period_end_ranks.game_id,
+        period_end_ranks.period,
+        period_end_ranks.score_differential
+    from period_end_ranks
+    where period_end_ranks.reverse_period_order = 1
+),
+
+winner_period_margins as (
+    select
+        games.game_id,
+        max(
+            case
+                when period_end_margins.period = 2 then
+                    case
+                        when games.winning_team_id = games.home_team_id
+                            then period_end_margins.score_differential
+                        when games.winning_team_id = games.away_team_id
+                            then -period_end_margins.score_differential
+                    end
+            end
+        ) as winner_halftime_margin,
+        max(
+            case
+                when period_end_margins.period = 3 then
+                    case
+                        when games.winning_team_id = games.home_team_id
+                            then period_end_margins.score_differential
+                        when games.winning_team_id = games.away_team_id
+                            then -period_end_margins.score_differential
+                    end
+            end
+        ) as winner_margin_entering_fourth
+    from games
+    inner join period_end_margins
+        on games.game_id = period_end_margins.game_id
+    group by games.game_id
+),
+
+game_periods as (
+    select
+        scoring.game_id,
+        max(scoring.period) as final_period
+    from scoring
+    group by scoring.game_id
+),
+
 biggest_run as (
     select
         ranked_runs.game_id,
@@ -299,7 +403,30 @@ select
     biggest_run.biggest_run_opponent_points,
     biggest_run.biggest_run_start_seconds,
     biggest_run.biggest_run_end_seconds,
-    biggest_run.biggest_run_label
+    biggest_run.biggest_run_label,
+    coalesce(game_periods.final_period, 4) as final_period,
+    greatest(coalesce(game_periods.final_period, 4) - 4, 0) as overtime_periods,
+    coalesce(game_periods.final_period, 4) > 4 as went_to_overtime,
+    coalesce(blown_lead.largest_lead_blown, 0) as largest_lead_blown,
+    case
+        when coalesce(blown_lead.largest_lead_blown, 0) > 0
+            then case
+                when games.winning_team_id = games.home_team_id then games.away_team_abbreviation
+                when games.winning_team_id = games.away_team_id then games.home_team_abbreviation
+            end
+    end as blown_lead_team_abbreviation,
+    case
+        when coalesce(blown_lead.largest_lead_blown, 0) > 0
+            then case
+                when games.winning_team_id = games.home_team_id then games.home_team_abbreviation
+                when games.winning_team_id = games.away_team_id then games.away_team_abbreviation
+            end
+    end as comeback_team_abbreviation,
+    blown_lead.blown_lead_period,
+    blown_lead.blown_lead_elapsed_seconds,
+    coalesce(blown_lead.largest_lead_blown, 0) = 0 as is_wire_to_wire,
+    winner_period_margins.winner_halftime_margin,
+    winner_period_margins.winner_margin_entering_fourth
 from games
 inner join game_end
     on games.game_id = game_end.game_id
@@ -309,3 +436,9 @@ left join lead_events
     on games.game_id = lead_events.game_id
 left join biggest_run
     on games.game_id = biggest_run.game_id
+left join blown_lead
+    on games.game_id = blown_lead.game_id
+left join winner_period_margins
+    on games.game_id = winner_period_margins.game_id
+left join game_periods
+    on games.game_id = game_periods.game_id

@@ -5,6 +5,12 @@ import pytest
 from schema import validate_schema
 
 EXTRA_CUBES = """
+  - name: team_game_flow
+    sql: SELECT 1 FROM gold.fct_game_flow
+    measures:
+      - name: biggest_lead_blown
+      - name: biggest_comeback
+      - name: overtime_games
   - name: games_schedule
   - name: game_predictions
   - name: player_injuries

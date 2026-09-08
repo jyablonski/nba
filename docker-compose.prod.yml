@@ -1,13 +1,16 @@
-# Production overlay for docker-compose.yml. Do not start scraper / dbt / ml / cube / cron.
+# Production overlay for docker-compose.yml. Do not start scraper / dbt / ml / cron.
 # IMAGE_PREFIX/IMAGE_TAG select prebuilt registry images; unset means the local
 # `nba-*:latest` this box built. Set PUBLIC_URL to move off baseline.jyablonski.dev
 # (the Caddyfile hardcodes the same host separately — ACME needs it there).
-# Cube is on the local Tilt stack but stays off here (12GB VM). Ask/MCP need CUBE_API_URL; without Cube they fail clearly (no gold SQL fallback). REST over gold still works.
-# Usage: DOCKER_TARGET=runtime docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres api frontend mcp caddy
+# Cube runs on the production Compose network for Ask/MCP, but is not published to the host. Postgres is intentionally published for direct DBeaver access. REST over gold still works independently.
+# Usage: DOCKER_TARGET=runtime docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres api frontend mcp cube caddy
 # `ports: !reset []` (not a bare `[]`) is required so Compose drops the base file's published ports.
 services:
   postgres:
-    ports: !reset []
+    # Bind on all host interfaces so DBeaver can connect through the Oracle public IP.
+    # Override POSTGRES_PORT in the server .env to use a different external port.
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     mem_limit: 2g
     command:
       - postgres
@@ -29,24 +32,44 @@ services:
     build:
       args:
         NEXT_PUBLIC_API_URL: ${PUBLIC_URL:-https://baseline.jyablonski.dev}
+        NEXT_PUBLIC_GIT_SHA: ${GIT_SHA:-dev}
     environment:
       NEXT_PUBLIC_API_URL: ${PUBLIC_URL:-https://baseline.jyablonski.dev}
 
   # Base compose bind-mounts host code for local `compose run`. Runtime
   # images must stay baked; `!reset` (not a bare `[]`) drops the merge.
   scraper:
+    image: ${IMAGE_PREFIX:-}nba-scraper:${IMAGE_TAG:-latest}
     volumes: !reset []
 
   dbt:
+    image: ${IMAGE_PREFIX:-}nba-dbt:${IMAGE_TAG:-latest}
     volumes: !reset []
 
   ml:
+    image: ${IMAGE_PREFIX:-}nba-ml:${IMAGE_TAG:-latest}
     volumes: !reset []
 
   mcp:
     image: ${IMAGE_PREFIX:-}nba-mcp:${IMAGE_TAG:-latest}
     volumes: !reset []
     mem_limit: 512m
+    # Public MCP endpoint: http://<oracle-host>:8001/mcp
+    ports:
+      - "${MCP_HOST_PORT:-8001}:8000"
+    environment:
+      MCP_TRANSPORT: streamable-http
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8000"
+      MCP_PATH: /mcp
+      MCP_API_TOKEN: ${MCP_API_TOKEN:-}
+
+  cube:
+    image: ${IMAGE_PREFIX:-}nba-cube:${IMAGE_TAG:-latest}
+    ports: !reset []
+    mem_limit: 1g
+    environment:
+      CUBEJS_DEV_MODE: "false"
 
   caddy:
     image: caddy:2-alpine

@@ -179,3 +179,105 @@ def test_scrape_play_by_play_resolves_player_and_upserts(monkeypatch: pytest.Mon
     )
     assert written == 1
     assert captured[0][0]["team_id"] == team_id
+
+
+ASSISTED_PBP_HTML = """
+<table id="pbp"><tbody>
+  <tr class="thead" id="q1"><th colspan="6">1st Q</th></tr>
+  <tr>
+    <td>10:04.0</td>
+    <td></td><td></td><td>4-2</td><td></td>
+    <td>
+      <a href="/players/h/holmgch01.html">C. Holmgren</a> makes 2-pt layup from 1 ft
+      (assist by <a href="/players/d/dortlu01.html">L. Dort</a>)
+    </td>
+  </tr>
+</tbody></table>
+"""
+
+
+def _mangle(value: str) -> str:
+    """Reproduce UTF-8 bytes decoded as latin-1, the way requests mangles BRef."""
+    return value.encode("utf-8").decode("latin-1")
+
+
+@pytest.mark.unit
+def test_primary_player_is_the_actor_not_the_assister() -> None:
+    """BRef names the scorer first; crediting the last link would credit the assister."""
+    rows = parse_play_by_play_html(
+        ASSISTED_PBP_HTML,
+        game_id=uuid4(),
+        season="2025-26",
+        home_bref_abbreviation="OKC",
+        away_bref_abbreviation="HOU",
+    )
+    assert len(rows) == 1
+    assert rows[0]["player_external_id"] == "holmgch01"
+    assert rows[0]["secondary_player_external_id"] == "dortlu01"
+    assert rows[0]["team_bref_abbreviation"] == "OKC"
+
+
+@pytest.mark.unit
+def test_single_player_event_has_no_secondary() -> None:
+    rows = parse_play_by_play_html(
+        LIVE_PBP_HTML,
+        game_id=uuid4(),
+        season="2025-26",
+        home_bref_abbreviation="OKC",
+        away_bref_abbreviation="HOU",
+    )
+    assert rows[0]["player_external_id"] == "curryst01"
+    assert rows[0]["secondary_player_external_id"] is None
+
+
+@pytest.mark.unit
+def test_map_action_carries_secondary_player() -> None:
+    secondary = uuid4()
+    mapped = map_play_by_play_action(
+        {"action_number": 3, "secondary_player_id": secondary},
+        game_id=uuid4(),
+        season="2025-26",
+        scraped_at=datetime(2025, 10, 1),
+    )
+    assert mapped is not None
+    assert mapped["secondary_player_id"] == secondary
+
+
+@pytest.mark.unit
+def test_repair_mojibake_round_trip() -> None:
+    from scrapers import repair_mojibake
+
+    assert repair_mojibake(_mangle("Nikola Joki\u0107")) == "Nikola Joki\u0107"
+    assert repair_mojibake(_mangle("Dennis Schr\u00f6der")) == "Dennis Schr\u00f6der"
+    # Already-correct text and plain ASCII are left alone.
+    assert repair_mojibake("Nikola Joki\u0107") == "Nikola Joki\u0107"
+    assert repair_mojibake("Kevin Durant") == "Kevin Durant"
+
+
+@pytest.mark.unit
+def test_repair_encoded_text_updates_only_mangled_rows(monkeypatch: pytest.MonkeyPatch) -> None:
+    from scrapers import play_by_play as pbp
+
+    mangled_player = SimpleNamespace(
+        full_name=_mangle("Nikola Joki\u0107"), first_name="Nikola", last_name=None
+    )
+    clean_player = SimpleNamespace(full_name="Kevin Durant", first_name="Kevin", last_name="Durant")
+    mangled_action = SimpleNamespace(description=_mangle("Foul by A. \u015eeng\u00fcn"))
+    clean_action = SimpleNamespace(description="Foul by K. Durant")
+
+    def fake_query(model):
+        if model is pbp.Player:
+            return SimpleNamespace(all=lambda: [mangled_player, clean_player])
+        return SimpleNamespace(
+            filter=lambda *_: SimpleNamespace(all=lambda: [mangled_action, clean_action])
+        )
+
+    session = SimpleNamespace(query=fake_query)
+    monkeypatch.setattr(pbp, "get_session", lambda: _session(session))
+
+    assert pbp.repair_encoded_text() == (1, 1)
+    assert mangled_player.full_name == "Nikola Joki\u0107"
+    assert mangled_player.last_name == "Joki\u0107"
+    assert clean_player.full_name == "Kevin Durant"
+    assert mangled_action.description == "Foul by A. \u015eeng\u00fcn"
+    assert clean_action.description == "Foul by K. Durant"

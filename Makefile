@@ -5,13 +5,17 @@
 	pipeline-status pipeline-enable pipeline-disable scrape dbt ml refresh \
 	refresh-daily refresh-daily-once \
 	prod-config prod-up prod-migrate prod-deploy prod-release prod-build prod-pull \
+	prod-pipeline-status prod-pipeline-enable prod-pipeline-disable prod-refresh prod-refresh-daily prod-refresh-daily-once \
 	prod-health prod-prune quality
 
 COMPOSE ?= docker compose
 TILT ?= tilt
 DOCKER_TARGET ?= runtime
-# Same compose project as Tilt (directory name, usually nba).
-COMPOSE_PROJECT_NAME ?= $(notdir $(CURDIR))
+# Same compose project as Tilt. Pinned, not derived from the directory name:
+# Compose namespaces volumes by project, so renaming the checkout would point at
+# a fresh, empty `<dir>_pgdata` and the warehouse would look wiped. Changing this
+# value has the same effect — migrate the volume first if you ever do.
+COMPOSE_PROJECT_NAME ?= nba
 export COMPOSE_PROJECT_NAME
 # One-shots must not reconcile depends_on postgres (recreates Tilt's container).
 COMPOSE_RUN_TOOLS = $(COMPOSE) --profile tools run --rm --no-deps
@@ -37,8 +41,8 @@ up: ## Start the stack with Tilt (hot reload)
 prod-config: ## Validate prod overlay
 	$(COMPOSE_PROD) config
 
-prod-up: ## Runtime images + caddy (needs DOCKER_TARGET=runtime)
-	DOCKER_TARGET=runtime $(COMPOSE_PROD) up -d postgres api frontend mcp caddy
+prod-up: ## Runtime images + cube + caddy (needs DOCKER_TARGET=runtime)
+	DOCKER_TARGET=runtime $(COMPOSE_PROD) up -d postgres api frontend mcp cube caddy
 
 prod-migrate: ## Alembic upgrade head via prod overlay (one-shot; does not recreate postgres)
 	DOCKER_TARGET=runtime $(COMPOSE_PROD) run --rm --no-deps migrate alembic upgrade head
@@ -70,10 +74,31 @@ prod-release: $(PROD_IMAGES) ## Images, migrate, up, caddy reload, health gate, 
 
 # `--parallel 1` keeps the Next.js build (2-4GB peak) from racing the others.
 prod-build: ## Build runtime images on this machine (on-box deploy path)
-	DOCKER_TARGET=runtime $(COMPOSE_PROD) build --parallel 1 api frontend migrate mcp
+	DOCKER_TARGET=runtime $(COMPOSE_PROD) build --parallel 1 api frontend migrate mcp cube scraper dbt ml
 
 prod-pull: ## Pull prebuilt runtime images (registry deploy path; needs IMAGE_PREFIX)
-	$(COMPOSE_PROD) pull postgres caddy migrate api frontend mcp
+	$(COMPOSE_PROD) pull postgres caddy migrate api frontend mcp cube scraper dbt ml
+
+prod-pipeline-status: ## Show the production scrape gate using registry images
+	@test -n "$(IMAGE_PREFIX)" || { echo "prod-pipeline-status requires IMAGE_PREFIX=ghcr.io/<owner>/" >&2; exit 1; }
+	COMPOSE="$(COMPOSE_PROD)" $(MAKE) pipeline-status
+
+prod-pipeline-enable: ## Enable the production daily scrape gate
+	@test -n "$(IMAGE_PREFIX)" || { echo "prod-pipeline-enable requires IMAGE_PREFIX=ghcr.io/<owner>/" >&2; exit 1; }
+	COMPOSE="$(COMPOSE_PROD)" $(MAKE) pipeline-enable
+
+prod-pipeline-disable: ## Disable the production daily scrape gate
+	@test -n "$(IMAGE_PREFIX)" || { echo "prod-pipeline-disable requires IMAGE_PREFIX=ghcr.io/<owner>/" >&2; exit 1; }
+	COMPOSE="$(COMPOSE_PROD)" $(MAKE) pipeline-disable
+
+prod-refresh: ## Run the production scrape -> dbt -> ml job using registry images
+	@test -n "$(IMAGE_PREFIX)" || { echo "prod-refresh requires IMAGE_PREFIX=ghcr.io/<owner>/" >&2; exit 1; }
+	COMPOSE="$(COMPOSE_PROD)" FORCE=0 ./scripts/refresh-daily.sh
+
+prod-refresh-daily: prod-refresh ## Alias for prod-refresh
+
+prod-refresh-daily-once: ## Force one production scrape -> dbt -> ml cycle
+	COMPOSE="$(COMPOSE_PROD)" FORCE=1 ./scripts/refresh-daily.sh
 
 # Probe from inside the compose network: a deploy must not depend on public DNS
 # or on Caddy already holding a cert. Caddy's alpine image ships busybox wget.
@@ -85,9 +110,19 @@ done; \
 echo "prod-health: $(2) never answered at $(1)" >&2; exit 1
 endef
 
-prod-health: ## Fail the deploy if api or frontend did not come back up
+prod-health: ## Fail the deploy if api, frontend, cube, or mcp did not come back up
 	@$(call wait_ok,http://api:8000/health,api)
 	@$(call wait_ok,http://frontend:3000/,frontend)
+	@for i in $$(seq 1 20); do \
+		if $(COMPOSE_PROD) exec -T api python -c 'import http.client; c=http.client.HTTPConnection("cube", 4000, timeout=3); c.request("GET", "/cubejs-api/v1/meta"); raise SystemExit(0 if c.getresponse().status < 500 else 1)' >/dev/null 2>&1; then exit 0; fi; \
+		sleep 3; \
+	done; \
+	echo "prod-health: cube never answered at http://cube:4000/cubejs-api/v1/meta" >&2; exit 1
+	@for i in $$(seq 1 20); do \
+		if $(COMPOSE_PROD) exec -T api python -c 'import socket; s=socket.create_connection(("mcp", 8000), timeout=3); s.close()' >/dev/null 2>&1; then exit 0; fi; \
+		sleep 3; \
+	done; \
+	echo "prod-health: mcp never answered on mcp:8000" >&2; exit 1
 
 # Dangling layers only. `-a` would delete the previous release's images and
 # with them the fast rollback path.

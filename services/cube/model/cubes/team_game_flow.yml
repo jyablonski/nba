@@ -1,0 +1,161 @@
+# One row per team per game (home and away unpivoted from gold.fct_game_flow).
+# Game-grain flow cannot express "this team blew the lead" — largest_lead_blown
+# always belongs to the loser, so it is split into lead_blown / comeback_from here.
+cubes:
+  - name: team_game_flow
+    sql: |
+      SELECT
+        game_id || '-' || CAST(home_team_id AS VARCHAR) AS id,
+        game_id,
+        season,
+        game_date,
+        home_team_id AS team_id,
+        home_team_abbreviation AS team_abbreviation,
+        away_team_abbreviation AS opponent_abbreviation,
+        'home' AS location,
+        CASE WHEN winning_team_id = home_team_id THEN 'W' ELSE 'L' END AS result,
+        max_home_lead AS largest_lead,
+        CASE WHEN winning_team_id = home_team_id THEN 0 ELSE largest_lead_blown END AS lead_blown,
+        CASE WHEN winning_team_id = home_team_id THEN largest_lead_blown ELSE 0 END AS comeback_from,
+        lead_changes,
+        ties,
+        final_period,
+        overtime_periods,
+        went_to_overtime,
+        is_wire_to_wire
+      FROM gold.fct_game_flow
+      UNION ALL
+      SELECT
+        game_id || '-' || CAST(away_team_id AS VARCHAR) AS id,
+        game_id,
+        season,
+        game_date,
+        away_team_id AS team_id,
+        away_team_abbreviation AS team_abbreviation,
+        home_team_abbreviation AS opponent_abbreviation,
+        'away' AS location,
+        CASE WHEN winning_team_id = away_team_id THEN 'W' ELSE 'L' END AS result,
+        max_away_lead AS largest_lead,
+        CASE WHEN winning_team_id = away_team_id THEN 0 ELSE largest_lead_blown END AS lead_blown,
+        CASE WHEN winning_team_id = away_team_id THEN largest_lead_blown ELSE 0 END AS comeback_from,
+        lead_changes,
+        ties,
+        final_period,
+        overtime_periods,
+        went_to_overtime,
+        is_wire_to_wire
+      FROM gold.fct_game_flow
+
+    joins:
+      - name: teams
+        sql: "{CUBE}.team_id = {teams}.team_id"
+        relationship: many_to_one
+
+    dimensions:
+      - name: id
+        sql: id
+        type: string
+        primary_key: true
+        public: true
+
+      - name: game_id
+        sql: game_id
+        type: string
+
+      - name: game_date
+        sql: game_date
+        type: time
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: team_id
+        sql: team_id
+        type: string
+
+      - name: team_abbreviation
+        sql: team_abbreviation
+        type: string
+
+      - name: opponent_abbreviation
+        sql: opponent_abbreviation
+        type: string
+
+      - name: location
+        sql: location
+        type: string
+
+      - name: result
+        sql: result
+        type: string
+
+      - name: went_to_overtime
+        sql: went_to_overtime
+        type: boolean
+
+      - name: is_wire_to_wire
+        sql: is_wire_to_wire
+        type: boolean
+
+    measures:
+      - name: games
+        sql: game_id
+        type: count_distinct
+
+      - name: largest_lead
+        description: Biggest lead this team held in a single game.
+        sql: largest_lead
+        type: max
+
+      - name: avg_largest_lead
+        sql: largest_lead
+        type: avg
+
+      - name: biggest_lead_blown
+        description: Biggest lead this team held in a game it went on to lose.
+        sql: lead_blown
+        type: max
+
+      - name: biggest_comeback
+        description: Biggest deficit this team erased in a game it went on to win.
+        sql: comeback_from
+        type: max
+
+      - name: blown_leads
+        description: Losses in which this team led by 10 or more at some point.
+        sql: game_id
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.lead_blown >= 10"
+
+      - name: comeback_wins
+        description: Wins in which this team trailed by 10 or more at some point.
+        sql: game_id
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.comeback_from >= 10"
+
+      - name: wire_to_wire_wins
+        sql: game_id
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.result = 'W'"
+          - sql: "{CUBE}.is_wire_to_wire"
+
+      - name: overtime_games
+        sql: game_id
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.went_to_overtime"
+
+      - name: overtime_wins
+        sql: game_id
+        type: count_distinct
+        filters:
+          - sql: "{CUBE}.went_to_overtime"
+          - sql: "{CUBE}.result = 'W'"
+
+      - name: avg_lead_changes
+        sql: lead_changes
+        type: avg

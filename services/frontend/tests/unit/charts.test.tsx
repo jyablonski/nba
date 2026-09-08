@@ -200,11 +200,18 @@ describe("charts", () => {
         />
       </svg>
     );
-    expect(logo.querySelectorAll("circle")).toHaveLength(1);
-    expect(logo.querySelector("image")).toHaveAttribute(
+    // Markers are the bare logo: no background circle, no clip.
+    expect(logo.querySelectorAll("circle")).toHaveLength(0);
+    const image = logo.querySelector("image");
+    expect(image).toHaveAttribute(
       "href",
       "https://cdn.nba.com/logos/nba/1610612756/primary/L/logo.svg"
     );
+    expect(image).toHaveAttribute("width", "42.5");
+    expect(image).toHaveAttribute("height", "42.5");
+    expect(image).toHaveAttribute("x", "18.75");
+    expect(image).toHaveAttribute("y", "18.75");
+    expect(image).not.toHaveAttribute("clip-path");
     expect(logo.querySelector("text")).toBeNull();
     expect(logo.querySelector("title")).toBeNull();
     render(

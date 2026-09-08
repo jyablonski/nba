@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from queries.games import (
     GAME_EXISTS,
     GET_GAME_FLOW,
+    LIST_BIGGEST_COLLAPSES,
     LIST_GAMES,
     LIST_GAMES_COUNT,
     LIST_PLAY_BY_PLAY,
@@ -58,6 +59,10 @@ class GamesRepository:
         total = self.db.execute(LIST_SCHEDULE_COUNT, params).scalar_one()
         rows = self.db.execute(LIST_SCHEDULE, params)
         return int(total), [dict(row._mapping) for row in rows]
+
+    def list_biggest_collapses(self, *, season: str | None, limit: int) -> list[dict]:
+        rows = self.db.execute(LIST_BIGGEST_COLLAPSES, {"season": season, "limit": limit})
+        return [dict(row._mapping) for row in rows]
 
     def list_seasons(self) -> list[str]:
         rows = self.db.execute(LIST_SEASONS)

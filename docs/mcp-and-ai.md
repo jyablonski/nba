@@ -8,11 +8,11 @@ MCP exposes structured NBA analytics tools to LLM hosts (for example Claude Desk
 
 ## Use case
 
-Wire `services/mcp` into an MCP-capable client when you want chat-driven analytics over the same Cube model Ask uses. Operators still need scraper + dbt first; empty `gold` tables mean empty Cube results. MCP starts in the default local and production Compose stacks; scraper and dbt remain in profile `tools`. MCP needs Cube (`CUBE_API_URL`, `CUBEJS_API_SECRET`); Cube down → clear tool error, no gold SQL fallback.
+Wire `services/mcp` into an MCP-capable client when you want chat-driven analytics over the same Cube model Ask uses. Operators still need scraper + dbt first; empty `gold` tables mean empty Cube results. MCP and Cube start in the default local and production Compose stacks; scraper and dbt remain in profile `tools`. MCP needs Cube (`CUBE_API_URL`, `CUBEJS_API_SECRET`); Cube down → clear tool error, no gold SQL fallback.
 
 ## How it works today
 
-The server is FastMCP (`uv run src/server.py`, stdio for clients). It reads Cube (`CUBE_API_URL`, default host `http://localhost:4000`) with `CUBEJS_API_SECRET`. Python pin is **3.14**. It does not open Postgres for query tools.
+The server is FastMCP (`uv run src/server.py`, stdio for local clients by default). The production Compose overlay switches it to Streamable HTTP at `/mcp`, listens on container port 8000, and publishes host port 8001. HTTP clients must send `Authorization: Bearer $MCP_API_TOKEN`; this token is separate from `CUBEJS_API_SECRET`, which only authenticates MCP to Cube. It reads Cube (`CUBE_API_URL`, default host `http://localhost:4000`) with `CUBEJS_API_SECRET`. Python pin is **3.14**. It does not open Postgres for query tools.
 
 Named tools (Cube wrappers):
 
@@ -72,6 +72,6 @@ Injuries / odds / PBP / reddit / Elo WP / full slate are queryable via Cube/MCP/
 
 These ideas appear in product direction but must not be described as present behavior:
 
-Streaming replies in `/ask`. A production-hardened LLM product (retries, auth, rate limits, eval against a hosted model). Cursor Pro as MCP host vs Courtline `/ask` providers: [plans/ask-llm-providers.md](plans/ask-llm-providers.md). Cube SQL API / pre-aggregates. Cube on the 12GB production VM (off today). Historical paid-salary ledger (BRef remaining-year snapshot is current). Courtline win-prob badge / “who wins tonight”.
+Streaming replies in `/ask`. A production-hardened LLM product (retries, auth, rate limits, eval against a hosted model). Cursor Pro as MCP host vs Courtline `/ask` providers: [plans/ask-llm-providers.md](plans/ask-llm-providers.md). Cube SQL API / pre-aggregates. Historical paid-salary ledger (BRef remaining-year snapshot is current). Courtline win-prob badge / “who wins tonight”.
 
 Label anything in this section as future work when writing code or docs elsewhere.

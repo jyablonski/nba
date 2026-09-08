@@ -9,8 +9,9 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "sqlfluff==4.3.0",
     "sqlfluff-templater-dbt==4.3.0",
+    "sqlfluff==4.3.0",
+    "ty==0.0.78",
 ]
 
 [tool.uv]
@@ -74,3 +75,7 @@ forbid_qualified = false
 [tool.sqlfluff.rules.references.keywords]
 # NBA domain columns that collide with SQL keywords (e.g. LOCATION).
 ignore_words = "location,result,source"
+
+# dbt ships no Python source; this only anchors ty to this project.
+[tool.ty.environment]
+python-version = "3.13"

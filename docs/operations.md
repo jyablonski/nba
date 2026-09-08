@@ -14,7 +14,26 @@ make up                 # Tilt: postgres, migrate, cube, api, frontend
 make db-migrate         # after new Alembic revisions (exited migrate is not re-run)
 ```
 
-Keep `DATABASE_URL` in sync with the Postgres settings. Wipe a stale volume only when you intend to: `docker compose down -v`. Local Cube is a RAM hog (~400–800 MB); it is on Tilt because Ask/MCP require it. Production overlay leaves Cube off.
+Keep `DATABASE_URL` in sync with the Postgres settings. Wipe a stale volume only when you intend to: `docker compose down -v`. Cube is a RAM hog (~400–800 MB), so the production overlay gives it a 1 GB memory limit and keeps it internal to Compose; monitor VM memory when running refresh jobs alongside the always-on stack.
+
+## Direct production database access
+
+The production overlay publishes Postgres on `${POSTGRES_PORT:-5432}:5432` for direct tools such as DBeaver. The database remains on port `5432` inside the Compose network, so API, Cube, dbt, and migrations continue using `postgres:5432`. Set `POSTGRES_PORT` in the Oracle host's `.env` if the external port should differ, then run `make prod-up` or `make prod-release` to recreate the mapping.
+
+Docker listens on all host interfaces for this mapping. To reach it from a local machine, allow inbound TCP on the selected port in the OCI VCN security list or network security group and any host firewall, then use the Oracle public IP or DNS name in DBeaver:
+
+```text
+Host: <oracle-public-ip-or-dns>
+Port: 5432 (or POSTGRES_PORT)
+Database: POSTGRES_DB
+Username: POSTGRES_USER
+Password: POSTGRES_PASSWORD
+SSL: disabled unless separately configured
+```
+
+The credentials are the values in `/opt/nba/.env`; never paste them into the repository or logs. From the Oracle host, verify the listener with `sudo ss -ltnp | grep ':5432'` and test the OCI path from the workstation with `nc -vz <oracle-public-ip-or-dns> 5432`. Publishing the database port does not expose Cube or change the private Compose URLs.
+
+Production MCP uses Streamable HTTP on `http://<oracle-public-ip-or-dns>:8001/mcp` and requires `Authorization: Bearer <MCP_API_TOKEN>`. Allow inbound TCP 8001 in the OCI VCN security list or network security group and any host firewall. The MCP service remains stdio for local development; `MCP_TRANSPORT=stdio` is the default in `.env`.
 
 First load is manual (not `refresh-daily`): current-season / Courtline smoke is `scrape-all --active-only` (default ingest is the latest season) then dbt `seed`/`run`/`test` via profile `tools`. See [data.md](data.md). Omit `--active-only` only for full career-directory history. Pass `--seasons` for a later backfill. `scrape-all` skips Reddit unless `--with-reddit`. Injuries and odds are current snapshots, not the historical loop.
 
@@ -31,6 +50,11 @@ make dbt                                # dbt deps + seed + run + test
 make ml                                 # Elo score then gold copy
 make refresh                            # scrape then dbt then ml (alias: refresh-daily)
 make refresh-daily-once                 # FORCE=1 bypass for a manual test
+
+# Oracle production jobs use the pulled GHCR images and the prod overlay:
+IMAGE_PREFIX=ghcr.io/<owner>/ IMAGE_TAG=latest make prod-pipeline-enable
+IMAGE_PREFIX=ghcr.io/<owner>/ IMAGE_TAG=latest make prod-refresh
+IMAGE_PREFIX=ghcr.io/<owner>/ IMAGE_TAG=latest make prod-refresh-daily-once # FORCE=1 bypass for a manual test
 ```
 
 `scripts/refresh-daily.sh` waits for an **existing** healthy Postgres. It will not `compose up postgres` (that recreates Tilt’s container; `init.sql` does not re-run on existing `pgdata`). Local `compose run` bind-mounts host models/src (same as `docker-compose.yml`); YAML/SQL/Python edits need no image rebuild. It skips `compose build` unless `BUILD=1` or `SKIP_BUILD=0` (Dockerfile / lockfile / package changes), then:
@@ -68,7 +92,7 @@ dbt and ml failures fail the shell. They do **not** send a second Slack post.
 
 Not started by `make up` / Tilt. After `make pipeline-enable`, prefer host cron:
 
-`15 8 * * * cd /path/to/nba && make refresh`
+For the Oracle VM, pass the registry coordinates so the prod overlay selects the images pulled from GHCR: `15 8 * * * cd /opt/nba && IMAGE_PREFIX=ghcr.io/<owner>/ IMAGE_TAG=latest make prod-refresh`.
 
 Compose profile `cron` runs `python -m main pipeline run-once` only — **no dbt, no Elo**. Do not treat that container as a full refresh.
 

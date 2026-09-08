@@ -25,6 +25,17 @@ repos:
         exclude: ^(package-lock\.json|.*uv\.lock|htmlcov/|.*coverage/)
         entry: node services/frontend/node_modules/prettier/bin/prettier.cjs --write
         pass_filenames: true
+      # ty runs per service: each has its own venv and its own src on the module
+      # path, so a single repo-wide invocation would resolve imports against the
+      # wrong environment. --python is explicit because pre-commit exports the
+      # root VIRTUAL_ENV, which ty would otherwise use to resolve third-party
+      # imports. Production source only; tests use duck-typed doubles.
+      - id: ty
+        name: ty
+        language: system
+        pass_filenames: false
+        files: ^services/(api|scraper|mcp|cube|ml|migrate)/.*\.py$
+        entry: bash -c 'for s in api scraper mcp cube ml migrate; do echo "-- ty $s"; (cd "services/$s" && ./.venv/bin/ty check --python .venv) || exit 1; done'
       - id: frontend-eslint
         name: frontend eslint
         language: system

@@ -318,6 +318,9 @@ class PlayByPlay(Base):
     player_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("source.players.player_id")
     )
+    secondary_player_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.players.player_id")
+    )
     action_type: Mapped[str | None] = mapped_column(String(50))
     sub_type: Mapped[str | None] = mapped_column(String(80))
     description: Mapped[str | None] = mapped_column(Text)
