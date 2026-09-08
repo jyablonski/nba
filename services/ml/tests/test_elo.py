@@ -1,4 +1,5 @@
 from datetime import date
+from uuid import UUID
 
 import pytest
 
@@ -24,11 +25,11 @@ def _game(
     home_won: bool | None,
 ) -> GameRow:
     return GameRow(
-        game_id=game_id,
+        game_id=UUID(int=int(game_id)),
         game_date=day,
         season=season,
-        home_team_id=home,
-        away_team_id=away,
+        home_team_id=UUID(int=home),
+        away_team_id=UUID(int=away),
         home_won=home_won,
     )
 
@@ -48,8 +49,8 @@ def test_walk_forward_updates_after_result_not_before() -> None:
     ]
     preds, ratings = walk_forward(games)
     assert preds[0] == expected_home_win(INITIAL_RATING, INITIAL_RATING)
-    assert ratings[1] > INITIAL_RATING
-    assert ratings[2] < INITIAL_RATING
+    assert ratings[UUID(int=1)] > INITIAL_RATING
+    assert ratings[UUID(int=2)] < INITIAL_RATING
     assert preds[1] > preds[0]
 
 
@@ -65,10 +66,10 @@ def test_walk_forward_does_not_use_same_game_score() -> None:
 
 @pytest.mark.unit
 def test_season_reset_regresses_toward_mean() -> None:
-    ratings = {1: 1700.0, 2: 1300.0}
+    ratings = {UUID(int=1): 1700.0, UUID(int=2): 1300.0}
     reset = regress_ratings(ratings)
-    assert INITIAL_RATING < reset[1] < 1700.0
-    assert 1300.0 < reset[2] < INITIAL_RATING
+    assert INITIAL_RATING < reset[UUID(int=1)] < 1700.0
+    assert 1300.0 < reset[UUID(int=2)] < INITIAL_RATING
 
 
 @pytest.mark.unit
@@ -86,11 +87,11 @@ def test_fit_then_score_upcoming() -> None:
 @pytest.mark.unit
 def test_game_row_from_mapping_winner_location() -> None:
     row = {
-        "game_id": "002",
+        "game_id": UUID("00000000-0000-4000-8000-000000000102"),
         "game_date": date(2024, 10, 22),
         "season": "2024-25",
-        "home_team_id": 1,
-        "away_team_id": 2,
+        "home_team_id": UUID(int=1),
+        "away_team_id": UUID(int=2),
         "winner_location": "away",
     }
     parsed = game_row_from_mapping(row)

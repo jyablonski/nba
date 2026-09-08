@@ -178,9 +178,9 @@ export const api = {
       )
     ),
 
-  getPlayer: async (id: number) => asData<PlayerDetail>(await fetchApi(`/api/v1/players/${id}`)),
+  getPlayer: async (id: string) => asData<PlayerDetail>(await fetchApi(`/api/v1/players/${id}`)),
 
-  getPlayerGameLog: async (id: number, params: GameLogParams = {}) =>
+  getPlayerGameLog: async (id: string, params: GameLogParams = {}) =>
     asPaginated<GameLogEntry>(
       await fetchApi(
         `/api/v1/players/${id}/game-log${buildQuery({
@@ -194,12 +194,12 @@ export const api = {
       )
     ),
 
-  getPlayerBackToBacks: async (id: number, season?: string) =>
+  getPlayerBackToBacks: async (id: string, season?: string) =>
     asData<BackToBackStats>(
       await fetchApi(`/api/v1/players/${id}/back-to-backs${buildQuery({ season })}`)
     ),
 
-  comparePlayers: async (ids: number[], stat?: string) =>
+  comparePlayers: async (ids: string[], stat?: string) =>
     asPaginated<PlayerComparison>(
       await fetchApi(
         `/api/v1/players/compare${buildQuery({
@@ -209,7 +209,7 @@ export const api = {
       )
     ),
 
-  comparePlayersHeadToHead: async (ids: number[]) =>
+  comparePlayersHeadToHead: async (ids: string[]) =>
     asData<HeadToHeadComparison>(
       await fetchApi(
         `/api/v1/players/compare/head-to-head${buildQuery({
@@ -223,9 +223,9 @@ export const api = {
       await fetchApi(`/api/v1/teams${buildQuery({ season: params.season })}`)
     ),
 
-  getTeam: async (id: number) => asData<TeamDetail>(await fetchApi(`/api/v1/teams/${id}`)),
+  getTeam: async (id: string) => asData<TeamDetail>(await fetchApi(`/api/v1/teams/${id}`)),
 
-  getTeamGames: async (id: number, params: TeamGamesParams = {}) =>
+  getTeamGames: async (id: string, params: TeamGamesParams = {}) =>
     asPaginated<TeamGame>(
       await fetchApi(
         `/api/v1/teams/${id}/games${buildQuery({
@@ -241,7 +241,7 @@ export const api = {
       )
     ),
 
-  getTeamRecord: async (id: number, params: TeamRecordParams = {}) =>
+  getTeamRecord: async (id: string, params: TeamRecordParams = {}) =>
     asData<TeamRecord>(
       await fetchApi(
         `/api/v1/teams/${id}/record${buildQuery({
@@ -267,7 +267,7 @@ export const api = {
 
   listSeasons: async () => asSeasons(await fetchApi("/api/v1/seasons")),
 
-  getPlayerSeasonStats: async (id: number) =>
+  getPlayerSeasonStats: async (id: string) =>
     asPaginated<PlayerSeasonStats>(await fetchApi(`/api/v1/players/${id}/season-stats`)),
 
   getStatus: async () => asData<WarehouseStatus>(await fetchApi("/api/v1/status")),

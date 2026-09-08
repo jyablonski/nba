@@ -58,12 +58,12 @@ def test_parse_injuries_html_fixture() -> None:
     curry = next(row for row in rows if row["player_name"] == "Stephen Curry")
     assert curry["bref_player_slug"] == "curryst01"
     assert curry["bref_team_abbreviation"] == "GSW"
-    assert curry["nba_team_abbreviation"] == "GSW"
+    assert "team_id" not in curry
     assert curry["update_date"] == date(2026, 9, 3)
     assert "Ankle" in curry["description"]
     kawhi = next(row for row in rows if row["player_name"] == "Kawhi Leonard")
     assert kawhi["bref_team_abbreviation"] == "LAC"
-    assert kawhi["nba_team_abbreviation"] == "LAC"
+    assert "team_id" not in kawhi
 
 
 @pytest.mark.unit
@@ -83,6 +83,9 @@ def test_parse_injuries_empty_without_table() -> None:
 def test_scrape_injuries_upserts_and_deletes_stale(monkeypatch: pytest.MonkeyPatch) -> None:
     session = MagicMock()
     monkeypatch.setattr("scrapers.injuries.get_session", lambda: _session(session))
+    monkeypatch.setattr("scrapers.injuries.seed_team_catalog", lambda *args, **kwargs: 30)
+    monkeypatch.setattr("scrapers.injuries.resolve_team_id", lambda _session, code: code)
+    monkeypatch.setattr("scrapers.injuries.ensure_player", lambda *args, **kwargs: "player-id")
     captured: list[list[dict]] = []
 
     def fake_upsert(_session, _model, rows, _conflict):

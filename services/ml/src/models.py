@@ -1,6 +1,8 @@
 from datetime import datetime
+from uuid import UUID
 
 from sqlalchemy import DateTime, Float, Integer, String, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -21,12 +23,12 @@ class GamePrediction(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    game_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    game_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     as_of: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     model_name: Mapped[str] = mapped_column(String(50), nullable=False)
     model_version: Mapped[str] = mapped_column(String(50), nullable=False)
-    home_team_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    away_team_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    home_team_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    away_team_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     model_wp: Mapped[float] = mapped_column(Float, nullable=False)
     market_wp: Mapped[float | None] = mapped_column(Float)
     scraped_at: Mapped[datetime] = mapped_column(

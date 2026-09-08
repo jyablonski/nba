@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from sqlalchemy.orm import Session
 
 from queries.teams import (
@@ -21,10 +23,10 @@ class TeamsRepository:
 
     @staticmethod
     def game_filter_params(
-        team_id: int,
+        team_id: UUID,
         *,
         season: str | None = None,
-        opponent_team_id: int | None = None,
+        opponent_team_id: UUID | None = None,
         location: str | None = None,
         since_season: str | None = None,
         arena_city: str | None = None,
@@ -47,7 +49,7 @@ class TeamsRepository:
             params["offset"] = offset
         return params
 
-    def get_team(self, team_id: int) -> dict | None:
+    def get_team(self, team_id: UUID) -> dict | None:
         row = self.db.execute(TEAM_BY_ID, {"team_id": team_id}).mappings().first()
         return dict(row) if row is not None else None
 
@@ -62,7 +64,7 @@ class TeamsRepository:
         rows = self.db.execute(LIST_TEAMS, {"season": season, "limit": limit, "offset": offset})
         return int(total), [dict(row._mapping) for row in rows]
 
-    def latest_season_for_team(self, team_id: int) -> str | None:
+    def latest_season_for_team(self, team_id: UUID) -> str | None:
         return self.db.execute(LATEST_SEASON_FOR_TEAM, {"team_id": team_id}).scalar()
 
     def compute_record(self, team: dict, params: dict) -> dict:

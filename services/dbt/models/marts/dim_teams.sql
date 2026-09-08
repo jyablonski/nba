@@ -3,11 +3,20 @@ with teams as (
 ),
 
 current_arenas as (
-    select * from {{ ref('nba_team_arenas') }}
+    select
+        team_id::uuid as team_id,
+        arena_name,
+        arena_latitude,
+        arena_longitude
+    from {{ ref('nba_team_arenas') }}
 ),
 
 team_colors as (
-    select * from {{ ref('nba_team_colors') }}
+    select
+        team_id::uuid as team_id,
+        primary_color,
+        alternate_color
+    from {{ ref('nba_team_colors') }}
 ),
 
 payroll as (
@@ -49,7 +58,7 @@ current_team_payroll as (
     inner join current_payroll_season
         on payroll.season = current_payroll_season.season
     inner join teams
-        on payroll.nba_team_abbreviation = teams.abbreviation
+        on payroll.team_id = teams.team_id
     left join cba_caps
         on payroll.season = cba_caps.season
 )

@@ -40,7 +40,6 @@ describe("about page", () => {
     expect(screen.getByRole("heading", { name: "Sources" })).toBeInTheDocument();
     const sources = screen.getByRole("heading", { name: "Sources" }).closest("section");
     expect(sources).toBeTruthy();
-    expect(within(sources!).getByText("NBA Stats")).toBeInTheDocument();
     expect(within(sources!).getByText("Basketball-Reference")).toBeInTheDocument();
     expect(within(sources!).getByText("The Odds API")).toBeInTheDocument();
     expect(within(sources!).getByText(/r\/nba posts/)).toBeInTheDocument();

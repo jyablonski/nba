@@ -16,7 +16,6 @@ const HIDDEN_COLUMNS = new Set([
   "match_method",
   "source",
   "is_active",
-  "nba_team_abbreviation",
 ]);
 
 const ALIAS_IF_PREFERRED = [

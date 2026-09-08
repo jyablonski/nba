@@ -3,7 +3,7 @@ version: 2
 models:
   - name: int_play_by_play_scoring
     description: >
-      Scoring plays only from PlayByPlayV3. A scoring play is a row where the
+      Scoring plays only from Basketball-Reference play-by-play. A scoring play is a row where the
       running home or away score changes. Grain is game_id x action_number.
       Clock is parsed to remaining and elapsed seconds (Q1–Q4 = 720s, OT = 300s).
       Differential is home minus away. Season-scoped ingest; not a full-history backfill.

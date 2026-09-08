@@ -15,7 +15,6 @@ from bs4 import BeautifulSoup, Comment, Tag
 
 from scrapers.contracts_parse import (
     PLAYER_HREF_RE,
-    nba_team_abbreviation,
     normalize_player_name,
 )
 
@@ -248,7 +247,6 @@ def parse_injuries_html(html: str, *, source_url: str = INJURIES_URL) -> list[di
                     "player_name_normalized": normalized,
                     "bref_player_slug": slug,
                     "bref_team_abbreviation": bref,
-                    "nba_team_abbreviation": nba_team_abbreviation(bref),
                     "update_date": parse_update_date(update_raw),
                     "description": description,
                     "source_url": source_url,

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   FALLBACK_AWAY,
   FALLBACK_HOME,
+  colorForScoringSide,
   colorsCollide,
   ensureReadableOnChart,
   isTooDarkOnChart,
@@ -10,6 +11,16 @@ import {
   normalizeHex,
   resolvePlotColors,
 } from "@/lib/team-colors";
+
+describe("colorForScoringSide", () => {
+  const colors = { home: "#111111", away: "#222222", tied: "#333333" };
+
+  it("uses the scoring team's color independently of the score differential", () => {
+    expect(colorForScoringSide("home", colors)).toBe("#111111");
+    expect(colorForScoringSide("away", colors)).toBe("#222222");
+    expect(colorForScoringSide(null, colors)).toBe("#333333");
+  });
+});
 
 describe("normalizeHex", () => {
   it("accepts #RGB and #RRGGBB", () => {

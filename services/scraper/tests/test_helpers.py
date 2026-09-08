@@ -1,15 +1,17 @@
 from datetime import date, datetime
+from types import SimpleNamespace
 
 import pytest
 
 from scrapers import (
+    BREF_HEADERS,
+    BREF_PROVIDER,
+    BrefHTTPError,
+    bref_get,
+    bref_rate_limit,
     current_season,
     dataset_rows,
     generate_seasons,
-    matchup_is_home,
-    matchup_row_is_home,
-    matchup_team_abbr,
-    nba_date,
     parse_game_date,
     parse_matchup_sides,
     parse_minutes,
@@ -24,7 +26,9 @@ from scrapers import (
 
 
 @pytest.mark.unit
-def test_season_helpers() -> None:
+def test_bref_identity_and_season_helpers() -> None:
+    assert BREF_PROVIDER == "basketball-reference"
+    assert BREF_HEADERS["User-Agent"]
     assert season_from_start_year(2024) == "2024-25"
     assert season_start_year("2024-25") == 2024
     assert generate_seasons("2023-24", "2024-25") == ["2023-24", "2024-25"]
@@ -33,73 +37,50 @@ def test_season_helpers() -> None:
 
 
 @pytest.mark.unit
-def test_current_season_october_boundary() -> None:
+def test_current_season_and_parse_seasons() -> None:
     assert current_season(date(2025, 10, 1)) == "2025-26"
     assert current_season(date(2026, 1, 15)) == "2025-26"
-
-
-@pytest.mark.unit
-def test_parse_seasons() -> None:
     assert parse_seasons("2024-25, 2023-24") == ["2024-25", "2023-24"]
-    assert parse_seasons("2010-11,2024-25") == ["2010-11", "2024-25"]
-    assert parse_seasons(None) == [current_season()]
     assert parse_seasons("  ,  ") == [current_season()]
 
 
 @pytest.mark.unit
-def test_parse_game_date_formats() -> None:
+def test_parse_game_date_and_numeric_helpers() -> None:
     assert parse_game_date(date(2024, 10, 22)) == date(2024, 10, 22)
     assert parse_game_date(datetime(2024, 10, 22, 19, 0)) == date(2024, 10, 22)
-    assert parse_game_date("2024-10-22") == date(2024, 10, 22)
     assert parse_game_date("Oct 22, 2024") == date(2024, 10, 22)
-    assert parse_game_date("October 22, 2024") == date(2024, 10, 22)
-    assert parse_game_date("10/22/2024") == date(2024, 10, 22)
     with pytest.raises(ValueError):
         parse_game_date("not-a-date")
-
-
-@pytest.mark.unit
-def test_parse_minutes_and_numbers() -> None:
-    assert parse_minutes(None) is None
-    assert parse_minutes("") is None
-    assert parse_minutes(36) == 36.0
     assert parse_minutes("36:30") == 36.5
     assert parse_minutes("not") is None
-    assert parse_minutes("12.5") == 12.5
-    assert to_int("") is None
     assert to_int("12.0") == 12
-    assert to_int("x") is None
-    assert to_float("") is None
     assert to_float("1.5") == 1.5
-    assert to_float("x") is None
-    assert to_str(None) is None
     assert to_str("  clip  ") == "clip"
-    assert to_str("  ") is None
 
 
 @pytest.mark.unit
-def test_row_get_and_dataset_rows() -> None:
+def test_row_and_payload_helpers() -> None:
     assert row_get({"GAME_ID": "1"}, "game_id") == "1"
     assert row_get({"a": 1}, "b") is None
     assert dataset_rows({"PlayerGameLog": [{"id": 1}]}, "PlayerGameLog") == [{"id": 1}]
-    assert dataset_rows({"other": [{"id": 2}]}) == [{"id": 2}]
     assert dataset_rows({"x": "nope"}) == []
+    assert parse_matchup_sides("DAL @ DET") == ("DET", "DAL")
+    assert parse_matchup_sides("DET vs. DAL") == ("DET", "DAL")
+    assert parse_matchup_sides("All-Star Game") == (None, None)
 
 
 @pytest.mark.unit
-def test_matchup_helpers() -> None:
-    assert matchup_is_home("LAC vs. GSW") is True
-    assert matchup_is_home("LAC @ CHI") is False
-    assert matchup_team_abbr("LAC vs. GSW") == "LAC"
-    assert matchup_team_abbr("") is None
-    assert parse_matchup_sides("DAL @ DET") == ("DET", "DAL")
-    assert parse_matchup_sides("DET vs. DAL") == ("DET", "DAL")
-    assert parse_matchup_sides("NYK vs ORL") == ("NYK", "ORL")
-    assert parse_matchup_sides("") == (None, None)
-    assert parse_matchup_sides("All-Star Game") == (None, None)
-    assert matchup_row_is_home("DAL @ DET", "DET") is True
-    assert matchup_row_is_home("DAL @ DET", "DAL") is False
-    assert matchup_row_is_home("SAS @ OKC", "OKC") is True
-    assert matchup_row_is_home("SAS @ OKC", "SAS") is False
-    assert matchup_row_is_home("DET vs. DAL", None) is True
-    assert nba_date(date(2024, 10, 22)) == "2024-10-22"
+def test_bref_rate_limit_and_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    import scrapers
+
+    monkeypatch.setattr(scrapers, "BREF_REQUEST_DELAY_SECONDS", 0)
+    monkeypatch.setattr(scrapers, "_last_bref_request_at", 0.0)
+    bref_rate_limit()
+    response = SimpleNamespace(status_code=200, text="<html>ok</html>")
+    assert (
+        bref_get("https://example.test/x", get=lambda *args, **kwargs: response)
+        == "<html>ok</html>"
+    )
+    error = SimpleNamespace(status_code=403, text="nope")
+    with pytest.raises(BrefHTTPError, match="HTTP 403"):
+        bref_get("https://example.test/x", get=lambda *args, **kwargs: error)

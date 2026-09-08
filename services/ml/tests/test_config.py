@@ -1,4 +1,5 @@
 from datetime import date
+from uuid import UUID
 
 import pytest
 
@@ -42,11 +43,11 @@ def test_clip_and_rows_from_object() -> None:
         "Row",
         (),
         {
-            "game_id": "9",
+            "game_id": UUID("00000000-0000-4000-8000-000000000109"),
             "game_date": date(2024, 1, 1),
             "season": "2023-24",
-            "home_team_id": 1,
-            "away_team_id": 2,
+            "home_team_id": UUID("00000000-0000-4000-8000-000000000201"),
+            "away_team_id": UUID("00000000-0000-4000-8000-000000000202"),
             "home_won": True,
             "winner_location": "home",
         },

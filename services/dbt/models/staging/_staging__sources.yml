@@ -5,31 +5,28 @@ sources:
     schema: source
     tables:
       - name: players
-        description: Player biographical data from NBA API (Alembic source schema)
+        description: Baseline player registry with provider-independent UUID identity.
       - name: teams
-        description: Team reference data from NBA API
+        description: Repo-owned franchise catalog with provider-independent UUID identity.
       - name: games
-        description: Game results from NBA API
+        description: Basketball-Reference schedule and result rows keyed by Baseline UUIDs.
       - name: player_game_logs
-        description: Per-player per-game stat lines from NBA API
+        description: Basketball-Reference box-score rows keyed by Baseline UUIDs.
       - name: player_contracts
         description: >
-          Remaining player-season salaries from Basketball-Reference team
-          payroll pages (not NBA Stats). Historical paid-salary ledgers
-          are planned.
+          Remaining player-season salaries from Basketball-Reference team payroll pages.
       - name: team_payroll
         description: >
           Team-season payroll totals from the Basketball-Reference
           Team Totals footer. Luxury-tax rules are not applied.
       - name: standings
         description: >
-          Season-to-date Regular Season standings from NBA Stats
-          LeagueStandingsV3. Unique on (season, season_type, team_id);
+          Season-to-date Regular Season standings from Basketball-Reference. Unique on (season, season_type, team_id);
           as_of_date is the scrape watermark.
       - name: player_injuries
         description: >
           Current Basketball-Reference injury report snapshot. Unique on
-          (player_name_normalized, bref_team_abbreviation). Not a historical
+          (player_id, team_id). Not a historical
           ledger; history exists only from the day scraping starts.
       - name: game_odds
         description: >
@@ -42,7 +39,7 @@ sources:
           (game_id, as_of, model_version).
       - name: play_by_play
         description: >
-          NBA Stats PlayByPlayV3 actions. Unique on (game_id, action_number, action_id).
+          Basketball-Reference play-by-play actions. Unique on (game_id, action_number, action_id).
           Opt-in current-season ingest; not a full-history backfill.
       - name: reddit_posts
         description: >

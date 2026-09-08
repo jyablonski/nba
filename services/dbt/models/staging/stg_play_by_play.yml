@@ -3,7 +3,7 @@ version: 2
 models:
   - name: stg_play_by_play
     description: >
-      Lightly cleaned PlayByPlayV3 actions. Grain is game_id x action_number x
+      Lightly cleaned Basketball-Reference actions. Grain is game_id x action_number x
       action_id (V3 repeats actionNumber for steal/block pairs).
       Season-scoped ingest; not a full-history backfill.
     columns:

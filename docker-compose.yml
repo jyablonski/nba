@@ -166,8 +166,6 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    profiles:
-      - tools
 
   cube:
     image: nba-cube

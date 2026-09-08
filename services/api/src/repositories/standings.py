@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from uuid import UUID
 
 from services.standings_rank import apply_derived_ranks
 from sqlalchemy.orm import Session
@@ -32,7 +33,7 @@ class StandingsRepository:
         rows = self.db.execute(LIST_STANDINGS, params)
         return int(total), apply_derived_ranks([dict(row._mapping) for row in rows])
 
-    def get_team_standing(self, team_id: int, season: str | None = None) -> dict | None:
+    def get_team_standing(self, team_id: UUID, season: str | None = None) -> dict | None:
         row = (
             self.db.execute(
                 TEAM_STANDING,

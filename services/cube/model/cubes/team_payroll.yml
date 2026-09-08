@@ -11,14 +11,10 @@ cubes:
 
       - name: team_id
         sql: team_id
-        type: number
-
-      - name: bref_team_abbreviation
-        sql: bref_team_abbreviation
         type: string
 
-      - name: nba_team_abbreviation
-        sql: nba_team_abbreviation
+      - name: abbreviation
+        sql: abbreviation
         type: string
 
       - name: team_name

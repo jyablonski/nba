@@ -11,7 +11,12 @@ away_teams as (
 ),
 
 home_arenas as (
-    select * from {{ ref('nba_team_arenas') }}
+    select
+        team_id::uuid as team_id,
+        arena_name,
+        arena_city,
+        arena_state
+    from {{ ref('nba_team_arenas') }}
 )
 
 select

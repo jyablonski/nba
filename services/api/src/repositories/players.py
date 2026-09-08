@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from sqlalchemy.orm import Session
 
 from queries.players import (
@@ -26,7 +28,7 @@ class PlayersRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def player_exists(self, player_id: int) -> bool:
+    def player_exists(self, player_id: UUID) -> bool:
         row = self.db.execute(PLAYER_EXISTS, {"player_id": player_id}).first()
         return row is not None
 
@@ -35,7 +37,7 @@ class PlayersRepository:
         *,
         search: str | None,
         active: bool | None,
-        team_id: int | None = None,
+        team_id: UUID | None = None,
         limit: int,
         offset: int,
     ) -> tuple[int, list[dict]]:
@@ -51,21 +53,21 @@ class PlayersRepository:
         rows = self.db.execute(LIST_PLAYERS, params)
         return int(total), [dict(row._mapping) for row in rows]
 
-    def get_player(self, player_id: int) -> dict | None:
+    def get_player(self, player_id: UUID) -> dict | None:
         row = self.db.execute(PLAYER_BY_ID, {"player_id": player_id}).mappings().first()
         return dict(row) if row is not None else None
 
-    def compare_players(self, player_ids: list[int], order_column: str) -> list[dict]:
+    def compare_players(self, player_ids: list[UUID], order_column: str) -> list[dict]:
         stmt = compare_players_stmt(order_column)
         return [dict(row._mapping) for row in self.db.execute(stmt, {"player_ids": player_ids})]
 
-    def list_players_by_ids(self, player_ids: list[int]) -> list[dict]:
+    def list_players_by_ids(self, player_ids: list[UUID]) -> list[dict]:
         return [
             dict(row._mapping)
             for row in self.db.execute(PLAYERS_BY_IDS, {"player_ids": player_ids})
         ]
 
-    def list_head_to_head_logs(self, player_a: int, player_b: int) -> list[dict]:
+    def list_head_to_head_logs(self, player_a: UUID, player_b: UUID) -> list[dict]:
         return [
             dict(row._mapping)
             for row in self.db.execute(
@@ -73,13 +75,13 @@ class PlayersRepository:
             )
         ]
 
-    def get_player_name(self, player_id: int) -> dict | None:
+    def get_player_name(self, player_id: UUID) -> dict | None:
         row = self.db.execute(PLAYER_NAME, {"player_id": player_id}).mappings().first()
         return dict(row) if row is not None else None
 
     def list_game_logs(
         self,
-        player_id: int,
+        player_id: UUID,
         *,
         season: str | None,
         is_back_to_back: bool | None = None,
@@ -101,7 +103,7 @@ class PlayersRepository:
 
     def list_season_stats(
         self,
-        player_id: int,
+        player_id: UUID,
         *,
         limit: int,
         offset: int,
@@ -111,7 +113,7 @@ class PlayersRepository:
         rows = self.db.execute(LIST_SEASON_STATS, params)
         return int(total), [dict(row._mapping) for row in rows]
 
-    def get_back_to_back_stats(self, player_id: int, season: str | None) -> dict:
+    def get_back_to_back_stats(self, player_id: UUID, season: str | None) -> dict:
         row = (
             self.db.execute(
                 BACK_TO_BACK_STATS,

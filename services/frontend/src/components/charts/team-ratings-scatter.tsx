@@ -15,13 +15,13 @@ import {
 } from "recharts";
 
 import { formatStat } from "@/lib/format";
-import { nbaTeamLogoUrl } from "@/lib/team-logo";
 import {
   leagueRatingAverages,
   paddedDomain,
   teamRatingPoints,
   type TeamRatingPoint,
 } from "@/lib/team-ratings";
+import { teamLogoUrl } from "@/lib/team-logo";
 import type { TeamSummary } from "@/lib/types";
 
 const tooltipStyle = {
@@ -59,17 +59,26 @@ export function TeamLogoMarker({
   payload?: TeamRatingPoint;
 }) {
   if (cx == null || cy == null || payload == null) return null;
-  const size = 30;
+  const size = 34;
+  const logoUrl = teamLogoUrl(payload.abbreviation);
   return (
     <g>
       <a href={`/teams/${payload.team_id}`}>
-        <image
-          href={nbaTeamLogoUrl(payload.team_id)}
-          x={cx - size / 2}
-          y={cy - size / 2}
-          width={size}
-          height={size}
-        />
+        <circle cx={cx} cy={cy} r={size / 2} fill="#E8E4DA" stroke="#8C8577" />
+        {logoUrl ? (
+          <image
+            href={logoUrl}
+            x={cx - 12}
+            y={cy - 12}
+            width={24}
+            height={24}
+            preserveAspectRatio="xMidYMid meet"
+          />
+        ) : (
+          <text x={cx} y={cy + 4} textAnchor="middle" fontSize={8} fontWeight={700} fill="#5C574F">
+            {payload.abbreviation}
+          </text>
+        )}
       </a>
     </g>
   );

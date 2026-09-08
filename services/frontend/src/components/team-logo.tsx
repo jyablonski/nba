@@ -1,31 +1,56 @@
+import { useState } from "react";
 import Link from "next/link";
 
-import { nbaTeamLogoUrl } from "@/lib/team-logo";
+import { teamLogoLabel, teamLogoUrl } from "@/lib/team-logo";
 import { cn } from "@/lib/utils";
 
 export function TeamLogo({
   teamId,
+  abbreviation,
   size = 18,
   className,
 }: {
-  teamId: number | null | undefined;
+  teamId: string | null | undefined;
+  abbreviation?: string | null;
   size?: number;
   className?: string;
 }) {
-  if (teamId == null || !Number.isFinite(teamId)) return null;
+  const logoUrl = teamLogoUrl(abbreviation);
+  const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
+
+  if (!teamId) return null;
+  if (!logoUrl || failedLogoUrl === logoUrl) {
+    return (
+      <span
+        aria-hidden="true"
+        style={{ width: size, height: size }}
+        className={cn(
+          "inline-flex shrink-0 items-center justify-center rounded-full bg-muted text-[8px] font-bold text-muted-foreground",
+          className
+        )}
+      >
+        {teamLogoLabel(abbreviation)}
+      </span>
+    );
+  }
+
   return (
-    // next/image would need images.remotePatterns for cdn.nba.com plus
-    // dangerouslyAllowSVG, which proxies arbitrary remote SVG through our own
-    // origin. Not worth an XSS vector to optimize an 18px icon.
-    // eslint-disable-next-line @next/next/no-img-element -- remote SVG team logo
-    <img
-      src={nbaTeamLogoUrl(teamId)}
-      alt=""
-      width={size}
-      height={size}
-      className={cn("inline-block shrink-0 object-contain", className)}
-      loading="lazy"
-    />
+    <span
+      aria-hidden="true"
+      style={{ width: size, height: size }}
+      className={cn("inline-flex shrink-0 items-center justify-center", className)}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element -- NBA CDN supplies the SVG logo. */}
+      <img
+        src={logoUrl}
+        alt=""
+        aria-hidden="true"
+        width={size}
+        height={size}
+        className="h-full w-full object-contain"
+        onError={() => setFailedLogoUrl(logoUrl)}
+      />
+    </span>
   );
 }
 
@@ -33,11 +58,13 @@ export function TeamAbbrLink({
   teamId,
   abbreviation,
   href,
+  size,
   className,
 }: {
-  teamId: number;
+  teamId: string;
   abbreviation: string;
   href: string;
+  size?: number;
   className?: string;
 }) {
   return (
@@ -45,7 +72,7 @@ export function TeamAbbrLink({
       href={href}
       className={cn("inline-flex items-center gap-1.5 font-semibold hover:text-primary", className)}
     >
-      <TeamLogo teamId={teamId} />
+      <TeamLogo teamId={teamId} abbreviation={abbreviation} size={size} />
       {abbreviation}
     </Link>
   );

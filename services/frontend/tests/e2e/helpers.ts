@@ -2,7 +2,6 @@ import { expect, type Page } from "@playwright/test";
 
 export const PRIMARY_NAV = [
   "Home",
-  "Games",
   "Schedule",
   "Players",
   "Teams",

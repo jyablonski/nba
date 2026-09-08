@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+from uuid import UUID
 
 import pytest
 from click.testing import CliRunner
@@ -19,6 +20,10 @@ from scrapers.odds import (
     parse_odds_events,
     scrape_odds,
 )
+
+TEAM_GSW = UUID("7bf8726a-a852-452d-b81f-14839127c5fb")
+TEAM_LAC = UUID("a79dabb2-26c5-443c-bbb4-cabdd8db5958")
+GAME_ONE = UUID("00000000-0000-4000-8000-000000000101")
 
 SAMPLE_EVENTS = [
     {
@@ -107,17 +112,17 @@ def test_match_odds_game_id() -> None:
         "commence_time": datetime(2024, 10, 22, 23, 30, 0),
     }
     teams = {
-        "golden state warriors": 1610612744,
-        "los angeles clippers": 1610612746,
-        "la clippers": 1610612746,
+        "golden state warriors": TEAM_GSW,
+        "los angeles clippers": TEAM_LAC,
+        "la clippers": TEAM_LAC,
     }
     game = SimpleNamespace(
-        game_id="0022400001",
-        home_team_id=1610612744,
-        away_team_id=1610612746,
+        game_id=GAME_ONE,
+        home_team_id=TEAM_GSW,
+        away_team_id=TEAM_LAC,
         game_date=datetime(2024, 10, 22).date(),
     )
-    assert match_odds_game_id(row, teams_by_name=teams, games=[game]) == "0022400001"
+    assert match_odds_game_id(row, teams_by_name=teams, games=[game]) == GAME_ONE
     assert match_odds_game_id(row, teams_by_name=teams, games=[]) is None
 
 
@@ -136,14 +141,14 @@ def test_scrape_odds_upserts_with_match(monkeypatch: pytest.MonkeyPatch) -> None
     session.query.return_value.all.side_effect = [
         [
             SimpleNamespace(
-                team_id=1610612744,
+                team_id=TEAM_GSW,
                 full_name="Golden State Warriors",
                 city="Golden State",
                 nickname="Warriors",
                 abbreviation="GSW",
             ),
             SimpleNamespace(
-                team_id=1610612746,
+                team_id=TEAM_LAC,
                 full_name="LA Clippers",
                 city="Los Angeles",
                 nickname="Clippers",
@@ -152,9 +157,9 @@ def test_scrape_odds_upserts_with_match(monkeypatch: pytest.MonkeyPatch) -> None
         ],
         [
             SimpleNamespace(
-                game_id="0022400001",
-                home_team_id=1610612744,
-                away_team_id=1610612746,
+                game_id=GAME_ONE,
+                home_team_id=TEAM_GSW,
+                away_team_id=TEAM_LAC,
                 game_date=datetime(2024, 10, 22).date(),
             )
         ],
@@ -169,7 +174,7 @@ def test_scrape_odds_upserts_with_match(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr("scrapers.odds.upsert_rows", fake_upsert)
     count = scrape_odds(api_key="test-key", fetch_events=lambda key: SAMPLE_EVENTS)
     assert count == 2
-    assert captured[0][0]["game_id"] == "0022400001"
+    assert captured[0][0]["game_id"] == GAME_ONE
     session.execute.assert_called()
 
 

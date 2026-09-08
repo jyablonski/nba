@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -34,13 +35,15 @@ def _validate_season_type(season_type: str | None) -> str | None:
     key = season_type.strip().lower().replace("-", "").replace(" ", "")
     mapping = {
         "regularseason": "Regular Season",
+        "cup": "Cup",
+        "nbacup": "Cup",
         "playoffs": "Playoffs",
         "playin": "PlayIn",
     }
     if key not in mapping:
         raise HTTPException(
             status_code=400,
-            detail="season_type must be Regular Season, Playoffs, or PlayIn",
+            detail="season_type must be Regular Season, Cup, Playoffs, or PlayIn",
         )
     return mapping[key]
 
@@ -62,7 +65,7 @@ def list_teams(
 
 @router.get("/{team_id}", response_model=ItemResponse[TeamDetail])
 def get_team(
-    team_id: int,
+    team_id: UUID,
     repo: TeamsRepository = Depends(get_teams_repository),
     standings_repo: StandingsRepository = Depends(get_standings_repository),
 ) -> ItemResponse[TeamDetail]:
@@ -122,9 +125,9 @@ def get_team(
 
 @router.get("/{team_id}/games", response_model=PaginatedResponse[TeamGameResult])
 def get_team_games(
-    team_id: int,
+    team_id: UUID,
     season: Annotated[str | None, Query()] = None,
-    opponent_team_id: Annotated[int | None, Query()] = None,
+    opponent_team_id: Annotated[UUID | None, Query()] = None,
     location: Annotated[str | None, Query()] = None,
     since_season: Annotated[str | None, Query()] = None,
     arena_city: Annotated[str | None, Query()] = None,
@@ -156,8 +159,8 @@ def get_team_games(
 
 @router.get("/{team_id}/record", response_model=ItemResponse[TeamRecord])
 def get_team_record(
-    team_id: int,
-    opponent_team_id: Annotated[int | None, Query()] = None,
+    team_id: UUID,
+    opponent_team_id: Annotated[UUID | None, Query()] = None,
     location: Annotated[str | None, Query()] = None,
     since_season: Annotated[str | None, Query()] = None,
     season: Annotated[str | None, Query()] = None,

@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -24,13 +25,15 @@ def _validate_season_type(season_type: str | None) -> str | None:
     key = season_type.strip().lower().replace("-", "").replace(" ", "")
     mapping = {
         "regularseason": "Regular Season",
+        "cup": "Cup",
+        "nbacup": "Cup",
         "playoffs": "Playoffs",
         "playin": "PlayIn",
     }
     if key not in mapping:
         raise HTTPException(
             status_code=400,
-            detail="season_type must be Regular Season, Playoffs, or PlayIn",
+            detail="season_type must be Regular Season, Cup, Playoffs, or PlayIn",
         )
     return mapping[key]
 
@@ -58,7 +61,7 @@ def list_recent_games(
 
 @router.get("/{game_id}/play-by-play", response_model=PaginatedResponse[PlayByPlayEvent])
 def get_game_play_by_play(
-    game_id: str,
+    game_id: UUID,
     repo: GamesRepository = Depends(get_games_repository),
 ) -> PaginatedResponse[PlayByPlayEvent]:
     if not repo.game_exists(game_id):
@@ -73,7 +76,7 @@ def get_game_play_by_play(
 
 @router.get("/{game_id}/flow", response_model=ItemResponse[GameFlow])
 def get_game_flow(
-    game_id: str,
+    game_id: UUID,
     repo: GamesRepository = Depends(get_games_repository),
 ) -> ItemResponse[GameFlow]:
     row = repo.get_game_flow(game_id)

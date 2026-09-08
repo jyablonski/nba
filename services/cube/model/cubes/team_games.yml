@@ -72,7 +72,7 @@ cubes:
 
       - name: team_id
         sql: team_id
-        type: number
+        type: string
 
       - name: team_abbreviation
         sql: team_abbreviation

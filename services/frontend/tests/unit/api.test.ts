@@ -2,6 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiClientError, api, queryErrorMessage } from "@/lib/api";
 
+const PLAYER_A = "00000000-0000-4000-8000-000000000001";
+const PLAYER_B = "00000000-0000-4000-8000-000000000002";
+const TEAM_GSW = "7bf8726a-a852-452d-b81f-14839127c5fb";
+const TEAM_LAL = "8cbd46d2-8092-4b1e-8b24-f31c7692cadd";
+const GAME_A = "00000000-0000-4000-8000-000000000101";
+const GAME_B = "00000000-0000-4000-8000-000000000102";
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -21,15 +28,19 @@ describe("api client", () => {
         return jsonResponse({
           data: {
             games_played: 1,
-            players: [{ player_id: 1, full_name: "A", games: 1, mpg: 36, ppg: 20, rpg: 5, apg: 4 }],
+            players: [
+              { player_id: PLAYER_A, full_name: "A", games: 1, mpg: 36, ppg: 20, rpg: 5, apg: 4 },
+            ],
             games: [],
           },
         });
       }
       if (url.includes("/players/compare")) {
-        return jsonResponse({ data: [{ player_id: 1, full_name: "A", career_games_played: 10 }] });
+        return jsonResponse({
+          data: [{ player_id: PLAYER_A, full_name: "A", career_games_played: 10 }],
+        });
       }
-      if (url.includes("/players/1/game-log")) {
+      if (url.includes(`/players/${PLAYER_A}/game-log`)) {
         return jsonResponse([
           {
             game_date: "2024-10-22",
@@ -44,10 +55,10 @@ describe("api client", () => {
           },
         ]);
       }
-      if (url.includes("/players/1/back-to-backs")) {
+      if (url.includes(`/players/${PLAYER_A}/back-to-backs`)) {
         return jsonResponse({
           data: {
-            player_id: 1,
+            player_id: PLAYER_A,
             player_name: "A",
             season: null,
             total_back_to_backs: 2,
@@ -57,10 +68,10 @@ describe("api client", () => {
           },
         });
       }
-      if (url.endsWith("/players/1")) {
+      if (url.endsWith(`/players/${PLAYER_A}`)) {
         return jsonResponse({
           data: {
-            player_id: 1,
+            player_id: PLAYER_A,
             full_name: "A",
             is_active: true,
             first_name: "A",
@@ -77,7 +88,7 @@ describe("api client", () => {
         return jsonResponse({
           data: [
             {
-              player_id: 1,
+              player_id: PLAYER_A,
               full_name: "Kawhi Leonard",
               position: "F",
               team_abbreviation: "LAC",
@@ -87,17 +98,17 @@ describe("api client", () => {
           meta: { total: 1, limit: 25, offset: 0 },
         });
       }
-      if (url.includes("/teams/1/games")) {
+      if (url.includes(`/teams/${TEAM_GSW}/games`)) {
         return jsonResponse({ data: [] });
       }
-      if (url.includes("/teams/1/record")) {
+      if (url.includes(`/teams/${TEAM_GSW}/record`)) {
         return jsonResponse({
-          data: { team_id: 1, team_name: "GSW", wins: 1, losses: 0, win_pct: 1 },
+          data: { team_id: TEAM_GSW, team_name: "GSW", wins: 1, losses: 0, win_pct: 1 },
         });
       }
-      if (url.endsWith("/teams/1")) {
+      if (url.endsWith(`/teams/${TEAM_GSW}`)) {
         return jsonResponse({
-          team_id: 1,
+          team_id: TEAM_GSW,
           abbreviation: "GSW",
           team_name: "Warriors",
           conference: "West",
@@ -111,7 +122,7 @@ describe("api client", () => {
         return jsonResponse({
           data: [
             {
-              team_id: 1610612744,
+              team_id: TEAM_GSW,
               abbreviation: "GSW",
               team_name: "Golden State Warriors",
               season: "2024-25",
@@ -129,7 +140,7 @@ describe("api client", () => {
         return jsonResponse({
           data: [
             {
-              game_id: "0022400001",
+              game_id: GAME_A,
               action_number: 2,
               elapsed_seconds: 30,
               score_home: 2,
@@ -142,11 +153,11 @@ describe("api client", () => {
       if (url.includes("/flow")) {
         return jsonResponse({
           data: {
-            game_id: "0022400001",
+            game_id: GAME_A,
             season: "2024-25",
             game_date: "2024-10-22",
-            home_team_id: 1,
-            away_team_id: 2,
+            home_team_id: TEAM_GSW,
+            away_team_id: TEAM_LAL,
             has_play_by_play: true,
             biggest_run_label: "GSW 11-0",
           },
@@ -156,12 +167,12 @@ describe("api client", () => {
         return jsonResponse({
           data: [
             {
-              game_id: "0022600100",
+              game_id: GAME_B,
               season: "2026-27",
               game_date: "2026-10-22",
               status: "Scheduled",
-              home_team_id: 1,
-              away_team_id: 2,
+              home_team_id: TEAM_GSW,
+              away_team_id: TEAM_LAL,
             },
           ],
         });
@@ -171,7 +182,7 @@ describe("api client", () => {
       }
       if (url.includes("/season-stats")) {
         return jsonResponse({
-          data: [{ player_id: 1, season: "2024-25", games_played: 3, ppg: 27.3 }],
+          data: [{ player_id: PLAYER_A, season: "2024-25", games_played: 3, ppg: 27.3 }],
         });
       }
       if (url.includes("/status")) {
@@ -191,13 +202,13 @@ describe("api client", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      api.searchPlayers("kawhi", { active: true, team_id: 1610612744, limit: 10, offset: 0 })
+      api.searchPlayers("kawhi", { active: true, team_id: TEAM_GSW, limit: 10, offset: 0 })
     ).resolves.toMatchObject({
       meta: { total: 1 },
     });
-    await expect(api.getPlayer(1)).resolves.toMatchObject({ full_name: "A" });
+    await expect(api.getPlayer(PLAYER_A)).resolves.toMatchObject({ full_name: "A" });
     await expect(
-      api.getPlayerGameLog(1, {
+      api.getPlayerGameLog(PLAYER_A, {
         season: "2024-25",
         is_back_to_back: true,
         sort: "points",
@@ -208,17 +219,19 @@ describe("api client", () => {
     ).resolves.toMatchObject({
       data: [{ points: 20 }],
     });
-    await expect(api.getPlayerBackToBacks(1)).resolves.toMatchObject({ total_back_to_backs: 2 });
-    await expect(api.comparePlayers([1, 2], "games_played")).resolves.toMatchObject({
-      data: [{ player_id: 1 }],
+    await expect(api.getPlayerBackToBacks(PLAYER_A)).resolves.toMatchObject({
+      total_back_to_backs: 2,
     });
-    await expect(api.comparePlayersHeadToHead([1, 2])).resolves.toMatchObject({
+    await expect(api.comparePlayers([PLAYER_A, PLAYER_B], "games_played")).resolves.toMatchObject({
+      data: [{ player_id: PLAYER_A }],
+    });
+    await expect(api.comparePlayersHeadToHead([PLAYER_A, PLAYER_B])).resolves.toMatchObject({
       games_played: 1,
-      players: [{ player_id: 1 }],
+      players: [{ player_id: PLAYER_A }],
     });
     expect(
       fetchMock.mock.calls.some((call) =>
-        String(call[0]).includes("/players/compare/head-to-head?ids=1%2C2")
+        String(call[0]).includes(`/players/compare/head-to-head?ids=${PLAYER_A}%2C${PLAYER_B}`)
       )
     ).toBe(true);
     await expect(api.listTeams()).resolves.toMatchObject({ data: [] });
@@ -226,21 +239,23 @@ describe("api client", () => {
     expect(
       fetchMock.mock.calls.some((call) => String(call[0]).includes("/teams?season=2025-26"))
     ).toBe(true);
-    await expect(api.getTeam(1)).resolves.toMatchObject({ abbreviation: "GSW" });
+    await expect(api.getTeam(TEAM_GSW)).resolves.toMatchObject({ abbreviation: "GSW" });
     await expect(
-      api.getTeamGames(1, { location: "away", season_type: "Regular Season" })
+      api.getTeamGames(TEAM_GSW, { location: "away", season_type: "Regular Season" })
     ).resolves.toMatchObject({ data: [] });
-    await expect(api.getTeamGames(1, { arena_city: "Denver", limit: 200 })).resolves.toMatchObject({
+    await expect(
+      api.getTeamGames(TEAM_GSW, { arena_city: "Denver", limit: 200 })
+    ).resolves.toMatchObject({
       data: [],
     });
     expect(fetchMock.mock.calls.some((call) => String(call[0]).includes("arena_city=Denver"))).toBe(
       true
     );
     expect(fetchMock.mock.calls.some((call) => String(call[0]).includes("limit=200"))).toBe(true);
-    await expect(api.getTeamRecord(1, { since_season: "2010-11" })).resolves.toMatchObject({
+    await expect(api.getTeamRecord(TEAM_GSW, { since_season: "2010-11" })).resolves.toMatchObject({
       wins: 1,
     });
-    await expect(api.getTeamRecord(1, { arena_city: "Denver" })).resolves.toMatchObject({
+    await expect(api.getTeamRecord(TEAM_GSW, { arena_city: "Denver" })).resolves.toMatchObject({
       wins: 1,
     });
     await expect(
@@ -263,13 +278,13 @@ describe("api client", () => {
     expect(
       fetchMock.mock.calls.some((call) => String(call[0]).includes("season_type=Regular+Season"))
     ).toBe(true);
-    await expect(api.getGamePlayByPlay("0022400001")).resolves.toMatchObject({
+    await expect(api.getGamePlayByPlay(GAME_A)).resolves.toMatchObject({
       data: [{ score_differential: 2 }],
     });
-    await expect(api.getGameFlow("0022400001")).resolves.toMatchObject({
+    await expect(api.getGameFlow(GAME_A)).resolves.toMatchObject({
       biggest_run_label: "GSW 11-0",
     });
-    await expect(api.getPlayerSeasonStats(1)).resolves.toMatchObject({
+    await expect(api.getPlayerSeasonStats(PLAYER_A)).resolves.toMatchObject({
       data: [{ season: "2024-25" }],
     });
     await expect(api.getStatus()).resolves.toMatchObject({
@@ -291,7 +306,7 @@ describe("api client", () => {
         async () => new Response(JSON.stringify({ detail: "Player not found" }), { status: 404 })
       )
     );
-    await expect(api.getPlayer(9)).rejects.toMatchObject({
+    await expect(api.getPlayer(PLAYER_B)).rejects.toMatchObject({
       status: 404,
       message: "Player not found",
     });
@@ -300,7 +315,7 @@ describe("api client", () => {
       "fetch",
       vi.fn(async () => new Response("nope", { status: 500 }))
     );
-    await expect(api.getPlayer(9)).rejects.toMatchObject({ status: 500 });
+    await expect(api.getPlayer(PLAYER_B)).rejects.toMatchObject({ status: 500 });
 
     vi.stubGlobal(
       "fetch",

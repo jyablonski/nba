@@ -1,8 +1,8 @@
 # Tilt local stack: hot-reload for app code, full rebuild on Dockerfile / lockfile changes.
 # Production is compose + Caddy (`docker-compose.prod.yml`), not Tilt — see docs/plans/oci-caddy-hosting.md.
-# Usage: `make up` (or `tilt up`) — postgres, migrate, cube, api, frontend.
+# Usage: `make up` (or `tilt up`) — postgres, migrate, cube, api, frontend, mcp.
 # Optional compose profiles (do not enable by default; they start extra services):
-#   tilt up -- --profiles tools
+#   tilt up -- --profiles tools (scraper, dbt, and ml)
 #   tilt up -- --profiles tools --profiles cron
 # docker_build has no platform pin — images match the host CPU (amd64 or arm64).
 
@@ -38,7 +38,7 @@ docker_build(
     context="./services/api",
     dockerfile="./services/api/Dockerfile",
     target="development",
-    only=["src", "pyproject.toml", "uv.lock", "Dockerfile", ".python-version"],
+    only=["src", "pyproject.toml", "uv.lock", "Dockerfile", "uvicorn-log-config.json", ".python-version"],
     ignore=["**/__pycache__", "**/.pytest_cache", "**/htmlcov", "**/.venv"],
     live_update=[
         fall_back_on([
@@ -67,6 +67,7 @@ docker_build(
         "postcss.config.mjs",
         "components.json",
         "eslint.config.mjs",
+        "scripts",
         "Dockerfile",
     ],
     ignore=["**/node_modules", "**/.next", "**/coverage", "**/playwright-report", "**/test-results"],
@@ -83,12 +84,13 @@ docker_build(
         sync("./services/frontend/tsconfig.build.json", "/app/tsconfig.build.json"),
         sync("./services/frontend/postcss.config.mjs", "/app/postcss.config.mjs"),
         sync("./services/frontend/components.json", "/app/components.json"),
+        sync("./services/frontend/scripts", "/app/scripts"),
     ],
 )
 
 # Profiled images are omitted unless those compose profiles are requested.
-# Default Tilt must not register tools/cron — compose hides scraper/dbt/mcp
-# (profile tools) and refresh-daily (profile cron). Cube is on the default stack.
+# Default Tilt does not register scraper/dbt/ml or refresh-daily. MCP and Cube
+# are on the default stack.
 # `compose run --no-deps` still bind-mounts host models/src from docker-compose.yml
 # (no rebuild after YAML/Python edits). live_update below only applies when the
 # tools profile is on and those containers are running.
@@ -175,23 +177,22 @@ if "tools" in profiles:
             sync("./services/ml/src", "/app/src"),
         ],
     )
-
-    docker_build(
-        "nba-mcp",
-        context="./services/mcp",
-        dockerfile="./services/mcp/Dockerfile",
-        target="development",
-        only=["src", "pyproject.toml", "uv.lock", "Dockerfile", ".python-version"],
-        ignore=["**/__pycache__", "**/.pytest_cache", "**/htmlcov", "**/.venv"],
-        live_update=[
-            fall_back_on([
-                "./services/mcp/Dockerfile",
-                "./services/mcp/pyproject.toml",
-                "./services/mcp/uv.lock",
-            ]),
-            sync("./services/mcp/src", "/app/src"),
-        ],
-    )
+docker_build(
+    "nba-mcp",
+    context="./services/mcp",
+    dockerfile="./services/mcp/Dockerfile",
+    target="development",
+    only=["src", "pyproject.toml", "uv.lock", "Dockerfile", ".python-version"],
+    ignore=["**/__pycache__", "**/.pytest_cache", "**/htmlcov", "**/.venv"],
+    live_update=[
+        fall_back_on([
+            "./services/mcp/Dockerfile",
+            "./services/mcp/pyproject.toml",
+            "./services/mcp/uv.lock",
+        ]),
+        sync("./services/mcp/src", "/app/src"),
+    ],
+)
 
 docker_build(
     "nba-cube",
@@ -213,11 +214,12 @@ dc_resource("cube", resource_deps=["migrate"])
 dc_resource("api", resource_deps=["migrate"])
 dc_resource("frontend", resource_deps=["api"])
 
+dc_resource("mcp", resource_deps=["migrate"])
+
 if "tools" in profiles:
     dc_resource("scraper", resource_deps=["migrate"])
     dc_resource("dbt", resource_deps=["migrate"])
     dc_resource("ml", resource_deps=["migrate"])
-    dc_resource("mcp", resource_deps=["migrate"])
 
 if "cron" in profiles:
     dc_resource("refresh-daily", resource_deps=["migrate"])

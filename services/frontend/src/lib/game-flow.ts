@@ -59,9 +59,9 @@ export function formatMatchupTitle(flow: {
   away_team_abbreviation?: string | null;
   home_team_abbreviation?: string | null;
   winner_location?: string | null;
-  winning_team_id?: number | null;
-  away_team_id?: number;
-  home_team_id?: number;
+  winning_team_id?: string | null;
+  away_team_id?: string;
+  home_team_id?: string;
 }): string {
   const away = flow.away_team_name ?? flow.away_team_abbreviation ?? "Away";
   const home = flow.home_team_name ?? flow.home_team_abbreviation ?? "Home";

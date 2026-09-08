@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -28,10 +29,10 @@ def compare_players(
     repo: PlayersRepository = Depends(get_players_repository),
 ) -> PaginatedResponse[PlayerComparison]:
     try:
-        player_ids = [int(part.strip()) for part in ids.split(",") if part.strip()]
+        player_ids = [UUID(part.strip()) for part in ids.split(",") if part.strip()]
     except ValueError as exc:
         raise HTTPException(
-            status_code=400, detail="ids must be a comma-separated list of integers"
+            status_code=400, detail="ids must be a comma-separated list of UUIDs"
         ) from exc
 
     if len(player_ids) < 2:
@@ -67,10 +68,10 @@ def compare_players_head_to_head(
     repo: PlayersRepository = Depends(get_players_repository),
 ) -> ItemResponse[HeadToHeadComparison]:
     try:
-        player_ids = [int(part.strip()) for part in ids.split(",") if part.strip()]
+        player_ids = [UUID(part.strip()) for part in ids.split(",") if part.strip()]
     except ValueError as exc:
         raise HTTPException(
-            status_code=400, detail="ids must be a comma-separated list of integers"
+            status_code=400, detail="ids must be a comma-separated list of UUIDs"
         ) from exc
 
     if len(player_ids) != 2:
@@ -98,7 +99,7 @@ def compare_players_head_to_head(
 def list_players(
     search: Annotated[str | None, Query()] = None,
     active: Annotated[bool | None, Query()] = None,
-    team_id: Annotated[int | None, Query()] = None,
+    team_id: Annotated[UUID | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
     repo: PlayersRepository = Depends(get_players_repository),
@@ -115,7 +116,7 @@ def list_players(
 
 @router.get("/{player_id}", response_model=ItemResponse[PlayerDetail])
 def get_player(
-    player_id: int,
+    player_id: UUID,
     repo: PlayersRepository = Depends(get_players_repository),
 ) -> ItemResponse[PlayerDetail]:
     row = repo.get_player(player_id)
@@ -126,7 +127,7 @@ def get_player(
 
 @router.get("/{player_id}/game-log", response_model=PaginatedResponse[GameLogEntry])
 def get_player_game_log(
-    player_id: int,
+    player_id: UUID,
     season: Annotated[str | None, Query()] = None,
     is_back_to_back: Annotated[bool | None, Query()] = None,
     sort: Annotated[str, Query()] = "game_date",
@@ -165,7 +166,7 @@ def get_player_game_log(
 
 @router.get("/{player_id}/season-stats", response_model=PaginatedResponse[PlayerSeasonStats])
 def get_player_season_stats(
-    player_id: int,
+    player_id: UUID,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
     repo: PlayersRepository = Depends(get_players_repository),
@@ -182,7 +183,7 @@ def get_player_season_stats(
 
 @router.get("/{player_id}/back-to-backs", response_model=ItemResponse[BackToBackStats])
 def get_player_back_to_backs(
-    player_id: int,
+    player_id: UUID,
     season: Annotated[str | None, Query()] = None,
     repo: PlayersRepository = Depends(get_players_repository),
 ) -> ItemResponse[BackToBackStats]:

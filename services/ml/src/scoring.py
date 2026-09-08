@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -33,11 +34,11 @@ def load_upcoming_games(session: Session) -> list[GameRow]:
     return [game_row_from_mapping(row) for row in rows]
 
 
-def load_market_wp(session: Session) -> dict[str, float]:
+def load_market_wp(session: Session) -> dict[UUID, float]:
     rows = session.execute(SELECT_MARKET_WP_BY_GAME).mappings().all()
-    market: dict[str, float] = {}
+    market: dict[UUID, float] = {}
     for row in rows:
-        game_id = str(row["game_id"])
+        game_id = UUID(str(row["game_id"]))
         value = row["market_wp"]
         if value is None:
             continue
@@ -81,7 +82,7 @@ def evaluate_holdout(games: list[GameRow]) -> dict[str, Any]:
 def build_prediction_rows(
     upcoming: list[GameRow],
     probs: list[float],
-    market_wp: dict[str, float],
+    market_wp: dict[UUID, float],
     *,
     as_of: datetime,
 ) -> list[dict[str, Any]]:

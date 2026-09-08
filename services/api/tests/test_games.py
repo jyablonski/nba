@@ -1,6 +1,17 @@
 from datetime import date
 
 import pytest
+from ids import (
+    GAME_ONE,
+    GAME_SCHEDULE,
+    GAME_TWO,
+    MISSING_ID,
+    PLAYER_KAWHI,
+    TEAM_GSW,
+    TEAM_LAL,
+    TEAM_NYK,
+    TEAM_SAS,
+)
 
 
 @pytest.mark.unit
@@ -11,22 +22,22 @@ def test_list_games(client, session, mapping_row, query_result) -> None:
             [
                 mapping_row(
                     {
-                        "game_id": "0022400001",
+                        "game_id": GAME_ONE,
                         "season": "2024-25",
                         "season_type": "Regular Season",
                         "game_date": date(2024, 10, 22),
                         "arena": "Chase Center",
                         "arena_city": "San Francisco",
                         "arena_state": "CA",
-                        "home_team_id": 1610612744,
+                        "home_team_id": TEAM_GSW,
                         "home_team_abbreviation": "GSW",
                         "home_team_name": "Golden State Warriors",
                         "home_score": 120,
-                        "away_team_id": 1610612747,
+                        "away_team_id": TEAM_LAL,
                         "away_team_abbreviation": "LAL",
                         "away_team_name": "Los Angeles Lakers",
                         "away_score": 110,
-                        "winning_team_id": 1610612744,
+                        "winning_team_id": TEAM_GSW,
                         "winner_location": "home",
                         "score_margin": 10,
                     }
@@ -36,7 +47,7 @@ def test_list_games(client, session, mapping_row, query_result) -> None:
     ]
     response = client.get("/api/v1/games", params={"season": "2024-25", "limit": 10})
     assert response.status_code == 200
-    assert response.json()["data"][0]["game_id"] == "0022400001"
+    assert response.json()["data"][0]["game_id"] == GAME_ONE
     assert response.json()["data"][0]["arena_city"] == "San Francisco"
 
 
@@ -76,7 +87,7 @@ def test_get_game_play_by_play(client, session, mapping_row, query_result) -> No
             [
                 mapping_row(
                     {
-                        "game_id": "0042500405",
+                        "game_id": GAME_TWO,
                         "action_number": 12,
                         "period": 1,
                         "clock": "PT11M32.00S",
@@ -89,8 +100,8 @@ def test_get_game_play_by_play(client, session, mapping_row, query_result) -> No
                         "away_points": 0,
                         "points_scored": 2,
                         "scoring_side": "home",
-                        "team_id": 1610612759,
-                        "player_id": 1,
+                        "team_id": TEAM_SAS,
+                        "player_id": PLAYER_KAWHI,
                         "action_type": "Made Shot",
                         "sub_type": "2pt",
                         "description": "Wembanyama 2PT",
@@ -99,7 +110,7 @@ def test_get_game_play_by_play(client, session, mapping_row, query_result) -> No
             ]
         ),
     ]
-    response = client.get("/api/v1/games/0042500405/play-by-play")
+    response = client.get(f"/api/v1/games/{GAME_TWO}/play-by-play")
     assert response.status_code == 200
     body = response.json()
     assert body["meta"]["total"] == 1
@@ -112,7 +123,7 @@ def test_get_game_play_by_play_empty_when_ingested_game_has_none(
     client, session, query_result
 ) -> None:
     session.queue = [query_result(scalar=1), query_result([])]
-    response = client.get("/api/v1/games/0022400001/play-by-play")
+    response = client.get(f"/api/v1/games/{GAME_ONE}/play-by-play")
     assert response.status_code == 200
     assert response.json()["data"] == []
     assert response.json()["meta"]["total"] == 0
@@ -121,7 +132,7 @@ def test_get_game_play_by_play_empty_when_ingested_game_has_none(
 @pytest.mark.unit
 def test_get_game_play_by_play_404(client, session, query_result) -> None:
     session.queue = [query_result(scalar=None)]
-    response = client.get("/api/v1/games/missing/play-by-play")
+    response = client.get(f"/api/v1/games/{MISSING_ID}/play-by-play")
     assert response.status_code == 404
     assert response.json()["detail"] == "Game not found"
 
@@ -133,18 +144,18 @@ def test_get_game_flow(client, session, mapping_row, query_result) -> None:
             [
                 mapping_row(
                     {
-                        "game_id": "0042500405",
+                        "game_id": GAME_TWO,
                         "season": "2025-26",
                         "game_date": date(2026, 6, 13),
-                        "home_team_id": 1610612759,
+                        "home_team_id": TEAM_SAS,
                         "home_team_abbreviation": "SAS",
                         "home_team_name": "San Antonio Spurs",
                         "home_score": 90,
-                        "away_team_id": 1610612752,
+                        "away_team_id": TEAM_NYK,
                         "away_team_abbreviation": "NYK",
                         "away_team_name": "New York Knicks",
                         "away_score": 94,
-                        "winning_team_id": 1610612752,
+                        "winning_team_id": TEAM_NYK,
                         "winning_team_abbreviation": "NYK",
                         "winner_location": "away",
                         "scoring_play_count": 97,
@@ -171,7 +182,7 @@ def test_get_game_flow(client, session, mapping_row, query_result) -> None:
             ]
         )
     ]
-    response = client.get("/api/v1/games/0042500405/flow")
+    response = client.get(f"/api/v1/games/{GAME_TWO}/flow")
     assert response.status_code == 200
     flow = response.json()["data"]
     assert flow["has_play_by_play"] is True
@@ -186,12 +197,12 @@ def test_get_game_flow_empty_pbp(client, session, mapping_row, query_result) -> 
             [
                 mapping_row(
                     {
-                        "game_id": "0022400001",
+                        "game_id": GAME_ONE,
                         "season": "2024-25",
                         "game_date": date(2024, 10, 22),
-                        "home_team_id": 1,
-                        "away_team_id": 2,
-                        "winning_team_id": 1,
+                        "home_team_id": TEAM_GSW,
+                        "away_team_id": TEAM_LAL,
+                        "winning_team_id": TEAM_GSW,
                         "winner_location": "home",
                         "scoring_play_count": None,
                         "biggest_run_label": None,
@@ -200,7 +211,7 @@ def test_get_game_flow_empty_pbp(client, session, mapping_row, query_result) -> 
             ]
         )
     ]
-    response = client.get("/api/v1/games/0022400001/flow")
+    response = client.get(f"/api/v1/games/{GAME_ONE}/flow")
     assert response.status_code == 200
     flow = response.json()["data"]
     assert flow["has_play_by_play"] is False
@@ -210,7 +221,7 @@ def test_get_game_flow_empty_pbp(client, session, mapping_row, query_result) -> 
 @pytest.mark.unit
 def test_get_game_flow_404(client, session, query_result) -> None:
     session.queue = [query_result([])]
-    response = client.get("/api/v1/games/missing/flow")
+    response = client.get(f"/api/v1/games/{MISSING_ID}/flow")
     assert response.status_code == 404
 
 
@@ -233,7 +244,7 @@ def test_list_schedule(client, session, mapping_row, query_result) -> None:
             [
                 mapping_row(
                     {
-                        "game_id": "0022600100",
+                        "game_id": GAME_SCHEDULE,
                         "season": "2026-27",
                         "season_type": "Regular Season",
                         "game_date": date(2026, 10, 22),
@@ -241,10 +252,10 @@ def test_list_schedule(client, session, mapping_row, query_result) -> None:
                         "arena": "Chase Center",
                         "arena_city": "San Francisco",
                         "arena_state": "CA",
-                        "home_team_id": 1610612744,
+                        "home_team_id": TEAM_GSW,
                         "home_team_abbreviation": "GSW",
                         "home_team_name": "Golden State Warriors",
-                        "away_team_id": 1610612747,
+                        "away_team_id": TEAM_LAL,
                         "away_team_abbreviation": "LAL",
                         "away_team_name": "Los Angeles Lakers",
                     }
@@ -258,7 +269,7 @@ def test_list_schedule(client, session, mapping_row, query_result) -> None:
     )
     assert response.status_code == 200
     row = response.json()["data"][0]
-    assert row["game_id"] == "0022600100"
+    assert row["game_id"] == GAME_SCHEDULE
     assert row["status"] == "Scheduled"
     assert row["away_team_abbreviation"] == "LAL"
     assert row["home_team_abbreviation"] == "GSW"

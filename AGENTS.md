@@ -46,7 +46,7 @@ Prefer [docs/](docs/) and root [README.md](README.md) over inventing behavior.
 - `make prod-release` — images, migrate, up, caddy reload, `prod-health`, `prod-prune`. `IMAGE_PREFIX` set → `prod-pull` (GHCR); empty → `prod-build` (on-box)
 - `make prod-release IMAGE_TAG=<sha>` — rollback to a previously pushed image; does not rebuild and does not touch Alembic
 - `make sync` — refresh uv locks per Python pin
-- Compose profiles: `tools` (scraper/dbt/ml/mcp). Cube is on the default local stack (not a profile)
+- Compose profiles: `tools` (scraper/dbt/ml); MCP and Cube are on the default local stack (not a profile)
 - Docker: no `platform: linux/amd64` pin; bases are official multi-arch manifests
 
 ## Testing
@@ -67,14 +67,14 @@ Prefer [docs/](docs/) and root [README.md](README.md) over inventing behavior.
 - [docs/plans/ml-win-predictions.md](docs/plans/ml-win-predictions.md) — in progress: Elo v0 + upcoming games + BRef injuries + Odds API ingest; logit / Courtline / `/ask` still planned
 - [docs/plans/ask-llm-providers.md](docs/plans/ask-llm-providers.md) — planned: Cursor Pro via MCP (not Courtline `/ask`); local OpenAI-compatible for browser LLM; hosted keys opt-in
 - `GET /api/v1/status` is **current**: `last_scraped_at` from `source.scrape_pipeline.last_success_at` plus warehouse coverage counts. Do not surface `GET /health` in the UI.
-- `POST /api/v1/query` and `/ask` are **current**. Default backend is **rules** (`NLP_BACKEND=rules`): B2B, season averages, compare, arena-city record, salary/payroll, standings — each family is a Cube query. Unrecognized questions return a capability message, not HTTP 501. `NLP_BACKEND=llm` is an opt-in adapter (Cube meta + `query_cube` / named Cube tools, needs `NLP_LLM_API_KEY`); it is not the public default and does not run SQL. MCP `query_cube` is Cube query JSON only. Cube down → clear Ask/MCP error; no gold SQL fallback. Prod 12GB overlay keeps Cube off.
+- `POST /api/v1/query` and `/ask` are **current**. Default backend is **rules** (`NLP_BACKEND=rules`): B2B, season averages, compare, arena-city record, salary/payroll, standings — each family is a Cube query. Unrecognized questions return a capability message, not HTTP 501. `NLP_BACKEND=llm` is an opt-in adapter (Cube meta + `query_cube` / named Cube tools, needs `NLP_LLM_API_KEY`); it is not the public default and does not run SQL. MCP `query_cube` is Cube query JSON only. Cube down → clear Ask/MCP error; no gold SQL fallback. Prod 12GB overlay keeps Cube off, so MCP starts but its Cube-backed calls fail clearly.
 
 ## Conventions
 
 - Do not commit unless the user asks
 - Do not invent features; label planned vs current
 - dbt owns SQL + YAML tests, not Python unit tests
-- Scraper / dbt / ml / mcp → profile `tools`
+- Scraper / dbt / ml → profile `tools`; MCP is on the default stack
 - Frontend agent notes: `services/frontend/AGENTS.md`
 - dbt agent notes: `services/dbt/AGENTS.md`
 - Markdown: never impose a line-length / wrap limit. Do not hard-wrap prose in `.md` files. Do not reflow paragraphs to 80 (or any) columns. Coding agents must not “fix” wrapping by adding mid-paragraph newlines.

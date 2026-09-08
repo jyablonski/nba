@@ -31,7 +31,7 @@ cubes:
 
       - name: winning_team_id
         sql: winning_team_id
-        type: number
+        type: string
 
     measures:
       - name: total_games

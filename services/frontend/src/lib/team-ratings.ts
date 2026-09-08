@@ -1,7 +1,7 @@
 import type { TeamSummary } from "@/lib/types";
 
 export type TeamRatingPoint = {
-  team_id: number;
+  team_id: string;
   abbreviation: string;
   team_name: string;
   pts_scored_avg: number;

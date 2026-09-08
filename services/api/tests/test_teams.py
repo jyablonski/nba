@@ -1,11 +1,20 @@
 from datetime import date
 
 import pytest
+from ids import (
+    GAME_ONE,
+    GAME_TWO,
+    MISSING_ID,
+    TEAM_BOS,
+    TEAM_CHI,
+    TEAM_GSW,
+    TEAM_MIN,
+)
 
 
 def _team_row() -> dict:
     return {
-        "team_id": 1610612744,
+        "team_id": TEAM_GSW,
         "abbreviation": "GSW",
         "team_name": "Golden State Warriors",
         "conference": "West",
@@ -23,7 +32,7 @@ def _team_row() -> dict:
 
 def _standing_row() -> dict:
     return {
-        "team_id": 1610612744,
+        "team_id": TEAM_GSW,
         "abbreviation": "GSW",
         "team_name": "Golden State Warriors",
         "season": "2024-25",
@@ -51,7 +60,7 @@ def test_list_teams(client, session, mapping_row, query_result) -> None:
             [
                 mapping_row(
                     {
-                        "team_id": 1610612744,
+                        "team_id": TEAM_GSW,
                         "abbreviation": "GSW",
                         "team_name": "Golden State Warriors",
                         "conference": "West",
@@ -95,7 +104,7 @@ def test_list_teams_with_season_records(client, session, mapping_row, query_resu
             [
                 mapping_row(
                     {
-                        "team_id": 1610612744,
+                        "team_id": TEAM_GSW,
                         "abbreviation": "GSW",
                         "team_name": "Golden State Warriors",
                         "conference": "West",
@@ -121,7 +130,7 @@ def test_list_teams_with_season_records(client, session, mapping_row, query_resu
 @pytest.mark.unit
 def test_get_team_not_found(client, session, query_result) -> None:
     session.queue = [query_result(rows=[])]
-    response = client.get("/api/v1/teams/1")
+    response = client.get(f"/api/v1/teams/{MISSING_ID}")
     assert response.status_code == 404
 
 
@@ -133,7 +142,7 @@ def test_get_team_with_season_record(client, session, query_result) -> None:
         query_result(rows=[{"season_type": "Regular Season", "games": 82, "wins": 50}]),
         query_result(rows=[]),
     ]
-    response = client.get("/api/v1/teams/1610612744")
+    response = client.get(f"/api/v1/teams/{TEAM_GSW}")
     assert response.status_code == 200
     body = response.json()["data"]
     record = body["season_record"]
@@ -166,7 +175,7 @@ def test_get_team_attaches_standing(client, session, query_result) -> None:
         query_result(rows=[{"season_type": "Regular Season", "games": 82, "wins": 50}]),
         query_result(rows=[_standing_row()]),
     ]
-    response = client.get("/api/v1/teams/1610612744")
+    response = client.get(f"/api/v1/teams/{TEAM_GSW}")
     assert response.status_code == 200
     body = response.json()["data"]
     assert body["current_season_payroll"] == 51_000_000
@@ -186,7 +195,7 @@ def test_get_team_without_games(client, session, query_result) -> None:
         query_result(scalar=None),
         query_result(rows=[]),
     ]
-    response = client.get("/api/v1/teams/1610612744")
+    response = client.get(f"/api/v1/teams/{TEAM_GSW}")
     assert response.status_code == 200
     body = response.json()["data"]
     assert body["season_record"] is None
@@ -209,7 +218,7 @@ def test_get_team_splits_regular_season_play_in_playoffs(client, session, query_
         ),
         query_result(rows=[]),
     ]
-    response = client.get("/api/v1/teams/1610612744")
+    response = client.get(f"/api/v1/teams/{TEAM_GSW}")
     assert response.status_code == 200
     body = response.json()["data"]
     assert body["record_season"] == "2025-26"
@@ -244,7 +253,7 @@ def test_get_team_prefers_official_standings_record(client, session, query_resul
             ]
         ),
     ]
-    response = client.get("/api/v1/teams/1610612744")
+    response = client.get(f"/api/v1/teams/{TEAM_GSW}")
     assert response.status_code == 200
     record = response.json()["data"]["season_record"]
     assert record["wins"] == 60
@@ -275,7 +284,7 @@ def test_get_team_official_record_is_wins_plus_losses_not_game_fact_count(
             ]
         ),
     ]
-    response = client.get("/api/v1/teams/1610612744")
+    response = client.get(f"/api/v1/teams/{TEAM_GSW}")
     assert response.status_code == 200
     record = response.json()["data"]["season_record"]
     assert record["wins"] == 64
@@ -287,7 +296,7 @@ def test_get_team_official_record_is_wins_plus_losses_not_game_fact_count(
 @pytest.mark.unit
 def test_team_games_invalid_location(client, session, query_result) -> None:
     session.queue = [query_result(rows=[_team_row()])]
-    response = client.get("/api/v1/teams/1610612744/games", params={"location": "chicago"})
+    response = client.get(f"/api/v1/teams/{TEAM_GSW}/games", params={"location": "chicago"})
     assert response.status_code == 400
 
 
@@ -300,26 +309,26 @@ def test_team_games(client, session, mapping_row, query_result) -> None:
             [
                 mapping_row(
                     {
-                        "game_id": "0022400001",
+                        "game_id": GAME_ONE,
                         "season": "2024-25",
                         "season_type": "Regular Season",
                         "game_date": date(2024, 10, 22),
                         "arena": "United Center",
                         "arena_city": "Chicago",
                         "arena_state": "IL",
-                        "home_team_id": 1610612741,
+                        "home_team_id": TEAM_CHI,
                         "home_team_abbreviation": "CHI",
                         "home_team_name": "Chicago Bulls",
                         "home_score": 110,
-                        "away_team_id": 1610612744,
+                        "away_team_id": TEAM_GSW,
                         "away_team_abbreviation": "GSW",
                         "away_team_name": "Golden State Warriors",
                         "away_score": 118,
-                        "winning_team_id": 1610612744,
+                        "winning_team_id": TEAM_GSW,
                         "winner_location": "away",
                         "score_margin": 8,
                         "location": "away",
-                        "opponent_team_id": 1610612741,
+                        "opponent_team_id": TEAM_CHI,
                         "opponent_abbreviation": "CHI",
                         "opponent_name": "Chicago Bulls",
                         "team_score": 118,
@@ -331,7 +340,7 @@ def test_team_games(client, session, mapping_row, query_result) -> None:
         ),
     ]
     response = client.get(
-        "/api/v1/teams/1610612744/games",
+        f"/api/v1/teams/{TEAM_GSW}/games",
         params={"location": "away", "arena_city": "Chicago", "since_season": "2010-11"},
     )
     assert response.status_code == 200
@@ -351,26 +360,26 @@ def test_team_games_loss_returns_team_centric_margin(
             [
                 mapping_row(
                     {
-                        "game_id": "0042500314",
+                        "game_id": GAME_TWO,
                         "season": "2025-26",
                         "season_type": "Playoffs",
                         "game_date": date(2026, 4, 30),
                         "arena": "Ball Arena",
                         "arena_city": "Denver",
                         "arena_state": "CO",
-                        "home_team_id": 1610612744,
+                        "home_team_id": TEAM_GSW,
                         "home_team_abbreviation": "GSW",
                         "home_team_name": "Golden State Warriors",
                         "home_score": 98,
-                        "away_team_id": 1610612750,
+                        "away_team_id": TEAM_MIN,
                         "away_team_abbreviation": "MIN",
                         "away_team_name": "Minnesota Timberwolves",
                         "away_score": 110,
-                        "winning_team_id": 1610612750,
+                        "winning_team_id": TEAM_MIN,
                         "winner_location": "away",
                         "score_margin": -12,
                         "location": "home",
-                        "opponent_team_id": 1610612750,
+                        "opponent_team_id": TEAM_MIN,
                         "opponent_abbreviation": "MIN",
                         "opponent_name": "Minnesota Timberwolves",
                         "team_score": 98,
@@ -381,7 +390,7 @@ def test_team_games_loss_returns_team_centric_margin(
             ]
         ),
     ]
-    response = client.get("/api/v1/teams/1610612744/games")
+    response = client.get(f"/api/v1/teams/{TEAM_GSW}/games")
     assert response.status_code == 200
     row = response.json()["data"][0]
     assert row["is_win"] is False
@@ -405,14 +414,14 @@ def test_team_games_sql_fills_arena_from_home_team() -> None:
 @pytest.mark.unit
 def test_team_games_not_found(client, session, query_result) -> None:
     session.queue = [query_result(rows=[])]
-    response = client.get("/api/v1/teams/1/games")
+    response = client.get(f"/api/v1/teams/{MISSING_ID}/games")
     assert response.status_code == 404
 
 
 @pytest.mark.unit
 def test_team_record_not_found(client, session, query_result) -> None:
     session.queue = [query_result(rows=[])]
-    response = client.get("/api/v1/teams/1/record")
+    response = client.get(f"/api/v1/teams/{MISSING_ID}/record")
     assert response.status_code == 404
 
 
@@ -422,7 +431,7 @@ def test_team_record_empty(client, session, query_result) -> None:
         query_result(rows=[_team_row()]),
         query_result(rows=[{"games": 0, "wins": 0}]),
     ]
-    response = client.get("/api/v1/teams/1610612744/record")
+    response = client.get(f"/api/v1/teams/{TEAM_GSW}/record")
     assert response.status_code == 200
     assert response.json()["data"]["win_pct"] == 0.0
     assert response.json()["data"]["games"] == 0
@@ -435,7 +444,7 @@ def test_team_record_regular_season_filter(client, session, query_result) -> Non
         query_result(rows=[{"games": 82, "wins": 48}]),
     ]
     response = client.get(
-        "/api/v1/teams/1610612744/record",
+        f"/api/v1/teams/{TEAM_GSW}/record",
         params={"season": "2025-26", "season_type": "Regular Season"},
     )
     assert response.status_code == 200
@@ -454,7 +463,7 @@ def test_team_record_play_in_alias(client, session, query_result) -> None:
         query_result(rows=[{"games": 1, "wins": 0}]),
     ]
     response = client.get(
-        "/api/v1/teams/1610612744/record",
+        f"/api/v1/teams/{TEAM_GSW}/record",
         params={"season": "2025-26", "season_type": "Play-In"},
     )
     assert response.status_code == 200
@@ -465,7 +474,7 @@ def test_team_record_play_in_alias(client, session, query_result) -> None:
 def test_team_record_invalid_season_type(client, session, query_result) -> None:
     session.queue = [query_result(rows=[_team_row()])]
     response = client.get(
-        "/api/v1/teams/1610612744/record",
+        f"/api/v1/teams/{TEAM_GSW}/record",
         params={"season_type": "Summer League"},
     )
     assert response.status_code == 400
@@ -500,7 +509,7 @@ def test_list_teams_game_record_overlay(client, session, mapping_row, query_resu
             [
                 mapping_row(
                     {
-                        "team_id": 1610612738,
+                        "team_id": TEAM_BOS,
                         "abbreviation": "BOS",
                         "team_name": "Boston Celtics",
                         "conference": "East",

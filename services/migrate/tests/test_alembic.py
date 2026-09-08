@@ -40,6 +40,11 @@ EXPECTED_SOURCE_TABLES = {
     "game_odds",
     "game_predictions",
     "play_by_play",
+    "player_external_ids",
+    "team_external_ids",
+    "game_external_ids",
+    "team_aliases",
+    "identity_review_queue",
     "scrape_pipeline",
     "pipeline_runs",
 }
@@ -134,7 +139,8 @@ def test_alembic_ini_and_env_load() -> None:
     assert "CREATE TABLE source.player_injuries" in ml_ingest
     assert "CREATE TABLE source.game_odds" in ml_ingest
     assert "CREATE TABLE source.game_predictions" in ml_ingest
-    assert "UNIQUE (player_name_normalized, bref_team_abbreviation)" in ml_ingest
+    assert "player_id               UUID" in ml_ingest
+    assert "team_id                 UUID" in ml_ingest
     assert "UNIQUE (odds_event_id, bookmaker, market)" in ml_ingest
     assert "UNIQUE (game_id, as_of, model_version)" in ml_ingest
     ml_lowered = ml_ingest.lower()
@@ -152,8 +158,7 @@ def test_alembic_ini_and_env_load() -> None:
     )
     assert 'revision: str = "0005_source_play_by_play"' in pbp
     assert "CREATE TABLE source.play_by_play" in pbp
-    assert "UNIQUE (game_id, action_number)" in pbp
-    assert "PlayByPlayV3" in pbp
+    assert "UNIQUE (game_id, action_number, action_id)" in pbp
     pbp_lowered = pbp.lower()
     assert "create table silver." not in pbp_lowered
     assert "create table gold." not in pbp_lowered
@@ -187,8 +192,8 @@ def test_alembic_ini_and_env_load() -> None:
     ).read_text(encoding="utf-8")
     assert 'revision: str = "0007_source_pbp_action_id"' in pbp_action_id
     assert "0006_source_pipeline_reddit" in pbp_action_id
-    assert "DROP CONSTRAINT play_by_play_game_id_action_number_key" in pbp_action_id
-    assert "UNIQUE (game_id, action_number, action_id)" in pbp_action_id
+    assert "pass" in pbp_action_id
+    assert "provider-independent" in pbp_action_id
     pbp_action_id_lowered = pbp_action_id.lower()
     assert "create table silver." not in pbp_action_id_lowered
     assert "create table gold." not in pbp_action_id_lowered

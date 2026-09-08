@@ -8,7 +8,7 @@ MCP exposes structured NBA analytics tools to LLM hosts (for example Claude Desk
 
 ## Use case
 
-Wire `services/mcp` into an MCP-capable client when you want chat-driven analytics over the same Cube model Ask uses. Operators still need scraper + dbt first; empty `gold` tables mean empty Cube results. Compose profile `tools` includes the MCP image alongside scraper and dbt. MCP is **not** started on the production OCI always-on stack. Local MCP needs Cube (`CUBE_API_URL`, `CUBEJS_API_SECRET`); Cube down → clear tool error, no gold SQL fallback.
+Wire `services/mcp` into an MCP-capable client when you want chat-driven analytics over the same Cube model Ask uses. Operators still need scraper + dbt first; empty `gold` tables mean empty Cube results. MCP starts in the default local and production Compose stacks; scraper and dbt remain in profile `tools`. MCP needs Cube (`CUBE_API_URL`, `CUBEJS_API_SECRET`); Cube down → clear tool error, no gold SQL fallback.
 
 ## How it works today
 

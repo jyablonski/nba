@@ -74,6 +74,7 @@ describe("format helpers", () => {
   it("labels gold season types", () => {
     expect(formatSeasonType(null)).toBe("—");
     expect(formatSeasonType("Regular Season")).toBe("Regular Season");
+    expect(formatSeasonType("Cup")).toBe("NBA Cup");
     expect(formatSeasonType("Playoffs")).toBe("Playoffs");
     expect(formatSeasonType("PlayIn")).toBe("Play-in");
     expect(formatSeasonType("play-in")).toBe("Play-in");

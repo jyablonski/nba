@@ -6,45 +6,55 @@ from typing import Any
 
 import pytest
 from cube.errors import CubeUnavailableError
+from ids import (
+    GAME_ONE,
+    PLAYER_CURRY,
+    PLAYER_KAWHI,
+    PLAYER_LEBRON,
+    TEAM_BOS,
+    TEAM_GSW,
+    TEAM_LAL,
+    TEAM_OKC,
+)
 from services.nl_query import NaturalLanguageQueryService
 
 
 class FakeCubeAnalytics:
     def search_players(self, name: str) -> list[dict[str, Any]]:
         catalog = [
-            {"player_id": 202695, "full_name": "Kawhi Leonard"},
-            {"player_id": 2544, "full_name": "LeBron James"},
-            {"player_id": 201939, "full_name": "Stephen Curry"},
+            {"player_id": PLAYER_KAWHI, "full_name": "Kawhi Leonard"},
+            {"player_id": PLAYER_LEBRON, "full_name": "LeBron James"},
+            {"player_id": PLAYER_CURRY, "full_name": "Stephen Curry"},
         ]
         needle = (name or "").lower()
         return [row for row in catalog if needle in row["full_name"].lower()]
 
-    def get_player(self, player_id: int) -> dict[str, Any] | None:
-        if player_id == 201939:
+    def get_player(self, player_id: str) -> dict[str, Any] | None:
+        if str(player_id) == PLAYER_CURRY:
             return {
-                "player_id": 201939,
+                "player_id": PLAYER_CURRY,
                 "full_name": "Stephen Curry",
                 "current_season_salary": 55772427,
                 "current_remaining_guaranteed": 55772427,
                 "current_contract_season": "2025-26",
             }
-        if player_id == 2544:
+        if str(player_id) == PLAYER_LEBRON:
             return {
-                "player_id": 2544,
+                "player_id": PLAYER_LEBRON,
                 "full_name": "LeBron James",
                 "current_season_salary": 52662789,
                 "current_remaining_guaranteed": None,
                 "current_contract_season": None,
             }
-        if player_id == 202695:
+        if str(player_id) == PLAYER_KAWHI:
             return {
-                "player_id": 202695,
+                "player_id": PLAYER_KAWHI,
                 "full_name": "Kawhi Leonard",
                 "current_season_salary": None,
             }
         return None
 
-    def get_back_to_back_stats(self, player_id: int, season: str | None) -> dict:
+    def get_back_to_back_stats(self, player_id: str, season: str | None) -> dict:
         return {
             "total_back_to_backs": 10,
             "games_played_in_b2b": 8,
@@ -54,12 +64,12 @@ class FakeCubeAnalytics:
             "season": season,
         }
 
-    def compare_players(self, player_ids: list[int], stats: list[str] | None = None) -> list[dict]:
+    def compare_players(self, player_ids: list[str], stats: list[str] | None = None) -> list[dict]:
         if len(player_ids) < 2:
             raise ValueError("compare_players requires at least 2 player_ids")
         rows = [
             {
-                "player_id": 2544,
+                "player_id": PLAYER_LEBRON,
                 "full_name": "LeBron James",
                 "career_games_played": 1500,
                 "career_ppg": 27.1,
@@ -67,7 +77,7 @@ class FakeCubeAnalytics:
                 "career_apg": 7.4,
             },
             {
-                "player_id": 201939,
+                "player_id": PLAYER_CURRY,
                 "full_name": "Stephen Curry",
                 "career_games_played": 1000,
                 "career_ppg": 24.3,
@@ -75,12 +85,13 @@ class FakeCubeAnalytics:
                 "career_apg": 6.5,
             },
         ]
-        return [row for row in rows if row["player_id"] in player_ids]
+        player_id_values = {str(player_id) for player_id in player_ids}
+        return [row for row in rows if row["player_id"] in player_id_values]
 
     def find_team(self, abbreviation: str) -> dict | None:
         teams = {
             "GSW": {
-                "team_id": 1610612744,
+                "team_id": TEAM_GSW,
                 "abbreviation": "GSW",
                 "team_name": "Golden State Warriors",
                 "current_season_payroll": 180000000,
@@ -88,7 +99,7 @@ class FakeCubeAnalytics:
                 "current_contract_season": "2025-26",
             },
             "LAL": {
-                "team_id": 1610612747,
+                "team_id": TEAM_LAL,
                 "abbreviation": "LAL",
                 "team_name": "Los Angeles Lakers",
                 "current_season_payroll": 190000000,
@@ -96,7 +107,7 @@ class FakeCubeAnalytics:
                 "current_contract_season": None,
             },
             "OKC": {
-                "team_id": 1610612760,
+                "team_id": TEAM_OKC,
                 "abbreviation": "OKC",
                 "team_name": "Oklahoma City Thunder",
                 "current_season_payroll": None,
@@ -127,7 +138,7 @@ class FakeCubeAnalytics:
     ) -> list[dict]:
         rows = [
             {
-                "team_id": 1610612760,
+                "team_id": TEAM_OKC,
                 "abbreviation": "OKC",
                 "team_name": "Oklahoma City Thunder",
                 "conference": "West",
@@ -138,7 +149,7 @@ class FakeCubeAnalytics:
                 "games_back": 0,
             },
             {
-                "team_id": 1610612747,
+                "team_id": TEAM_LAL,
                 "abbreviation": "LAL",
                 "team_name": "Los Angeles Lakers",
                 "conference": "West",
@@ -149,7 +160,7 @@ class FakeCubeAnalytics:
                 "games_back": 10.0,
             },
             {
-                "team_id": 1610612738,
+                "team_id": TEAM_BOS,
                 "abbreviation": "BOS",
                 "team_name": "Boston Celtics",
                 "conference": "East",
@@ -164,43 +175,43 @@ class FakeCubeAnalytics:
             rows = [row for row in rows if row["conference"].lower() == conference.lower()]
         return rows
 
-    def get_team_standing(self, team_id: int, season: str | None = None) -> dict | None:
+    def get_team_standing(self, team_id: str, season: str | None = None) -> dict | None:
         for row in self.list_standings():
-            if row["team_id"] == team_id:
+            if str(row["team_id"]) == str(team_id):
                 return row
         return None
 
-    def get_player_game_log(self, player_id: int, season: str | None = None) -> list[dict]:
+    def get_player_game_log(self, player_id: str, season: str | None = None) -> list[dict]:
         return [{"player_id": player_id, "points": 30, "season": season}]
 
-    def get_career_stats(self, player_id: int) -> dict | None:
+    def get_career_stats(self, player_id: str) -> dict | None:
         return self.get_player(player_id)
 
-    def get_player_contract(self, player_id: int, season: str | None = None) -> dict | None:
+    def get_player_contract(self, player_id: str, season: str | None = None) -> dict | None:
         return self.get_player(player_id)
 
     def get_team_payroll(self, abbreviation: str, season: str | None = None) -> dict | None:
         return self.find_team(abbreviation)
 
-    def get_player_season_stats(self, player_id: int) -> list[dict]:
-        if player_id != 201939:
+    def get_player_season_stats(self, player_id: str) -> list[dict]:
+        if str(player_id) != PLAYER_CURRY:
             return []
         return [
-            {"player_id": 201939, "season": "2023-24", "games_played": 74, "ppg": 26.4},
-            {"player_id": 201939, "season": "2024-25", "games_played": 70, "ppg": 24.5},
+            {"player_id": PLAYER_CURRY, "season": "2023-24", "games_played": 74, "ppg": 26.4},
+            {"player_id": PLAYER_CURRY, "season": "2024-25", "games_played": 70, "ppg": 24.5},
         ]
 
     def get_games_schedule(self, **kwargs) -> list[dict]:
-        return [{"game_id": "0022400001", "status": "Scheduled"}]
+        return [{"game_id": GAME_ONE, "status": "Scheduled"}]
 
     def get_game_predictions(self, **kwargs) -> list[dict]:
-        return [{"game_id": "0022400001", "model_wp": 0.58, "model_version": "elo-v0"}]
+        return [{"game_id": GAME_ONE, "model_wp": 0.58, "model_version": "elo-v0"}]
 
     def get_player_injuries(self, **kwargs) -> list[dict]:
         return [{"player_name": "Kawhi Leonard", "description": "knee"}]
 
     def get_game_odds(self, **kwargs) -> list[dict]:
-        return [{"game_id": "0022400001", "market": "h2h"}]
+        return [{"game_id": GAME_ONE, "market": "h2h"}]
 
     def get_play_by_play(self, game_id: str, limit: int | None = None) -> list[dict]:
         return [{"game_id": game_id, "action_number": 1}]
@@ -282,6 +293,22 @@ def test_classify_empty_is_refuse(service: NaturalLanguageQueryService) -> None:
 
 
 @pytest.mark.unit
+def test_resolves_bref_initial_player_names() -> None:
+    class BrefNames(FakeCubeAnalytics):
+        def search_players(self, name: str) -> list[dict[str, Any]]:
+            if name.casefold() == "leonard":
+                return [{"player_id": PLAYER_KAWHI, "full_name": "K. Leonard"}]
+            return []
+
+    response = NaturalLanguageQueryService(BrefNames()).answer(
+        "How many back-to-backs has Kawhi Leonard played?"
+    )
+
+    assert response.data
+    assert "K. Leonard has" in response.answer
+
+
+@pytest.mark.unit
 def test_cube_down_is_clear_answer() -> None:
     class Down(FakeCubeAnalytics):
         def search_players(self, name: str) -> list[dict]:
@@ -355,7 +382,7 @@ def test_nl_error_and_fallback_paths(service: NaturalLanguageQueryService) -> No
 @pytest.mark.unit
 def test_salary_missing_detail() -> None:
     class MissingDetail(FakeCubeAnalytics):
-        def get_player_contract(self, player_id: int, season: str | None = None) -> dict | None:
+        def get_player_contract(self, player_id: str, season: str | None = None) -> dict | None:
             return None
 
     missing = NaturalLanguageQueryService(MissingDetail())
@@ -366,11 +393,11 @@ def test_salary_missing_detail() -> None:
 def test_compare_and_standings_empty_rows() -> None:
     class ThinCompare(FakeCubeAnalytics):
         def compare_players(
-            self, player_ids: list[int], stats: list[str] | None = None
+            self, player_ids: list[str], stats: list[str] | None = None
         ) -> list[dict]:
             return [
                 {
-                    "player_id": 2544,
+                    "player_id": PLAYER_LEBRON,
                     "full_name": "LeBron James",
                     "career_games_played": 1,
                 }
@@ -382,12 +409,12 @@ def test_compare_and_standings_empty_rows() -> None:
         ) -> list[dict]:
             return []
 
-        def get_team_standing(self, team_id: int, season: str | None = None) -> dict | None:
+        def get_team_standing(self, team_id: str, season: str | None = None) -> dict | None:
             return None
 
     class PartialNamePlayers(FakeCubeAnalytics):
         def search_players(self, name: str) -> list[dict]:
-            return [{"player_id": 201939, "full_name": "Wardell Stephen Curry"}]
+            return [{"player_id": PLAYER_CURRY, "full_name": "Wardell Stephen Curry"}]
 
     compare = NaturalLanguageQueryService(ThinCompare())
     assert "Could not load career rows" in compare.answer("Compare LeBron vs Curry").answer
@@ -412,7 +439,7 @@ def test_who_leads_west_from_game_record_ranks() -> None:
         ) -> list[dict]:
             rows = [
                 {
-                    "team_id": 1610612760,
+                    "team_id": TEAM_OKC,
                     "abbreviation": "OKC",
                     "team_name": "Oklahoma City Thunder",
                     "conference": "West",
@@ -424,7 +451,7 @@ def test_who_leads_west_from_game_record_ranks() -> None:
                     "season": season,
                 },
                 {
-                    "team_id": 1610612744,
+                    "team_id": TEAM_GSW,
                     "abbreviation": "GSW",
                     "team_name": "Golden State Warriors",
                     "conference": "West",

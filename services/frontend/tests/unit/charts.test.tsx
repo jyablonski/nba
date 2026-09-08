@@ -20,6 +20,11 @@ import {
 } from "@/components/charts/team-ratings-scatter";
 import { WinLossDonut } from "@/components/charts/win-loss-donut";
 
+const TEAM_A = "00000000-0000-4000-8000-000000000201";
+const TEAM_B = "00000000-0000-4000-8000-000000000202";
+const TEAM_BOS = "7927412c-868d-4650-b329-bdc07b20358c";
+const TEAM_PHX = "811b221e-1e3e-4c60-ae9e-837b1572d757";
+
 describe("charts", () => {
   it("shows empty states", () => {
     render(<SeasonLineChart data={[]} />);
@@ -112,8 +117,8 @@ describe("charts", () => {
           game_id: "0042500405",
           season: "2025-26",
           game_date: "2026-06-13",
-          home_team_id: 1,
-          away_team_id: 2,
+          home_team_id: TEAM_A,
+          away_team_id: TEAM_B,
           home_team_abbreviation: "SAS",
           away_team_abbreviation: "NYK",
           home_primary_color: "#000000",
@@ -158,7 +163,7 @@ describe("charts", () => {
       <TeamRatingsScatter
         teams={[
           {
-            team_id: 1610612738,
+            team_id: TEAM_BOS,
             abbreviation: "BOS",
             team_name: "Boston Celtics",
             conference: "East",
@@ -186,7 +191,7 @@ describe("charts", () => {
           cx={40}
           cy={40}
           payload={{
-            team_id: 1610612756,
+            team_id: TEAM_PHX,
             abbreviation: "PHX",
             team_name: "Phoenix Suns",
             pts_scored_avg: 112.6,
@@ -195,7 +200,12 @@ describe("charts", () => {
         />
       </svg>
     );
-    expect(logo.querySelectorAll("image")).toHaveLength(1);
+    expect(logo.querySelectorAll("circle")).toHaveLength(1);
+    expect(logo.querySelector("image")).toHaveAttribute(
+      "href",
+      "https://cdn.nba.com/logos/nba/1610612756/primary/L/logo.svg"
+    );
+    expect(logo.querySelector("text")).toBeNull();
     expect(logo.querySelector("title")).toBeNull();
     render(
       <RatingsTooltip
@@ -203,7 +213,7 @@ describe("charts", () => {
         payload={[
           {
             payload: {
-              team_id: 1610612756,
+              team_id: TEAM_PHX,
               abbreviation: "PHX",
               team_name: "Phoenix Suns",
               pts_scored_avg: 112.6,
@@ -235,8 +245,8 @@ describe("charts", () => {
           game_id: "0022400001",
           season: "2024-25",
           game_date: "2024-10-22",
-          home_team_id: 1,
-          away_team_id: 2,
+          home_team_id: TEAM_A,
+          away_team_id: TEAM_B,
           has_play_by_play: true,
           game_elapsed_seconds: 3180,
         }}

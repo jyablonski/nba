@@ -111,6 +111,7 @@ function ConferenceColumn({
                       teamId={team.team_id}
                       abbreviation={team.abbreviation}
                       href={`/teams/${team.team_id}`}
+                      size={24}
                     />
                     <Link href={`/teams/${team.team_id}`} className="hover:text-primary">
                       {nickname || team.team_name}

@@ -30,13 +30,10 @@ export default function AboutPage() {
         </p>
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>
-            <span className="font-medium text-foreground">NBA Stats</span>: teams, players, the
-            season slate, box scores, standings, and play-by-play for completed games.
-          </li>
-          <li>
-            <span className="font-medium text-foreground">Basketball-Reference</span>:
-            remaining-year player salaries and team payroll, plus the current injury report.
-            Snapshots, not a paid ledger or injury history.
+            <span className="font-medium text-foreground">Basketball-Reference</span>: teams,
+            players, the season slate, box scores, standings, play-by-play, remaining-year player
+            salaries, team payroll, and the current injury report. Snapshots, not a paid ledger or
+            injury history.
           </li>
           <li>
             <span className="font-medium text-foreground">The Odds API</span>: upcoming NBA

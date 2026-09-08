@@ -11,7 +11,7 @@ cubes:
     dimensions:
       - name: player_id
         sql: player_id
-        type: number
+        type: string
         primary_key: true
 
       - name: full_name
@@ -56,7 +56,7 @@ cubes:
 
       - name: team_id
         sql: team_id
-        type: number
+        type: string
 
       - name: career_games_played
         sql: career_games_played

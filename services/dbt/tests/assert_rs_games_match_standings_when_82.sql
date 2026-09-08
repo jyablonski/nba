@@ -1,5 +1,5 @@
 -- Completed 82-game official snapshots must have 82 Regular Season Finals per team.
--- Catches LeagueGameFinder rows dropped when both sides repeat the "@" matchup.
+-- Catches schedule rows dropped when both sides repeat the "@" matchup.
 with regular_season_games as (
     select * from {{ ref('fct_team_game_results') }}
     where season_type = 'Regular Season'

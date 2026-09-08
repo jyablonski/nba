@@ -12,6 +12,7 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlencode
+from uuid import UUID
 
 import requests
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
@@ -193,9 +194,9 @@ def parse_odds_events(payload: Any) -> list[dict[str, Any]]:
     return rows
 
 
-def _load_team_and_game_lookup(session: Any) -> tuple[dict[str, int], list[Any]]:
+def _load_team_and_game_lookup(session: Any) -> tuple[dict[str, UUID], list[Any]]:
     teams = session.query(Team).all()
-    by_name: dict[str, int] = {}
+    by_name: dict[str, UUID] = {}
     for team in teams:
         by_name[_team_key(team.full_name)] = team.team_id
         by_name[_team_key(f"{team.city} {team.nickname}")] = team.team_id
@@ -207,9 +208,9 @@ def _load_team_and_game_lookup(session: Any) -> tuple[dict[str, int], list[Any]]
 def match_odds_game_id(
     row: dict[str, Any],
     *,
-    teams_by_name: dict[str, int],
+    teams_by_name: dict[str, UUID],
     games: list[Any],
-) -> str | None:
+) -> UUID | None:
     home_id = teams_by_name.get(_team_key(str(row.get("home_team_name") or "")))
     away_id = teams_by_name.get(_team_key(str(row.get("away_team_name") or "")))
     commence = row.get("commence_time")
@@ -224,7 +225,7 @@ def match_odds_game_id(
         and game.game_date == game_date
     ]
     if len(matches) == 1:
-        return str(matches[0].game_id)
+        return matches[0].game_id
     return None
 
 

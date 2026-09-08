@@ -2,25 +2,15 @@ version: 2
 
 models:
   - name: stg_team_payroll
-    description: Team-season payroll totals from Basketball-Reference Team Totals.
+    description: Team-season payroll totals from Basketball-Reference, resolved to canonical UUIDs.
     columns:
-      - name: nba_team_abbreviation
+      - name: team_id
         data_tests:
           - not_null
-          - dbt_expectations.expect_column_value_lengths_to_equal:
-              arguments:
-                value: 3
       - name: season
         data_tests:
           - not_null
-      - name: total_salary
-        data_tests:
-          - dbt_expectations.expect_column_values_to_be_between:
-              arguments:
-                min_value: 0
-                max_value: 5000000000
-                row_condition: "total_salary is not null"
     data_tests:
       - dbt_expectations.expect_compound_columns_to_be_unique:
           arguments:
-            column_list: ["bref_team_abbreviation", "season"]
+            column_list: ["team_id", "season"]

@@ -4,7 +4,7 @@
 CREATE SCHEMA IF NOT EXISTS gold;
 
 CREATE TABLE IF NOT EXISTS gold.dim_teams (
-    team_id         INTEGER PRIMARY KEY,
+    team_id         UUID PRIMARY KEY,
     abbreviation    VARCHAR(5) NOT NULL,
     team_name       VARCHAR(100) NOT NULL,
     city            VARCHAR(50),
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_teams (
 );
 
 CREATE TABLE IF NOT EXISTS gold.dim_players (
-    player_id               INTEGER PRIMARY KEY,
+    player_id               UUID PRIMARY KEY,
     first_name              VARCHAR(100) NOT NULL,
     last_name               VARCHAR(100) NOT NULL,
     full_name               VARCHAR(200) NOT NULL,
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS gold.dim_players (
     height                  VARCHAR(10),
     weight                  INTEGER,
     birth_date              DATE,
-    team_id                 INTEGER REFERENCES gold.dim_teams(team_id),
+    team_id                 UUID REFERENCES gold.dim_teams(team_id),
     from_year               INTEGER,
     to_year                 INTEGER,
     career_games_played     INTEGER DEFAULT 0,
@@ -52,13 +52,13 @@ CREATE TABLE IF NOT EXISTS gold.dim_players (
     career_rpg                    REAL,
     career_apg                    REAL,
     current_contract_season       VARCHAR(10),
-    current_contract_team_id      INTEGER,
+    current_contract_team_id      UUID,
     current_season_salary         BIGINT,
     current_remaining_guaranteed  BIGINT
 );
 
 CREATE TABLE IF NOT EXISTS gold.fct_team_game_results (
-    game_id                 VARCHAR(20) PRIMARY KEY,
+    game_id                 UUID PRIMARY KEY,
     season                  VARCHAR(10) NOT NULL,
     season_type             VARCHAR(20),
     game_date               DATE NOT NULL,
@@ -66,22 +66,22 @@ CREATE TABLE IF NOT EXISTS gold.fct_team_game_results (
     arena_city              VARCHAR(50),
     arena_state             VARCHAR(50),
     score_margin            INTEGER,
-    home_team_id            INTEGER NOT NULL,
+    home_team_id            UUID NOT NULL,
     home_team_abbreviation  VARCHAR(5),
     home_team_name          VARCHAR(100),
     home_score              INTEGER,
-    away_team_id            INTEGER NOT NULL,
+    away_team_id            UUID NOT NULL,
     away_team_abbreviation  VARCHAR(5),
     away_team_name          VARCHAR(100),
     away_score              INTEGER,
-    winning_team_id         INTEGER,
+    winning_team_id         UUID,
     winner_location         VARCHAR(10)
 );
 
 CREATE TABLE IF NOT EXISTS gold.fct_player_game_logs (
-    player_id               INTEGER NOT NULL,
-    game_id                 VARCHAR(20) NOT NULL,
-    team_id                 INTEGER NOT NULL,
+    player_id               UUID NOT NULL,
+    game_id                 UUID NOT NULL,
+    team_id                 UUID NOT NULL,
     game_date               DATE NOT NULL,
     season                  VARCHAR(10) NOT NULL,
     matchup                 VARCHAR(20),
@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS gold.fct_player_game_logs (
 );
 
 CREATE TABLE IF NOT EXISTS gold.fct_player_season_stats (
-    player_id               INTEGER NOT NULL,
+    player_id               UUID NOT NULL,
     season                  VARCHAR(10) NOT NULL,
     games_played            INTEGER NOT NULL,
     first_game_date         DATE,
@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS gold.fct_player_season_stats (
 );
 
 CREATE TABLE IF NOT EXISTS gold.fct_standings (
-    team_id             INTEGER NOT NULL REFERENCES gold.dim_teams(team_id),
+    team_id             UUID NOT NULL REFERENCES gold.dim_teams(team_id),
     abbreviation        VARCHAR(5) NOT NULL,
     team_name           VARCHAR(100) NOT NULL,
     season              VARCHAR(10) NOT NULL,
@@ -148,7 +148,7 @@ CREATE TABLE IF NOT EXISTS gold.fct_standings (
 );
 
 CREATE TABLE IF NOT EXISTS gold.fct_games_schedule (
-    game_id                 VARCHAR(20) PRIMARY KEY,
+    game_id                 UUID PRIMARY KEY,
     season                  VARCHAR(10) NOT NULL,
     season_type             VARCHAR(20),
     game_date               DATE NOT NULL,
@@ -156,11 +156,11 @@ CREATE TABLE IF NOT EXISTS gold.fct_games_schedule (
     arena                   VARCHAR(100),
     arena_city              VARCHAR(50),
     arena_state             VARCHAR(50),
-    home_team_id            INTEGER NOT NULL,
+    home_team_id            UUID NOT NULL,
     home_team_abbreviation  VARCHAR(5),
     home_team_name          VARCHAR(100),
     home_score              INTEGER,
-    away_team_id            INTEGER NOT NULL,
+    away_team_id            UUID NOT NULL,
     away_team_abbreviation  VARCHAR(5),
     away_team_name          VARCHAR(100),
     away_score              INTEGER

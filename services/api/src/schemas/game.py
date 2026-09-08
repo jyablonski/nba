@@ -1,4 +1,5 @@
 from datetime import date
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -6,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class ScheduledGame(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    game_id: str
+    game_id: UUID
     season: str
     season_type: str | None = None
     game_date: date
@@ -14,10 +15,10 @@ class ScheduledGame(BaseModel):
     arena: str | None = None
     arena_city: str | None = None
     arena_state: str | None = None
-    home_team_id: int
+    home_team_id: UUID
     home_team_abbreviation: str | None = None
     home_team_name: str | None = None
-    away_team_id: int
+    away_team_id: UUID
     away_team_abbreviation: str | None = None
     away_team_name: str | None = None
 
@@ -25,22 +26,22 @@ class ScheduledGame(BaseModel):
 class GameResult(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    game_id: str
+    game_id: UUID
     season: str
     season_type: str | None = None
     game_date: date
     arena: str | None = None
     arena_city: str | None = None
     arena_state: str | None = None
-    home_team_id: int
+    home_team_id: UUID
     home_team_abbreviation: str | None = None
     home_team_name: str | None = None
     home_score: int | None = None
-    away_team_id: int
+    away_team_id: UUID
     away_team_abbreviation: str | None = None
     away_team_name: str | None = None
     away_score: int | None = None
-    winning_team_id: int | None = None
+    winning_team_id: UUID | None = None
     winner_location: str | None = None
     score_margin: int | None = None
 
@@ -48,7 +49,7 @@ class GameResult(BaseModel):
 class PlayByPlayEvent(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    game_id: str
+    game_id: UUID
     action_number: int
     period: int | None = None
     clock: str | None = None
@@ -61,8 +62,8 @@ class PlayByPlayEvent(BaseModel):
     away_points: int | None = None
     points_scored: int | None = None
     scoring_side: str | None = None
-    team_id: int | None = None
-    player_id: int | None = None
+    team_id: UUID | None = None
+    player_id: UUID | None = None
     action_type: str | None = None
     sub_type: str | None = None
     description: str | None = None
@@ -71,22 +72,22 @@ class PlayByPlayEvent(BaseModel):
 class GameFlow(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    game_id: str
+    game_id: UUID
     season: str
     game_date: date
-    home_team_id: int
+    home_team_id: UUID
     home_team_abbreviation: str | None = None
     home_team_name: str | None = None
     home_primary_color: str | None = None
     home_alternate_color: str | None = None
     home_score: int | None = None
-    away_team_id: int
+    away_team_id: UUID
     away_team_abbreviation: str | None = None
     away_team_name: str | None = None
     away_primary_color: str | None = None
     away_alternate_color: str | None = None
     away_score: int | None = None
-    winning_team_id: int | None = None
+    winning_team_id: UUID | None = None
     winning_team_abbreviation: str | None = None
     winner_location: str | None = None
     has_play_by_play: bool = False
@@ -113,7 +114,7 @@ class GameFlow(BaseModel):
 
 class TeamGameResult(GameResult):
     location: str
-    opponent_team_id: int
+    opponent_team_id: UUID
     opponent_abbreviation: str | None = None
     opponent_name: str | None = None
     team_score: int | None = None

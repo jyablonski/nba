@@ -12,6 +12,7 @@ from cube.client import (
     format_meta_summary,
 )
 from cube.errors import CUBE_DOWN, CubeQueryError, CubeUnavailableError, UnknownMemberError
+from ids import PLAYER_CURRY
 
 SAMPLE_META = {
     "cubes": [
@@ -136,12 +137,12 @@ def test_flatten_collisions_and_meta_summary() -> None:
     row = {
         "players.full_name": "A",
         "teams.full_name": "B",
-        "players.player_id": 1,
+        "players.player_id": PLAYER_CURRY,
     }
     flat = flatten_row(row)
     assert flat["players.full_name"] == "A"
     assert flat["teams.full_name"] == "B"
-    assert flat["player_id"] == 1
+    assert flat["player_id"] == PLAYER_CURRY
     summary = format_meta_summary(SAMPLE_META)
     assert "## players" in summary
     assert "players.count" in summary

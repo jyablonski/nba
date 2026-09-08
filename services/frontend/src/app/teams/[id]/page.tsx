@@ -9,6 +9,7 @@ import { CapPosition } from "@/components/teams/cap-position";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
+import { withSeason } from "@/lib/nav";
 import {
   formatDate,
   formatGamesBack,
@@ -33,7 +34,7 @@ export default function TeamProfilePage() {
 
 function TeamProfile() {
   const params = useParams<{ id: string }>();
-  const teamId = Number(params.id);
+  const teamId = params.id;
   const { season: requestedSeason, seasons } = useSeason();
   const [seasonOverride, setSeasonOverride] = useState<string | null>(null);
   const [sinceSeason, setSinceSeason] = useState("");
@@ -45,7 +46,7 @@ function TeamProfile() {
   const teamQuery = useQuery({
     queryKey: ["team", teamId],
     queryFn: () => api.getTeam(teamId),
-    enabled: Number.isFinite(teamId),
+    enabled: Boolean(teamId),
   });
   const teamsQuery = useQuery({
     queryKey: ["teams"],
@@ -55,7 +56,7 @@ function TeamProfile() {
   const recordParams = {
     season: season || undefined,
     since_season: sinceSeason || undefined,
-    opponent_team_id: opponentId ? Number(opponentId) : undefined,
+    opponent_team_id: opponentId || undefined,
     location: location === "all" ? undefined : location,
     arena_city: arenaCity || undefined,
   };
@@ -63,22 +64,22 @@ function TeamProfile() {
   const gamesQuery = useQuery({
     queryKey: ["team", teamId, "games", recordParams],
     queryFn: () => api.getTeamGames(teamId, { ...recordParams, limit: 200 }),
-    enabled: Number.isFinite(teamId),
+    enabled: Boolean(teamId),
   });
   const overallQuery = useQuery({
     queryKey: ["team", teamId, "record", "overall", recordParams],
     queryFn: () => api.getTeamRecord(teamId, recordParams),
-    enabled: Number.isFinite(teamId),
+    enabled: Boolean(teamId),
   });
   const homeQuery = useQuery({
     queryKey: ["team", teamId, "record", "home", recordParams],
     queryFn: () => api.getTeamRecord(teamId, { ...recordParams, location: "home" }),
-    enabled: Number.isFinite(teamId),
+    enabled: Boolean(teamId),
   });
   const awayQuery = useQuery({
     queryKey: ["team", teamId, "record", "away", recordParams],
     queryFn: () => api.getTeamRecord(teamId, { ...recordParams, location: "away" }),
-    enabled: Number.isFinite(teamId),
+    enabled: Boolean(teamId),
   });
 
   const team = teamQuery.data;
@@ -93,13 +94,13 @@ function TeamProfile() {
         season_type: "Regular Season",
         limit: 10,
       }),
-    enabled: Number.isFinite(teamId) && needsForm,
+    enabled: Boolean(teamId) && needsForm,
   });
 
   const games = gamesQuery.data?.data ?? [];
   const overall = overallQuery.data;
 
-  if (!Number.isFinite(teamId)) {
+  if (!teamId) {
     return <ErrorState message="Invalid team id." />;
   }
 
@@ -274,8 +275,7 @@ function TeamProfile() {
       <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
         <section>
           <h2 className="type-module">
-            Games
-            {gamesTotal ? ` ${formatNumber(gamesTotal)} games` : ""}
+            {gamesTotal ? `${formatNumber(gamesTotal)} games` : "Game results"}
             {overall
               ? ` · ${formatRecordWithWinPct(overall.wins, overall.losses, overall.win_pct)}`
               : " · —"}
@@ -296,6 +296,7 @@ function TeamProfile() {
                   <th className="text-right">Score</th>
                   <th className="text-right">Margin</th>
                   <th>Arena</th>
+                  <th>PBP</th>
                 </tr>
               </thead>
               <tbody>
@@ -321,6 +322,14 @@ function TeamProfile() {
                       </td>
                       <td className="tabular text-right">{formatSignedMargin(view.margin)}</td>
                       <td className="text-muted-foreground">{view.arena}</td>
+                      <td>
+                        <Link
+                          href={withSeason(`/games/${game.game_id}`, view.season)}
+                          className="text-primary hover:underline"
+                        >
+                          PBP
+                        </Link>
+                      </td>
                     </tr>
                   );
                 })}
@@ -427,7 +436,7 @@ function RecordBar({ label, wins, losses }: { label: string; wins: number; losse
   );
 }
 
-function normalizeTeamGame(game: TeamGame, teamId: number) {
+function normalizeTeamGame(game: TeamGame, teamId: string) {
   const isHome = game.location?.toLowerCase() === "home" || game.home_team_id === teamId;
   const opponent =
     game.opponent_abbreviation ??

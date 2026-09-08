@@ -3,6 +3,15 @@
 from __future__ import annotations
 
 import pytest
+from ids import (
+    GAME_ONE,
+    GAME_SCHEDULE,
+    GAME_THREE,
+    PLAYER_CURRY,
+    PLAYER_KAWHI,
+    TEAM_GSW,
+    TEAM_LAC,
+)
 
 
 @pytest.mark.integration
@@ -24,12 +33,12 @@ def test_list_players_seeded(integration_client) -> None:
 
 @pytest.mark.integration
 def test_get_player_and_game_log(integration_client) -> None:
-    detail = integration_client.get("/api/v1/players/202695")
+    detail = integration_client.get(f"/api/v1/players/{PLAYER_KAWHI}")
     assert detail.status_code == 200
     assert detail.json()["data"]["career_games_played"] == 3
 
     logs = integration_client.get(
-        "/api/v1/players/202695/game-log",
+        f"/api/v1/players/{PLAYER_KAWHI}/game-log",
         params={"season": "2024-25"},
     )
     assert logs.status_code == 200
@@ -41,7 +50,7 @@ def test_get_player_and_game_log(integration_client) -> None:
 @pytest.mark.integration
 def test_player_back_to_backs(integration_client) -> None:
     response = integration_client.get(
-        "/api/v1/players/202695/back-to-backs",
+        f"/api/v1/players/{PLAYER_KAWHI}/back-to-backs",
         params={"season": "2024-25"},
     )
     assert response.status_code == 200
@@ -55,15 +64,15 @@ def test_player_back_to_backs(integration_client) -> None:
 def test_compare_players(integration_client) -> None:
     response = integration_client.get(
         "/api/v1/players/compare",
-        params={"ids": "202695,201939", "stat": "ppg"},
+        params={"ids": f"{PLAYER_KAWHI},{PLAYER_CURRY}", "stat": "ppg"},
     )
     assert response.status_code == 200
     rows = response.json()["data"]
     names = [row["full_name"] for row in rows]
     assert names[0] == "Stephen Curry"
     by_id = {row["player_id"]: row for row in rows}
-    assert by_id[201939]["career_avg_plus_minus"] == 3.5
-    assert by_id[202695]["career_avg_plus_minus"] == 0.7
+    assert by_id[PLAYER_CURRY]["career_avg_plus_minus"] == 3.5
+    assert by_id[PLAYER_KAWHI]["career_avg_plus_minus"] == 0.7
 
 
 @pytest.mark.integration
@@ -72,14 +81,14 @@ def test_teams_and_record(integration_client) -> None:
     assert teams.status_code == 200
     assert teams.json()["meta"]["total"] == 3
 
-    detail = integration_client.get("/api/v1/teams/1610612744")
+    detail = integration_client.get(f"/api/v1/teams/{TEAM_GSW}")
     assert detail.status_code == 200
     team = detail.json()["data"]
     assert team["arena_name"] == "Chase Center"
     assert team["arena_latitude"] == pytest.approx(37.76806)
     assert team["arena_longitude"] == pytest.approx(-122.38750)
 
-    record = integration_client.get("/api/v1/teams/1610612746/record")
+    record = integration_client.get(f"/api/v1/teams/{TEAM_LAC}/record")
     assert record.status_code == 200
     body = record.json()["data"]
     assert body["wins"] == 2
@@ -101,7 +110,7 @@ def test_games_and_seasons(integration_client) -> None:
     assert schedule.status_code == 200
     body = schedule.json()
     assert body["meta"]["total"] == 1
-    assert body["data"][0]["game_id"] == "0022400999"
+    assert body["data"][0]["game_id"] == GAME_SCHEDULE
     assert body["data"][0]["status"] == "Scheduled"
     assert body["data"][0]["home_team_abbreviation"] == "GSW"
 
@@ -125,15 +134,15 @@ def test_status_and_coverage(integration_client, postgres_engine) -> None:
             text(
                 """
                 INSERT INTO source.teams (
-                    team_id, abbreviation, full_name, city, nickname,
+                    team_id, canonical_slug, abbreviation, full_name, city, nickname,
                     conference, division, scraped_at
                 ) VALUES (
-                    1610612744, 'GSW', 'Golden State Warriors', 'San Francisco',
+                    :team_id, 'golden-state-warriors', 'GSW', 'Golden State Warriors', 'San Francisco',
                     'Warriors', 'West', 'Pacific', :ts
                 )
                 """
             ),
-            {"ts": "2026-08-01 12:00:00"},
+            {"team_id": TEAM_GSW, "ts": "2026-08-01 12:00:00"},
         )
     fallback = integration_client.get("/api/v1/status")
     assert fallback.status_code == 200
@@ -153,7 +162,7 @@ def test_status_and_coverage(integration_client, postgres_engine) -> None:
 def test_player_directory_and_season_stats(integration_client) -> None:
     players = integration_client.get(
         "/api/v1/players",
-        params={"team_id": 1610612746, "active": True},
+        params={"team_id": TEAM_LAC, "active": True},
     )
     assert players.status_code == 200
     row = players.json()["data"][0]
@@ -162,24 +171,24 @@ def test_player_directory_and_season_stats(integration_client) -> None:
     assert row["career_ppg"] == 27.3
 
     logs = integration_client.get(
-        "/api/v1/players/202695/game-log",
+        f"/api/v1/players/{PLAYER_KAWHI}/game-log",
         params={"is_back_to_back": True},
     )
     assert logs.status_code == 200
     assert logs.json()["meta"]["total"] == 1
     assert logs.json()["data"][0]["points"] == 24
 
-    seasons = integration_client.get("/api/v1/players/202695/season-stats")
+    seasons = integration_client.get(f"/api/v1/players/{PLAYER_KAWHI}/season-stats")
     assert seasons.status_code == 200
     assert seasons.json()["data"][0]["season"] == "2024-25"
     assert seasons.json()["data"][0]["games_played"] == 3
 
     compare = integration_client.get(
         "/api/v1/players/compare",
-        params={"ids": "202695,201939"},
+        params={"ids": f"{PLAYER_KAWHI},{PLAYER_CURRY}"},
     )
     assert compare.status_code == 200
-    kawhi = next(item for item in compare.json()["data"] if item["player_id"] == 202695)
+    kawhi = next(item for item in compare.json()["data"] if item["player_id"] == PLAYER_KAWHI)
     assert kawhi["team_abbreviation"] == "LAC"
     assert kawhi["first_season"] == "2024-25"
     assert kawhi["career_avg_plus_minus"] == 0.7
@@ -189,17 +198,17 @@ def test_player_directory_and_season_stats(integration_client) -> None:
 def test_compare_head_to_head(integration_client) -> None:
     h2h = integration_client.get(
         "/api/v1/players/compare/head-to-head",
-        params={"ids": "202695,201939"},
+        params={"ids": f"{PLAYER_KAWHI},{PLAYER_CURRY}"},
     )
     assert h2h.status_code == 200
     meeting = h2h.json()["data"]
     assert meeting["games_played"] == 2
     by_id = {row["player_id"]: row for row in meeting["players"]}
-    assert by_id[202695]["ppg"] == 29.0
-    assert by_id[201939]["ppg"] == 30.5
-    assert by_id[202695]["plus_minus"] == -2.0
-    assert by_id[201939]["plus_minus"] == 3.5
-    assert {game["game_id"] for game in meeting["games"]} == {"0022400001", "0022400003"}
+    assert by_id[PLAYER_KAWHI]["ppg"] == 29.0
+    assert by_id[PLAYER_CURRY]["ppg"] == 30.5
+    assert by_id[PLAYER_KAWHI]["plus_minus"] == -2.0
+    assert by_id[PLAYER_CURRY]["plus_minus"] == 3.5
+    assert {game["game_id"] for game in meeting["games"]} == {GAME_ONE, GAME_THREE}
 
 
 @pytest.mark.integration
@@ -214,7 +223,7 @@ def test_teams_directory_records(integration_client) -> None:
 
 @pytest.mark.integration
 def test_salary_payroll_and_standings(integration_client) -> None:
-    curry = integration_client.get("/api/v1/players/201939")
+    curry = integration_client.get(f"/api/v1/players/{PLAYER_CURRY}")
     assert curry.status_code == 200
     player = curry.json()["data"]
     assert player["current_season_salary"] == 50_000_000
@@ -231,7 +240,7 @@ def test_salary_payroll_and_standings(integration_client) -> None:
     assert rows[1]["abbreviation"] == "LAC"
     assert rows[1]["games_back"] == 1.5
 
-    team = integration_client.get("/api/v1/teams/1610612744")
+    team = integration_client.get(f"/api/v1/teams/{TEAM_GSW}")
     assert team.status_code == 200
     body = team.json()["data"]
     assert body["current_season_payroll"] == 51_000_000

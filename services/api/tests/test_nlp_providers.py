@@ -6,6 +6,7 @@ import json
 
 import pytest
 from cube.errors import CubeUnavailableError, UnknownMemberError
+from ids import GAME_ONE, MISSING_ID, PLAYER_CURRY, PLAYER_LEBRON
 from services.nlp.factory import build_nlp_provider
 from services.nlp.llm_client import (
     HttpLlmClient,
@@ -82,7 +83,7 @@ def test_llm_scripted_named_tool_not_sql(llm_settings: Settings) -> None:
                     LlmToolCall(
                         id="1",
                         name="get_player_contract",
-                        arguments={"player_id": 201939},
+                        arguments={"player_id": PLAYER_CURRY},
                     )
                 ],
             ),
@@ -167,12 +168,12 @@ def test_named_tools_cover_cube_equivalents() -> None:
     assert "location" in record_schema["function"]["parameters"]["properties"]
 
     assert executor.execute("search_players", {"name": "Curry"})["ok"]
-    assert executor.execute("get_player_game_log", {"player_id": 201939})["ok"]
-    assert executor.execute("get_player_back_to_backs", {"player_id": 201939})["ok"]
-    assert executor.execute("get_career_stats", {"player_id": 201939})["ok"]
-    assert executor.execute("compare_players", {"player_ids": [2544, 201939], "stats": ["games"]})[
-        "ok"
-    ]
+    assert executor.execute("get_player_game_log", {"player_id": PLAYER_CURRY})["ok"]
+    assert executor.execute("get_player_back_to_backs", {"player_id": PLAYER_CURRY})["ok"]
+    assert executor.execute("get_career_stats", {"player_id": PLAYER_CURRY})["ok"]
+    assert executor.execute(
+        "compare_players", {"player_ids": [PLAYER_LEBRON, PLAYER_CURRY], "stats": ["games"]}
+    )["ok"]
     assert executor.execute(
         "get_team_record",
         {
@@ -182,23 +183,23 @@ def test_named_tools_cover_cube_equivalents() -> None:
             "location": "away",
         },
     )["ok"]
-    assert executor.execute("get_player_contract", {"player_id": 201939})["ok"]
+    assert executor.execute("get_player_contract", {"player_id": PLAYER_CURRY})["ok"]
     assert executor.execute("get_team_payroll", {"team_abbreviation": "GSW"})["ok"]
     assert executor.execute("get_standings", {"conference": "West"})["ok"]
-    assert executor.execute("get_player_season_stats", {"player_id": 201939})["ok"]
+    assert executor.execute("get_player_season_stats", {"player_id": PLAYER_CURRY})["ok"]
     assert executor.execute("get_games_schedule", {"season": "2024-25"})["ok"]
     assert executor.execute("get_game_predictions", {"upcoming": True})["ok"]
     assert executor.execute("get_player_injuries", {"team_abbreviation": "LAC"})["ok"]
     assert executor.execute("get_game_odds", {})["ok"]
-    assert executor.execute("get_play_by_play", {"game_id": "0022400001"})["ok"]
+    assert executor.execute("get_play_by_play", {"game_id": GAME_ONE})["ok"]
     assert executor.execute("get_reddit_posts", {"search": "thread"})["ok"]
     assert executor.execute("query_cube", {"measures": ["players.count"]})["ok"]
     assert executor.execute("run_cube_query", {"measures": ["players.count"]})["ok"]
 
     missing = NamedToolExecutor(FakeCubeAnalytics())
-    assert missing.execute("compare_players", {"player_ids": [1]})["ok"] is False
-    assert missing.execute("get_career_stats", {"player_id": 1})["ok"] is False
-    assert missing.execute("get_player_contract", {"player_id": 1})["ok"] is False
+    assert missing.execute("compare_players", {"player_ids": [MISSING_ID]})["ok"] is False
+    assert missing.execute("get_career_stats", {"player_id": MISSING_ID})["ok"] is False
+    assert missing.execute("get_player_contract", {"player_id": MISSING_ID})["ok"] is False
     assert missing.execute("get_team_payroll", {"team_abbreviation": "ATL"})["ok"] is False
     assert missing.execute("get_team_record", {"team_abbreviation": "ATL"})["ok"] is False
     assert missing.execute("mystery", {})["ok"] is False
@@ -331,10 +332,10 @@ def test_llm_meta_cube_down(llm_settings: Settings) -> None:
 @pytest.mark.unit
 def test_tool_handler_errors_are_json() -> None:
     class Boom(FakeCubeAnalytics):
-        def get_career_stats(self, player_id: int) -> dict | None:
+        def get_career_stats(self, player_id: str) -> dict | None:
             raise UnknownMemberError("Unknown Cube member(s): players.nope")
 
     executor = NamedToolExecutor(Boom())
-    failed = executor.execute("get_career_stats", {"player_id": 1})
+    failed = executor.execute("get_career_stats", {"player_id": PLAYER_CURRY})
     assert failed["ok"] is False
     assert "players.nope" in failed["error"]

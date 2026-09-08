@@ -1,307 +1,389 @@
-"""Scrape NBA Stats PlayByPlayV3 into source.play_by_play.
-
-The CLI (``scrape-play-by-play``) loads Final games from ``source.games``
-for one season (default ``current_season()``). Daily / pipeline passes
-``game_ids`` for today's Finals only — not the whole season. Not on
-``scrape-all``. Does not invent or scrape games.
-"""
+"""Optional BRef play-by-play ingest for completed games."""
 
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+from uuid import UUID
+
+from bs4 import BeautifulSoup, Comment, Tag
+from identity import BREF_PROVIDER, ensure_player, resolve_team_id, seed_team_catalog
+from sqlalchemy import select
 
 from db import get_session, upsert_rows
-from models import Game, PlayByPlay
-from scrapers import (
-    NBA_REQUEST_TIMEOUT,
-    current_season,
-    nba_call,
-    row_get,
-    to_int,
-    to_str,
-)
-from scrapers.games import _is_final_status
+from models import Game, GameExternalId, PlayByPlay, Team
+from scrapers import BREF_BASE_URL, bref_get, current_season, to_int, to_str
 
 logger = logging.getLogger(__name__)
 
-# Flattened PlayByPlayV3 keys that become first-class columns.
-_PROMOTED_KEYS = frozenset(
-    {
-        "gameid",
-        "actionnumber",
-        "actionid",
-        "clock",
-        "period",
-        "teamid",
-        "personid",
-        "scorehome",
-        "scoreaway",
-        "actiontype",
-        "subtype",
-        "description",
-    }
-)
-
-# V3 repeats actionNumber for paired events (turnover+steal, miss+block)
-# with distinct actionId values. Grain is the triple.
-_UPSERT_CONFLICT = ["game_id", "action_number", "action_id"]
-_RICHNESS_KEYS = (
-    "period",
-    "clock",
-    "score_home",
-    "score_away",
-    "team_id",
-    "player_id",
-    "action_type",
-    "sub_type",
-    "description",
-)
-
 
 class NoFinalGamesError(RuntimeError):
-    """Raised when source.games has no Final rows for the requested season."""
+    """Raised when there are no completed games to enrich."""
 
 
-def _optional_id(value: Any) -> int | None:
-    parsed = to_int(value)
-    if parsed is None or parsed == 0:
+@dataclass(frozen=True)
+class GameReference:
+    game_id: UUID
+    season: str
+    home_bref_abbreviation: str | None = None
+    away_bref_abbreviation: str | None = None
+
+
+def play_by_play_url(external_id: str) -> str:
+    return f"{BREF_BASE_URL}/boxscores/pbp/{external_id}.html"
+
+
+def _find_table(soup: BeautifulSoup) -> Tag | None:
+    table = soup.find("table", id="pbp")
+    if isinstance(table, Tag):
+        return table
+    for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
+        if 'id="pbp"' not in comment and "id='pbp'" not in comment:
+            continue
+        nested = BeautifulSoup(str(comment), "html.parser")
+        table = nested.find("table", id="pbp")
+        if isinstance(table, Tag):
+            return table
+    return None
+
+
+def _cell(row: Tag, *stats: str) -> Tag | None:
+    for stat in stats:
+        cell = row.find(["th", "td"], attrs={"data-stat": stat})
+        if isinstance(cell, Tag):
+            return cell
+    return None
+
+
+def _text(row: Tag, *stats: str) -> str | None:
+    cell = _cell(row, *stats)
+    if not isinstance(cell, Tag):
         return None
-    return parsed
+    value = cell.get("csk") or cell.get_text(" ", strip=True)
+    return str(value).strip() or None
 
 
-def _extras(raw: dict[str, Any]) -> dict[str, Any] | None:
-    leftover: dict[str, Any] = {}
-    for key, value in raw.items():
-        if str(key).lower() in _PROMOTED_KEYS:
+def _linked_identity(row: Tag) -> tuple[str | None, str | None, str | None]:
+    player_external_id: str | None = None
+    player_name: str | None = None
+    team_abbreviation: str | None = None
+    for link in row.find_all("a"):
+        href = str(link.get("href") or "")
+        player = re.search(r"/players/[a-z]/([a-z0-9]+)\.html", href, re.IGNORECASE)
+        if player:
+            player_external_id = player.group(1).lower()
+            player_name = link.get_text(" ", strip=True) or None
+        team = re.search(r"/teams/([A-Z]{3})/", href, re.IGNORECASE)
+        if team:
+            team_abbreviation = team.group(1).upper()
+    return player_external_id, player_name, team_abbreviation
+
+
+def _live_score(value: str | None) -> tuple[int | None, int | None]:
+    match = re.fullmatch(r"\s*(\d+)\s*-\s*(\d+)\s*", value or "")
+    if not match:
+        return None, None
+    away, home = (int(part) for part in match.groups())
+    return home, away
+
+
+def parse_play_by_play_html(
+    html: str,
+    *,
+    game_id: UUID,
+    season: str,
+    home_bref_abbreviation: str | None = None,
+    away_bref_abbreviation: str | None = None,
+) -> list[dict[str, Any]]:
+    table = _find_table(BeautifulSoup(html, "html.parser"))
+    if table is None:
+        return []
+    rows: list[dict[str, Any]] = []
+    period: int | None = None
+    for number, row in enumerate(table.find_all("tr"), start=1):
+        if not isinstance(row, Tag):
             continue
-        if value is None or value == "":
+        if "thead" in (row.get("class") or []):
+            match = re.fullmatch(r"q(\d+)", str(row.get("id") or ""))
+            period = int(match.group(1)) if match else period
             continue
-        leftover[str(key)] = value
-    return leftover or None
+        cells = row.find_all(["th", "td"], recursive=False)
+        live_layout = not any(cell.get("data-stat") for cell in cells)
+        team: str | None = None
+        if live_layout:
+            if not cells or cells[0].get_text(" ", strip=True).casefold() == "time":
+                continue
+            candidates: list[tuple[Tag, str | None]] = []
+            if len(cells) >= 6:
+                candidates = [
+                    (cells[1], away_bref_abbreviation),
+                    (cells[5], home_bref_abbreviation),
+                ]
+            elif len(cells) >= 2:
+                candidates = [(cells[1], None)]
+            descriptions = [cell.get_text(" ", strip=True) for cell, _ in candidates]
+            description = " | ".join(text for text in descriptions if text)
+            for cell, candidate_team in candidates:
+                if cell.get_text(" ", strip=True) and candidate_team:
+                    team = candidate_team
+                    break
+            score_home, score_away = _live_score(
+                cells[3].get_text(" ", strip=True) if len(cells) >= 4 else None
+            )
+            clock = cells[0].get_text(" ", strip=True) or None
+        else:
+            description = " | ".join(
+                text for text in (_text(row, "a1"), _text(row, "a2"), _text(row, "a3")) if text
+            )
+            score_home = to_int(_text(row, "home_score"))
+            score_away = to_int(_text(row, "away_score"))
+            clock = _text(row, "time", "clock")
+
+        if not description:
+            continue
+        player_external_id, player_name, linked_team = _linked_identity(row)
+        team = linked_team or team
+        rows.append(
+            {
+                "game_id": game_id,
+                "season": season,
+                "action_number": number,
+                "action_id": number,
+                "period": period if live_layout else to_int(_text(row, "quarter", "period")),
+                "clock": clock,
+                "score_home": score_home,
+                "score_away": score_away,
+                "team_bref_abbreviation": team,
+                "player_external_id": player_external_id,
+                "player_name": player_name,
+                "action_type": None,
+                "sub_type": None,
+                "description": description,
+                "extras": None,
+            }
+        )
+    return rows
 
 
 def map_play_by_play_action(
-    raw: dict[str, Any],
-    *,
-    game_id: str,
-    season: str,
-    scraped_at: datetime,
+    raw: dict[str, Any], *, game_id: UUID, season: str, scraped_at: datetime
 ) -> dict[str, Any] | None:
-    """Map a PlayByPlayV3 action row. Skip if action_number is missing."""
-    action_number = to_int(row_get(raw, "actionNumber", "ACTION_NUMBER", "EVENTNUM"))
+    action_number = to_int(raw.get("action_number"))
     if action_number is None:
         return None
-    row_game_id = to_str(row_get(raw, "gameId", "GAME_ID")) or game_id
-    if not row_game_id:
-        return None
-    clock = to_str(row_get(raw, "clock", "CLOCK"))
-    action_type = to_str(row_get(raw, "actionType", "ACTION_TYPE"))
-    sub_type = to_str(row_get(raw, "subType", "SUB_TYPE"))
-    description = to_str(row_get(raw, "description", "DESCRIPTION"))
-    action_id = to_int(row_get(raw, "actionId", "ACTION_ID"))
     return {
-        "game_id": row_game_id,
+        "game_id": game_id,
         "season": season,
         "action_number": action_number,
-        "action_id": action_id if action_id is not None else action_number,
-        "period": to_int(row_get(raw, "period", "PERIOD")),
-        "clock": clock[:32] if clock else None,
-        "score_home": to_int(row_get(raw, "scoreHome", "SCORE_HOME")),
-        "score_away": to_int(row_get(raw, "scoreAway", "SCORE_AWAY")),
-        "team_id": _optional_id(row_get(raw, "teamId", "TEAM_ID")),
-        "player_id": _optional_id(row_get(raw, "personId", "PERSON_ID", "PLAYER_ID")),
-        "action_type": action_type[:50] if action_type else None,
-        "sub_type": sub_type[:80] if sub_type else None,
-        "description": description,
-        "extras": _extras(raw),
+        "action_id": to_int(raw.get("action_id")) or action_number,
+        "period": to_int(raw.get("period")),
+        "clock": to_str(raw.get("clock")),
+        "score_home": to_int(raw.get("score_home")),
+        "score_away": to_int(raw.get("score_away")),
+        "team_id": raw.get("team_id"),
+        "player_id": raw.get("player_id"),
+        "action_type": to_str(raw.get("action_type")),
+        "sub_type": to_str(raw.get("sub_type")),
+        "description": to_str(raw.get("description")),
+        "extras": raw.get("extras"),
         "scraped_at": scraped_at,
     }
 
 
-def _row_richness(row: dict[str, Any]) -> int:
-    score = sum(1 for key in _RICHNESS_KEYS if row.get(key) not in (None, ""))
-    extras = row.get("extras")
-    if extras:
-        score += len(extras)
-    return score
-
-
-def _dedupe_play_by_play_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """One row per (game_id, action_number, action_id). Keep richest, else last."""
-    chosen: dict[tuple[str, int, int | None], dict[str, Any]] = {}
-    for row in rows:
-        key = (row["game_id"], row["action_number"], row.get("action_id"))
-        existing = chosen.get(key)
-        if existing is None or _row_richness(row) >= _row_richness(existing):
-            chosen[key] = row
-    return list(chosen.values())
-
-
-def _final_games_for_season(season: str) -> list[dict[str, str]]:
-    with get_session() as session:
-        rows = (
-            session.query(Game.game_id, Game.season, Game.status)
-            .filter(Game.season == season)
-            .order_by(Game.game_id)
-            .all()
-        )
+def _snapshot_games(session: Any, games: Sequence[Game]) -> list[GameReference]:
+    team_ids = {
+        team_id
+        for game in games
+        for team_id in (getattr(game, "home_team_id", None), getattr(game, "away_team_id", None))
+        if team_id is not None
+    }
+    teams = {}
+    if team_ids:
+        teams = {
+            row.team_id: row.abbreviation
+            for row in session.query(Team).filter(Team.team_id.in_(team_ids)).all()
+        }
     return [
-        {"game_id": game_id, "season": game_season}
-        for game_id, game_season, status in rows
-        if _is_final_status(status)
+        GameReference(
+            game_id=game.game_id,
+            season=game.season,
+            home_bref_abbreviation=teams.get(getattr(game, "home_team_id", None)),
+            away_bref_abbreviation=teams.get(getattr(game, "away_team_id", None)),
+        )
+        for game in games
     ]
 
 
-def _list_dataset(payload: dict[str, Any], *names: str) -> list[dict[str, Any]] | None:
-    """Case-insensitive named list. None if the key is absent."""
-    lookup = {str(key).lower(): value for key, value in payload.items()}
-    for name in names:
-        rows = lookup.get(name.lower())
-        if isinstance(rows, list):
-            return [row for row in rows if isinstance(row, dict)]
-    return None
-
-
-def _actions_from_v3_payload(payload: Any) -> list[dict[str, Any]]:
-    """Pull action rows from PlayByPlayV3 raw or normalized shapes.
-
-    Raw ``get_dict()`` is ``{game: {actions: [...]}}``. nba_api 1.11.4
-    ``get_normalized_dict()`` only understands legacy ``resultSets``, so it
-    is empty for V3. Newer builds may expose ``PlayByPlay`` or ``Actions``.
-    """
-    if not isinstance(payload, dict):
-        return []
-    names = ("PlayByPlay", "Actions", "actions")
-    found = _list_dataset(payload, *names)
-    if found is not None:
-        return found
-    game = payload.get("game")
-    if isinstance(game, dict):
-        found = _list_dataset(game, *names)
-        if found is not None:
-            return found
-    return []
-
-
-def _payload_keys(payload: Any) -> list[str]:
-    if isinstance(payload, dict):
-        return list(payload.keys())
-    return [type(payload).__name__]
-
-
-def _play_by_play_actions(game_id: str) -> list[dict[str, Any]]:
-    from nba_api.stats.endpoints import playbyplayv3
-
-    endpoint = nba_call(
-        lambda: playbyplayv3.PlayByPlayV3(
-            game_id=game_id,
-            timeout=NBA_REQUEST_TIMEOUT,
+def _final_games_for_season(season: str) -> list[GameReference]:
+    with get_session() as session:
+        games = (
+            session.query(Game)
+            .filter(Game.season == season, Game.status == "Final")
+            .order_by(Game.game_date, Game.game_id)
+            .all()
         )
-    )
-    # Prefer the raw V3 body: 1.11.4 normalized dict is {} for this endpoint.
-    raw = endpoint.get_dict()
-    normalized = endpoint.get_normalized_dict()
-    rows = _actions_from_v3_payload(raw) or _actions_from_v3_payload(normalized)
-    if not rows:
-        game = raw.get("game") if isinstance(raw, dict) else None
-        nested = game if isinstance(game, dict) else {}
-        actions = nested.get("actions")
-        logger.warning(
-            "PlayByPlayV3 empty game_id=%s normalized_keys=%s raw_keys=%s nested_keys=%s raw_rowcount=%s",
-            game_id,
-            _payload_keys(normalized),
-            _payload_keys(raw),
-            list(nested.keys()),
-            len(actions) if isinstance(actions, list) else 0,
-        )
-    return rows
+        return _snapshot_games(session, games)
 
 
 def scrape_play_by_play(
     season: str | None = None,
     *,
-    game_ids: Sequence[str] | None = None,
+    game_ids: Sequence[UUID | str] | None = None,
     fetch_actions: Callable[[str], list[dict[str, Any]]] | None = None,
 ) -> int:
-    """Upsert PlayByPlayV3 events for Final games.
-
-    Without ``game_ids``, loads every Final in ``source.games`` for
-    ``season`` (CLI backfill). With ``game_ids``, only those ids (daily
-    path: today's Finals). An empty ``game_ids`` list is a no-op.
-    """
     target = season or current_season()
-    if game_ids is not None:
-        games = [
-            {"game_id": str(game_id).strip(), "season": target}
-            for game_id in game_ids
-            if str(game_id).strip()
-        ]
+    with get_session() as session:
+        queried_games = (
+            _final_games_for_season(target)
+            if game_ids is None
+            else session.query(Game)
+            .filter(Game.game_id.in_(list(game_ids)), Game.status == "Final")
+            .all()
+        )
+        games = queried_games if game_ids is None else _snapshot_games(session, queried_games)
         if not games:
-            logger.info("Play-by-play skipped: no game_ids for %s", target)
-            return 0
-    else:
-        games = _final_games_for_season(target)
-        if not games:
+            if game_ids is not None and not game_ids:
+                return 0
             raise NoFinalGamesError(
                 f"No Final games in source.games for {target}; run scrape-games first."
             )
+        external_rows = session.scalars(
+            select(GameExternalId).where(
+                GameExternalId.provider == BREF_PROVIDER,
+                GameExternalId.game_id.in_([game.game_id for game in games]),
+            )
+        ).all()
+        external_ids = {row.game_id: row.external_id for row in external_rows}
+        existing_game_ids = set(
+            session.scalars(
+                select(PlayByPlay.game_id)
+                .where(PlayByPlay.game_id.in_([game.game_id for game in games]))
+                .distinct()
+            ).all()
+        )
 
-    fetch = fetch_actions or _play_by_play_actions
-    scraped_at = datetime.now()
+    def fetch(external_id: str, game: GameReference) -> list[dict[str, Any]]:
+        if fetch_actions is not None:
+            return fetch_actions(external_id)
+        return parse_play_by_play_html(
+            bref_get(play_by_play_url(external_id)),
+            game_id=UUID(int=0),
+            season=game.season,
+            home_bref_abbreviation=game.home_bref_abbreviation,
+            away_bref_abbreviation=game.away_bref_abbreviation,
+        )
+
     total = 0
-    for index, game in enumerate(games, start=1):
-        game_id = game["game_id"]
-        try:
-            raw_rows = fetch(game_id)
-        except Exception:
-            logger.warning("PlayByPlayV3 failed game_id=%s season=%s", game_id, target)
-            continue
-        mapped: list[dict[str, Any]] = []
-        for raw in raw_rows:
-            row = map_play_by_play_action(
-                raw,
-                game_id=game_id,
-                season=target,
-                scraped_at=scraped_at,
-            )
-            if row:
-                mapped.append(row)
-        mapped = _dedupe_play_by_play_rows(mapped)
-        if not mapped:
-            sample_keys = (
-                list(raw_rows[0].keys()) if raw_rows and isinstance(raw_rows[0], dict) else []
-            )
-            logger.warning(
-                "PlayByPlayV3 produced no rows game_id=%s season=%s raw_rowcount=%s sample_keys=%s",
-                game_id,
-                target,
-                len(raw_rows),
-                sample_keys,
-            )
-        if mapped:
-            with get_session() as session:
+    stamp = datetime.now()
+    total_games = len(games)
+    checkpoint = max(1, total_games // 10)
+    completed = 0
+    skipped = 0
+    failed = 0
+    logger.info("Starting play-by-play scrape: %s game(s)", total_games)
+    with get_session() as session:
+        seed_team_catalog(session, scraped_at=stamp)
+        for index, game in enumerate(games, start=1):
+            if game.game_id in existing_game_ids:
+                skipped += 1
+                if index == 1 or index == total_games or index % checkpoint == 0:
+                    logger.info(
+                        "Play-by-play progress: %s/%s (%.0f%%); events=%s; skipped=%s; failed=%s; game=%s",
+                        index,
+                        total_games,
+                        index / total_games * 100 if total_games else 100,
+                        total,
+                        skipped,
+                        failed,
+                        game.game_id,
+                    )
+                continue
+            external_id = external_ids.get(game.game_id)
+            if not external_id:
+                failed += 1
+                continue
+            try:
+                raw_rows = fetch(external_id, game)
+            except Exception:
+                failed += 1
+                logger.exception("BRef play-by-play scrape failed for %s", external_id)
+                if index == 1 or index == total_games or index % checkpoint == 0:
+                    logger.info(
+                        "Play-by-play progress: %s/%s (%.0f%%); events=%s; skipped=%s; failed=%s; game=%s",
+                        index,
+                        total_games,
+                        index / total_games * 100 if total_games else 100,
+                        total,
+                        skipped,
+                        failed,
+                        external_id,
+                    )
+                continue
+            mapped: list[dict[str, Any]] = []
+            try:
+                for raw in raw_rows:
+                    raw["game_id"] = game.game_id
+                    raw["season"] = game.season
+                    team_id = resolve_team_id(session, raw.pop("team_bref_abbreviation", "") or "")
+                    if team_id is not None:
+                        raw["team_id"] = team_id
+                    player_external_id = raw.pop("player_external_id", None)
+                    player_name = raw.pop("player_name", None)
+                    if player_external_id and player_name:
+                        raw["player_id"] = ensure_player(
+                            session,
+                            provider=BREF_PROVIDER,
+                            external_id=player_external_id,
+                            full_name=player_name,
+                            source_url=play_by_play_url(external_id),
+                            team_id=team_id,
+                            is_active=True,
+                        )
+                    row = map_play_by_play_action(
+                        raw, game_id=game.game_id, season=game.season, scraped_at=stamp
+                    )
+                    if row:
+                        mapped.append(row)
                 total += upsert_rows(
-                    session,
-                    PlayByPlay,
-                    mapped,
-                    _UPSERT_CONFLICT,
+                    session, PlayByPlay, mapped, ["game_id", "action_number", "action_id"]
                 )
-        if index % 25 == 0 or index == len(games):
-            logger.info(
-                "Play-by-play %s/%s Final games for %s (%s events so far)",
-                index,
-                len(games),
-                target,
-                total,
-            )
+                completed += 1
+            except Exception:
+                failed += 1
+                session.rollback()
+                seed_team_catalog(session, scraped_at=stamp)
+                logger.exception("PBP mapping/upsert failed for %s", external_id)
+            if index == 1 or index == total_games or index % checkpoint == 0:
+                logger.info(
+                    "Play-by-play progress: %s/%s (%.0f%%); events=%s; skipped=%s; failed=%s; game=%s",
+                    index,
+                    total_games,
+                    index / total_games * 100 if total_games else 100,
+                    total,
+                    skipped,
+                    failed,
+                    external_id,
+                )
+        logger.info(
+            "Completed play-by-play scrape: %s/%s games loaded; %s events upserted; %s skipped; %s failed",
+            completed,
+            total_games,
+            total,
+            skipped,
+            failed,
+        )
     return total
 
 
 __all__ = [
+    "GameReference",
     "NoFinalGamesError",
     "map_play_by_play_action",
+    "parse_play_by_play_html",
+    "play_by_play_url",
     "scrape_play_by_play",
 ]
