@@ -43,7 +43,7 @@ group "default" {
 
 # What docker-compose.prod.yml actually runs. CI builds only this group.
 group "prod" {
-  targets = ["api", "frontend", "migrate"]
+  targets = ["api", "frontend", "migrate", "mcp"]
 }
 
 target "_common" {

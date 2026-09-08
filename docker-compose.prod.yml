@@ -44,6 +44,7 @@ services:
     volumes: !reset []
 
   mcp:
+    image: ${IMAGE_PREFIX:-}nba-mcp:${IMAGE_TAG:-latest}
     volumes: !reset []
     mem_limit: 512m
 
