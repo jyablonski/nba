@@ -6,7 +6,6 @@ describe("nav", () => {
   it("lists primary tabs including Ask", () => {
     expect(PRIMARY_NAV.map((item) => item.label)).toEqual([
       "Home",
-      "Games",
       "Schedule",
       "Players",
       "Teams",

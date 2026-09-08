@@ -9,6 +9,7 @@ import { CapPosition } from "@/components/teams/cap-position";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
+import { withSeason } from "@/lib/nav";
 import {
   formatDate,
   formatGamesBack,
@@ -274,8 +275,7 @@ function TeamProfile() {
       <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
         <section>
           <h2 className="type-module">
-            Games
-            {gamesTotal ? ` ${formatNumber(gamesTotal)} games` : ""}
+            {gamesTotal ? `${formatNumber(gamesTotal)} games` : "Game results"}
             {overall
               ? ` · ${formatRecordWithWinPct(overall.wins, overall.losses, overall.win_pct)}`
               : " · —"}
@@ -296,6 +296,7 @@ function TeamProfile() {
                   <th className="text-right">Score</th>
                   <th className="text-right">Margin</th>
                   <th>Arena</th>
+                  <th>PBP</th>
                 </tr>
               </thead>
               <tbody>
@@ -321,6 +322,14 @@ function TeamProfile() {
                       </td>
                       <td className="tabular text-right">{formatSignedMargin(view.margin)}</td>
                       <td className="text-muted-foreground">{view.arena}</td>
+                      <td>
+                        <Link
+                          href={withSeason(`/games/${game.game_id}`, view.season)}
+                          className="text-primary hover:underline"
+                        >
+                          PBP
+                        </Link>
+                      </td>
                     </tr>
                   );
                 })}

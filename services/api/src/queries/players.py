@@ -91,6 +91,7 @@ PLAYER_BY_ID = text(
         p.is_active,
         p.first_name,
         p.last_name,
+        p.jersey_number,
         p.height,
         p.weight,
         p.birth_date,
@@ -187,7 +188,9 @@ def list_game_logs_stmt(order_column: str, descending: bool):
     return text(
         f"""
         SELECT
+            game_id,
             game_date,
+            season,
             coalesce(opponent_abbreviation, '') AS opponent_abbreviation,
             coalesce(location, '') AS location,
             coalesce(result, '') AS result,

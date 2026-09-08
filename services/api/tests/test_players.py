@@ -463,7 +463,9 @@ def test_game_log(client, session, mapping_row, query_result) -> None:
             [
                 mapping_row(
                     {
+                        "game_id": GAME_ONE,
                         "game_date": date(2024, 10, 22),
+                        "season": "2024-25",
                         "opponent_abbreviation": "GSW",
                         "location": "home",
                         "result": "W",
@@ -484,6 +486,8 @@ def test_game_log(client, session, mapping_row, query_result) -> None:
     response = client.get(f"/api/v1/players/{PLAYER_KAWHI}/game-log", params={"season": "2024-25"})
     assert response.status_code == 200
     assert response.json()["data"][0]["points"] == 28
+    assert response.json()["data"][0]["game_id"] == str(GAME_ONE)
+    assert response.json()["data"][0]["season"] == "2024-25"
     assert response.json()["data"][0]["steals"] == 2
     assert response.json()["data"][0]["plus_minus"] == 8
 

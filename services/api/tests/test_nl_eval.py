@@ -293,6 +293,22 @@ def test_classify_empty_is_refuse(service: NaturalLanguageQueryService) -> None:
 
 
 @pytest.mark.unit
+def test_resolves_bref_initial_player_names() -> None:
+    class BrefNames(FakeCubeAnalytics):
+        def search_players(self, name: str) -> list[dict[str, Any]]:
+            if name.casefold() == "leonard":
+                return [{"player_id": PLAYER_KAWHI, "full_name": "K. Leonard"}]
+            return []
+
+    response = NaturalLanguageQueryService(BrefNames()).answer(
+        "How many back-to-backs has Kawhi Leonard played?"
+    )
+
+    assert response.data
+    assert "K. Leonard has" in response.answer
+
+
+@pytest.mark.unit
 def test_cube_down_is_clear_answer() -> None:
     class Down(FakeCubeAnalytics):
         def search_players(self, name: str) -> list[dict]:

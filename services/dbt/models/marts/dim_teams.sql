@@ -3,11 +3,20 @@ with teams as (
 ),
 
 current_arenas as (
-    select * from {{ ref('nba_team_arenas') }}
+    select
+        team_id::uuid as team_id,
+        arena_name,
+        arena_latitude,
+        arena_longitude
+    from {{ ref('nba_team_arenas') }}
 ),
 
 team_colors as (
-    select * from {{ ref('nba_team_colors') }}
+    select
+        team_id::uuid as team_id,
+        primary_color,
+        alternate_color
+    from {{ ref('nba_team_colors') }}
 ),
 
 payroll as (

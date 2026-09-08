@@ -107,6 +107,36 @@ def test_parse_schedule_classifies_postseason_rows() -> None:
 
 
 @pytest.mark.unit
+def test_parse_schedule_classifies_nba_cup_final() -> None:
+    html = """
+    <table id="schedule"><tbody>
+      <tr>
+        <td data-stat="date_game" csk="2025-12-13">Sat, Dec 13, 2025</td>
+        <td data-stat="visitor_team_name"><a href="/teams/OKC/2026.html">OKC</a></td>
+        <td data-stat="visitor_pts">104</td>
+        <td data-stat="home_team_name"><a href="/teams/SAS/2026.html">SAS</a></td>
+        <td data-stat="home_pts">111</td>
+        <td data-stat="arena_name">T-Mobile Arena</td>
+        <td data-stat="game_remarks">NBA Cup</td>
+        <td data-stat="box_score_text"><a href="/boxscores/202512130SAS.html">Box</a></td>
+      </tr>
+      <tr>
+        <td data-stat="date_game" csk="2025-12-16">Tue, Dec 16, 2025</td>
+        <td data-stat="visitor_team_name"><a href="/teams/SAS/2026.html">SAS</a></td>
+        <td data-stat="visitor_pts">113</td>
+        <td data-stat="home_team_name"><a href="/teams/NYK/2026.html">NYK</a></td>
+        <td data-stat="home_pts">124</td>
+        <td data-stat="arena_name">T-Mobile Arena</td>
+        <td data-stat="game_remarks">NBA Cup Final</td>
+        <td data-stat="box_score_text"><a href="/boxscores/202512160NYK.html">Box</a></td>
+      </tr>
+    </tbody></table>
+    """
+    rows = parse_schedule_html(html, season="2025-26", source_url="https://example.test/december")
+    assert [row["season_type"] for row in rows] == ["Regular Season", "Cup"]
+
+
+@pytest.mark.unit
 def test_schedule_page_urls_discovers_monthly_pages() -> None:
     base = schedule_url("2024-25")
     html = '<a href="/leagues/NBA_2025_games-november.html">November</a>'

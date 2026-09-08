@@ -35,13 +35,15 @@ def _validate_season_type(season_type: str | None) -> str | None:
     key = season_type.strip().lower().replace("-", "").replace(" ", "")
     mapping = {
         "regularseason": "Regular Season",
+        "cup": "Cup",
+        "nbacup": "Cup",
         "playoffs": "Playoffs",
         "playin": "PlayIn",
     }
     if key not in mapping:
         raise HTTPException(
             status_code=400,
-            detail="season_type must be Regular Season, Playoffs, or PlayIn",
+            detail="season_type must be Regular Season, Cup, Playoffs, or PlayIn",
         )
     return mapping[key]
 

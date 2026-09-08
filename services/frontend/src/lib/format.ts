@@ -89,6 +89,7 @@ export function formatSeasonType(value: string | null | undefined) {
     .toLowerCase()
     .replace(/[-_\s]+/g, "");
   if (key === "regularseason") return "Regular Season";
+  if (key === "cup" || key === "nbacup") return "NBA Cup";
   if (key === "playoffs") return "Playoffs";
   if (key === "playin") return "Play-in";
   return value;

@@ -125,8 +125,20 @@ def _season_type_for_row(
     *,
     first_play_in_date: date | None,
     source_url: str,
+    arena: str | None = None,
+    cup_final_date: date | None = None,
 ) -> str:
     normalized_remark = (remark or "").casefold().replace("-", " ")
+    normalized_arena = " ".join((arena or "").casefold().replace("-", " ").split())
+    # BRef marks both NBA Cup group games and knockout games as "NBA Cup".
+    # The championship is the latest neutral-site NBA Cup game and is the one
+    # Cup game excluded from the 82-game Regular Season standings.
+    if (
+        "cup" in normalized_remark
+        and normalized_arena == "t mobile arena"
+        and cup_final_date == game_date
+    ):
+        return "Cup"
     if "play in" in normalized_remark:
         return "PlayIn"
     if first_play_in_date is not None and game_date >= first_play_in_date:
@@ -137,7 +149,7 @@ def _season_type_for_row(
 
 
 def parse_schedule_html(html: str, *, season: str, source_url: str) -> list[dict[str, Any]]:
-    """Parse schedule rows and classify regular season, play-in, and playoffs."""
+    """Parse schedule rows and classify regular season, Cup, play-in, and playoffs."""
     soup = BeautifulSoup(html, "html.parser")
     parsed_rows: list[tuple[Tag, date, str, str, str | None]] = []
     first_play_in_date: date | None = None
@@ -162,6 +174,15 @@ def parse_schedule_html(html: str, *, season: str, source_url: str) -> list[dict
                 )
             parsed_rows.append((row, game_date, visitor, home, remark))
 
+    cup_neutral_dates = [
+        game_date
+        for row, game_date, _visitor, _home, remark in parsed_rows
+        if "cup" in (remark or "").casefold()
+        and " ".join((_cell_text(row, "arena_name") or "").casefold().replace("-", " ").split())
+        == "t mobile arena"
+    ]
+    cup_final_date = max(cup_neutral_dates) if cup_neutral_dates else None
+
     rows: list[dict[str, Any]] = []
     seen: set[tuple[date, str, str]] = set()
     for row, game_date, visitor, home, remark in parsed_rows:
@@ -172,6 +193,7 @@ def parse_schedule_html(html: str, *, season: str, source_url: str) -> list[dict
         home_score = to_int(_cell_text(row, "home_pts"))
         away_score = to_int(_cell_text(row, "visitor_pts"))
         external_id = _boxscore_key(row)
+        arena = _cell_text(row, "arena_name")
         rows.append(
             {
                 "provider": BREF_PROVIDER,
@@ -181,15 +203,17 @@ def parse_schedule_html(html: str, *, season: str, source_url: str) -> list[dict
                 "season_type": _season_type_for_row(
                     game_date,
                     remark,
+                    arena=arena,
                     first_play_in_date=first_play_in_date,
                     source_url=source_url,
+                    cup_final_date=cup_final_date,
                 ),
                 "game_date": game_date,
                 "home_bref_abbreviation": home,
                 "away_bref_abbreviation": visitor,
                 "home_score": home_score,
                 "away_score": away_score,
-                "arena": _cell_text(row, "arena_name"),
+                "arena": arena,
                 "status": "Final"
                 if home_score is not None and away_score is not None
                 else "Scheduled",

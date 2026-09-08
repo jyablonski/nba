@@ -22,12 +22,7 @@ import {
   quarterAxisTicks,
   selectBiggestRun,
 } from "@/lib/game-flow";
-import {
-  colorForLeader,
-  leadSegments,
-  leaderFromDifferential,
-  resolvePlotColors,
-} from "@/lib/team-colors";
+import { colorForScoringSide, resolvePlotColors, TIED_COLOR } from "@/lib/team-colors";
 import type { GameFlow, PlayByPlayEvent } from "@/lib/types";
 
 const tooltipStyle = {
@@ -39,6 +34,8 @@ const tooltipStyle = {
   padding: "10px",
   whiteSpace: "nowrap" as const,
 };
+
+const FLOW_LINE_COLOR = TIED_COLOR;
 
 export function GameFlowTooltip({
   active,
@@ -171,7 +168,6 @@ export function GameFlowChart({
     awayPrimary: flow?.away_primary_color,
     awayAlternate: flow?.away_alternate_color,
   });
-  const segments = leadSegments(data, plotColors);
   const runColor =
     biggestRun?.biggest_run_team_abbreviation &&
     biggestRun.biggest_run_team_abbreviation === teams.awayAbbreviation
@@ -225,25 +221,22 @@ export function GameFlowChart({
               />
             ) : null}
             <Tooltip content={<GameFlowTooltip />} />
-            {segments.map((segment, index) => (
-              <Line
-                key={`${segment.color}-${index}`}
-                type="linear"
-                data={segment.points}
-                dataKey="score_differential"
-                stroke={segment.color}
-                strokeWidth={2}
-                dot={(props: { cx?: number; cy?: number; payload?: ChartPoint }) => {
-                  const fill = colorForLeader(
-                    leaderFromDifferential(props.payload?.score_differential ?? 0),
-                    plotColors
-                  );
-                  return <circle cx={props.cx} cy={props.cy} r={3} fill={fill} stroke={fill} />;
-                }}
-                activeDot={{ r: 5 }}
-                isAnimationActive={false}
-              />
-            ))}
+            <Line
+              type="linear"
+              data={data}
+              dataKey="score_differential"
+              stroke={FLOW_LINE_COLOR}
+              strokeWidth={2}
+              dot={(props: { cx?: number; cy?: number; payload?: ChartPoint }) => {
+                const fill = colorForScoringSide(props.payload?.scoring_side, plotColors);
+                return <circle cx={props.cx} cy={props.cy} r={3} fill={fill} stroke={fill} />;
+              }}
+              activeDot={(props: { cx?: number; cy?: number; payload?: ChartPoint }) => {
+                const fill = colorForScoringSide(props.payload?.scoring_side, plotColors);
+                return <circle cx={props.cx} cy={props.cy} r={5} fill={fill} stroke={fill} />;
+              }}
+              isAnimationActive={false}
+            />
           </LineChart>
         </ResponsiveContainer>
       </div>

@@ -84,7 +84,14 @@ describe("teams directory", () => {
       expect(screen.getByRole("link", { name: "BOS" })).toBeInTheDocument();
     });
     expect(screen.getByRole("link", { name: "BOS" })).toHaveTextContent("BOS");
-    expect(screen.getByRole("link", { name: "BOS" }).querySelector("img")).toBeNull();
+    expect(screen.getByRole("link", { name: "BOS" }).querySelector("img")).toHaveAttribute(
+      "src",
+      "https://cdn.nba.com/logos/nba/1610612738/primary/L/logo.svg"
+    );
+    expect(screen.getByRole("link", { name: "BOS" }).querySelector("img")).toHaveAttribute(
+      "width",
+      "24"
+    );
     expect(listTeams).toHaveBeenCalledWith({ season: "2025-26" });
     expect(screen.queryByLabelText("Season")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Teams" })).toBeInTheDocument();

@@ -306,13 +306,51 @@ class NaturalLanguageQueryService:
         )
 
     def _resolve_player(self, name: str) -> dict[str, Any] | None:
-        rows = self.cube.search_players(name)
+        normalized_name = " ".join(name.split())
+        queries = [normalized_name]
+        name_parts = normalized_name.split()
+        if len(name_parts) > 1:
+            # Basketball-Reference commonly stores players as "K. Leonard"
+            # rather than their full first name. Searching the surname lets
+            # the initial-aware match below resolve aliases such as Kawhi Leonard.
+            queries.append(name_parts[-1])
+
+        rows: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        for query in queries:
+            for row in self.cube.search_players(query):
+                key = str(row.get("player_id") or row.get("full_name"))
+                if key not in seen_ids:
+                    seen_ids.add(key)
+                    rows.append(row)
         if not rows:
             return None
-        lowered = name.lower()
+
+        lowered = normalized_name.lower()
         for row in rows:
             if str(row["full_name"]).lower() == lowered:
                 return row
+
+        if len(name_parts) > 1:
+            last_name = name_parts[-1].rstrip(".").casefold()
+            first_initial = name_parts[0][0].casefold()
+            for row in rows:
+                full_name_parts = str(row["full_name"]).replace(".", "").split()
+                if (
+                    len(full_name_parts) > 1
+                    and full_name_parts[-1].casefold() == last_name
+                    and full_name_parts[0][:1].casefold() == first_initial
+                ):
+                    return row
+
+            last_name_matches = [
+                row
+                for row in rows
+                if str(row["full_name"]).split()[-1].rstrip(".").casefold() == last_name
+            ]
+            if len(last_name_matches) == 1:
+                return last_name_matches[0]
+
         for row in rows:
             if lowered in str(row["full_name"]).lower():
                 return row

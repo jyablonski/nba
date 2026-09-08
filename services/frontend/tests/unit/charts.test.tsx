@@ -201,7 +201,11 @@ describe("charts", () => {
       </svg>
     );
     expect(logo.querySelectorAll("circle")).toHaveLength(1);
-    expect(logo.querySelector("text")).toHaveTextContent("PHX");
+    expect(logo.querySelector("image")).toHaveAttribute(
+      "href",
+      "https://cdn.nba.com/logos/nba/1610612756/primary/L/logo.svg"
+    );
+    expect(logo.querySelector("text")).toBeNull();
     expect(logo.querySelector("title")).toBeNull();
     render(
       <RatingsTooltip

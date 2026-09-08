@@ -101,11 +101,13 @@ def test_ensure_player_creates_and_reuses_provider_identity() -> None:
         session,
         provider=BREF_PROVIDER,
         external_id="curryst01",
-        full_name="Stephen Curry",
+        full_name="S. Curry",
         team_id=uuid4(),
     )
     assert same_id == player_id
     assert session.rows[(Player, player_id)].full_name == "Stephen Curry"
+    assert session.rows[(Player, player_id)].first_name == "Stephen"
+    assert session.rows[(Player, player_id)].last_name == "Curry"
 
 
 @pytest.mark.unit

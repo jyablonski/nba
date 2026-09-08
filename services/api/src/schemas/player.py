@@ -21,6 +21,7 @@ class PlayerSummary(BaseModel):
 class PlayerDetail(PlayerSummary):
     first_name: str
     last_name: str
+    jersey_number: str | None = None
     height: str | None = None
     weight: int | None = None
     birth_date: date | None = None
@@ -35,7 +36,9 @@ class PlayerDetail(PlayerSummary):
 class GameLogEntry(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    game_id: UUID | None = None
     game_date: date
+    season: str | None = None
     opponent_abbreviation: str
     location: str
     result: str

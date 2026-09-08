@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import date, datetime
 from typing import Any
@@ -263,6 +264,28 @@ def _split_player_name(name: str) -> tuple[str, str]:
     return parts[0], " ".join(parts[1:])
 
 
+_ABBREVIATED_FIRST_NAME_RE = re.compile(r"[A-Za-z]\.")
+
+
+def is_abbreviated_player_name(name: str) -> bool:
+    first = " ".join(name.split()).split(" ", 1)[0]
+    return bool(_ABBREVIATED_FIRST_NAME_RE.fullmatch(first))
+
+
+def _preferred_player_name(existing: str, incoming: str) -> str:
+    existing = " ".join(existing.split()).strip()
+    incoming = " ".join(incoming.split()).strip()
+    if not incoming:
+        return existing
+    if (
+        existing
+        and is_abbreviated_player_name(incoming)
+        and not is_abbreviated_player_name(existing)
+    ):
+        return existing
+    return incoming
+
+
 def ensure_player(
     session: Session,
     *,
@@ -287,8 +310,9 @@ def ensure_player(
         player = session.get(Player, existing.player_id)
         if player is None:
             raise IdentityResolutionError(f"orphaned player crosswalk for {provider}:{external_id}")
-        player.full_name = full_name or player.full_name
-        first, last = _split_player_name(full_name or player.full_name)
+        canonical_name = _preferred_player_name(player.full_name, full_name)
+        player.full_name = canonical_name
+        first, last = _split_player_name(canonical_name)
         player.first_name, player.last_name = first, last
         player.team_id = team_id or player.team_id
         player.is_active = is_active
@@ -422,6 +446,7 @@ __all__ = [
     "ODDS_PROVIDER",
     "IdentityResolutionError",
     "ensure_player",
+    "is_abbreviated_player_name",
     "resolve_game",
     "resolve_team_id",
     "seed_team_catalog",

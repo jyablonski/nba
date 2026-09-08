@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
-import { SeasonLineChart } from "@/components/charts/season-line-chart";
+import { StatBarChart } from "@/components/charts/stat-bar-chart";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { useSeason } from "@/hooks/use-season";
@@ -51,7 +51,6 @@ function PlayerProfile() {
   const { season } = useSeason();
   const [sortKey, setSortKey] = useState<SortKey>("game_date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [logSeason] = useState("");
   const [b2bOnly, setB2bOnly] = useState(false);
   const [page, setPage] = useState(0);
 
@@ -65,17 +64,11 @@ function PlayerProfile() {
     queryFn: () => api.getPlayerBackToBacks(playerId),
     enabled: Boolean(playerId),
   });
-  const seasonStatsQuery = useQuery({
-    queryKey: ["player", playerId, "season-stats"],
-    queryFn: () => api.getPlayerSeasonStats(playerId),
-    enabled: Boolean(playerId),
-  });
-  const selectedLogSeason = logSeason || season;
   const logQuery = useQuery({
-    queryKey: ["player", playerId, "log", selectedLogSeason, b2bOnly, sortKey, sortDir, page],
+    queryKey: ["player", playerId, "log", season, b2bOnly, sortKey, sortDir, page],
     queryFn: () =>
       api.getPlayerGameLog(playerId, {
-        season: selectedLogSeason || undefined,
+        season: season || undefined,
         is_back_to_back: b2bOnly ? true : undefined,
         sort: sortKey,
         order: sortDir,
@@ -84,11 +77,27 @@ function PlayerProfile() {
       }),
     enabled: Boolean(playerId),
   });
+  const recentLogQuery = useQuery({
+    queryKey: ["player", playerId, "recent-points", season],
+    queryFn: () =>
+      api.getPlayerGameLog(playerId, {
+        season: season || undefined,
+        sort: "game_date",
+        order: "desc",
+        limit: 10,
+        offset: 0,
+      }),
+    enabled: Boolean(playerId),
+  });
 
-  const seasonPoints = useMemo(() => {
-    const rows = seasonStatsQuery.data?.data ?? [];
-    return rows.map((row) => ({ season: row.season, ppg: row.ppg ?? 0 }));
-  }, [seasonStatsQuery.data]);
+  const recentPoints = useMemo(
+    () =>
+      [...(recentLogQuery.data?.data ?? [])].reverse().map((row) => ({
+        date: formatDate(row.game_date).replace(/ \d{4}$/, ""),
+        points: row.points ?? 0,
+      })),
+    [recentLogQuery.data]
+  );
 
   function toggleSort(key: SortKey) {
     setPage(0);
@@ -122,14 +131,13 @@ function PlayerProfile() {
   const totalLogs = logQuery.data?.meta.total ?? 0;
   const identity = [
     player.team_abbreviation,
+    player.jersey_number ? `#${player.jersey_number}` : null,
     player.position,
     formatHeight(player.height),
     player.weight != null ? `${player.weight} lb` : null,
     formatBirthDate(player.birth_date),
     player.is_active ? "Active" : "Inactive",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  ].filter(Boolean) as string[];
 
   return (
     <div className="space-y-8">
@@ -144,7 +152,14 @@ function PlayerProfile() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="type-entity">{player.full_name}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{identity}</p>
+          <p className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+            {identity.map((item, index) => (
+              <span key={`${item}-${index}`} className="inline-flex items-center gap-2">
+                {index > 0 ? <span aria-hidden="true">·</span> : null}
+                {item}
+              </span>
+            ))}
+          </p>
         </div>
         <button
           type="button"
@@ -160,7 +175,6 @@ function PlayerProfile() {
           <p className="text-[11px] tracking-wide text-muted-foreground uppercase">Career</p>
           <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-5">
             <CareerStat label="Games" value={formatNumber(player.career_games_played)} />
-            <CareerStat label="Seasons" value={formatNumber(player.seasons_played)} />
             <CareerStat label="PPG" value={formatStat(player.career_ppg)} />
             <CareerStat label="RPG" value={formatStat(player.career_rpg)} />
             <CareerStat label="APG" value={formatStat(player.career_apg)} />
@@ -226,6 +240,7 @@ function PlayerProfile() {
                     >
                       Date
                     </SortHead>
+                    <th>PBP</th>
                     <th>Opp</th>
                     <th>Loc</th>
                     <th>Res</th>
@@ -361,14 +376,19 @@ function PlayerProfile() {
           </div>
 
           <div>
-            <h2 className="type-module">Points per game by season</h2>
+            <h2 className="type-module">Points in last 10 games</h2>
+            <p className="type-caption mt-1">Oldest to newest in the selected season.</p>
             <div className="mt-3">
-              {seasonStatsQuery.isLoading ? (
+              {recentLogQuery.isLoading ? (
                 <LoadingState />
-              ) : seasonStatsQuery.isError ? (
-                <SeasonLineChart data={[]} />
+              ) : recentLogQuery.isError ? (
+                <EmptyState title="No recent points" message="No recent game log to chart yet." />
               ) : (
-                <SeasonLineChart data={seasonPoints} />
+                <StatBarChart
+                  data={recentPoints}
+                  xKey="date"
+                  bars={[{ dataKey: "points", fill: "#2D5A27", name: "Points" }]}
+                />
               )}
             </div>
           </div>
@@ -429,6 +449,18 @@ function LogRow({ row }: { row: GameLogEntry }) {
   return (
     <tr className={row.is_back_to_back ? "bg-row-b2b" : undefined}>
       <td className="tabular">{formatDate(row.game_date)}</td>
+      <td>
+        {row.game_id ? (
+          <Link
+            href={withSeason(`/games/${row.game_id}`, row.season ?? "")}
+            className="text-primary hover:underline"
+          >
+            PBP
+          </Link>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </td>
       <td className="font-semibold">{row.opponent_abbreviation}</td>
       <td>{locationLabel(row.location)}</td>
       <td className={cn("font-medium", win && "text-primary", loss && "text-destructive")}>

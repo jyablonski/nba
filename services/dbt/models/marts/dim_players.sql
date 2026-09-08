@@ -35,7 +35,7 @@ current_player_contracts as (
     select
         matched_contracts.player_id,
         min(matched_contracts.season) as current_contract_season,
-        min(matched_contracts.team_id) as current_contract_team_id,
+        min(matched_contracts.team_id::text)::uuid as current_contract_team_id,
         sum(matched_contracts.salary) as current_season_salary,
         max(matched_contracts.remaining_guaranteed) as current_remaining_guaranteed
     from matched_contracts

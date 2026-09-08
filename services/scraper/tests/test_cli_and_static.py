@@ -5,7 +5,14 @@ import pytest
 from click.testing import CliRunner
 
 from main import cli, main
-from scrapers.players import parse_roster_html
+from models import Player, PlayerExternalId
+from scrapers.players import (
+    parse_player_directory_html,
+    parse_player_profile_html,
+    parse_roster_html,
+    player_directory_url,
+    player_profile_url,
+)
 from scrapers.teams import scrape_teams
 
 
@@ -19,6 +26,12 @@ ROSTER_HTML = """
   <tr><th data-stat="player"><a href="/players/c/curryst01.html">Stephen Curry</a></th>
   <td data-stat="number">30</td><td data-stat="pos">PG</td><td data-stat="height">6-2</td>
   <td data-stat="weight">185</td><td data-stat="birth_date">1988-03-14</td><td data-stat="years">2010-2025</td></tr>
+</tbody></table>
+"""
+
+PLAYER_DIRECTORY_HTML = """
+<table id="players"><tbody>
+  <tr><th data-stat="player"><a href="/players/c/curryst01.html">Stephen Curry</a></th></tr>
 </tbody></table>
 """
 
@@ -46,10 +59,61 @@ def test_parse_roster_comment_wrapper_and_invalid_birth_date() -> None:
     rows = parse_roster_html(html, team_id="team-id", source_url="https://example.test")
     assert rows[0]["external_id"] == "testpl01"
     assert rows[0]["birth_date"] is None
+
+
+def test_parse_roster_uses_visible_position_and_height_over_sort_keys() -> None:
+    html = """
+    <table id="roster"><tbody>
+      <tr>
+        <th data-stat="player"><a href="/players/t/testpl01.html">Test Player</a></th>
+        <td data-stat="pos" csk="1">PG</td>
+        <td data-stat="height" csk="74.0">6-2</td>
+        <td data-stat="weight" csk="185">185</td>
+        <td data-stat="birth_date" csk="1988-03-14">1988-03-14</td>
+      </tr>
+    </tbody></table>
+    """
+    from scrapers.players import parse_roster_html
+
+    rows = parse_roster_html(html, team_id="team", source_url="https://example.test/roster")
+    assert rows[0]["position"] == "PG"
+    assert rows[0]["height"] == "6-2"
     assert (
         parse_roster_html("<html></html>", team_id="team-id", source_url="https://example.test")
         == []
     )
+
+
+@pytest.mark.unit
+def test_parse_player_directory_html_and_url() -> None:
+    assert player_directory_url("C") == "https://www.basketball-reference.com/players/c/"
+    with pytest.raises(ValueError):
+        player_directory_url("12")
+    assert parse_player_directory_html(PLAYER_DIRECTORY_HTML) == {"curryst01": "Stephen Curry"}
+
+    wrapped = f"<!-- {PLAYER_DIRECTORY_HTML} -->"
+    assert parse_player_directory_html(wrapped) == {"curryst01": "Stephen Curry"}
+    assert player_profile_url("CurryST01") == (
+        "https://www.basketball-reference.com/players/c/curryst01.html"
+    )
+    with pytest.raises(ValueError):
+        player_profile_url("not-a-valid-slug!")
+    assert parse_player_profile_html("<h1>Stephen Curry</h1>") == "Stephen Curry"
+    assert parse_player_profile_html("<html></html>") is None
+
+
+@pytest.mark.unit
+def test_player_parsers_skip_non_player_rows() -> None:
+    malformed = """
+    <table id="roster"><tbody>
+      <tr class="thead"><th data-stat="player">Player</th></tr>
+      <tr><td data-stat="other">No player cell</td></tr>
+      <tr><th data-stat="player">Player</th></tr>
+      <tr><th data-stat="player"><a href="/not-a-player">Unknown Player</a></th></tr>
+    </tbody></table>
+    """
+    assert parse_roster_html(malformed, team_id="team-id", source_url="https://example.test") == []
+    assert parse_player_directory_html("<!-- <table id='other'></table> -->") == {}
 
 
 @pytest.mark.unit
@@ -70,6 +134,64 @@ def test_scrape_players_fetches_bref_rosters(monkeypatch: pytest.MonkeyPatch) ->
         )
         == 1
     )
+
+
+@pytest.mark.unit
+def test_scrape_players_repairs_existing_non_roster_player(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import catalog.teams
+
+    entry = catalog.teams.TEAM_CATALOG[0]
+    old_player_id = "old-player-id"
+    roster_player_id = "roster-player-id"
+    old_player = Player(
+        player_id=old_player_id,
+        first_name="O.",
+        last_name="Player",
+        full_name="O. Player",
+    )
+    roster_player = Player(
+        player_id=roster_player_id,
+        first_name="Stephen",
+        last_name="Curry",
+        full_name="Stephen Curry",
+    )
+    crosswalk = PlayerExternalId(
+        player_id=old_player_id,
+        provider="basketball-reference",
+        external_id="oldpl01",
+    )
+    session = MagicMock()
+    session.scalars.return_value.all.return_value = [crosswalk]
+
+    def get(model, key):
+        if model is PlayerExternalId:
+            return crosswalk if key == ("basketball-reference", "oldpl01") else None
+        if model is Player:
+            return old_player if key == old_player_id else roster_player
+        return None
+
+    session.get.side_effect = get
+
+    def fetch_html(url: str) -> str:
+        if url.endswith("/players/c/"):
+            return PLAYER_DIRECTORY_HTML
+        if url.endswith("/players/o/oldpl01.html"):
+            return "<h1>Old Player</h1>"
+        return ROSTER_HTML
+
+    monkeypatch.setattr("catalog.teams.TEAM_CATALOG", (entry,))
+    monkeypatch.setattr("scrapers.players.get_session", lambda: _session(session))
+    monkeypatch.setattr("scrapers.players.seed_team_catalog", lambda *args, **kwargs: 1)
+    monkeypatch.setattr("scrapers.players.ensure_player", lambda *args, **kwargs: roster_player_id)
+
+    from scrapers.players import scrape_players
+
+    assert scrape_players(season="2024-25", fetch_html=fetch_html) == 1
+    assert old_player.full_name == "Old Player"
+    assert old_player.first_name == "Old"
+    assert old_player.last_name == "Player"
 
 
 @pytest.mark.unit

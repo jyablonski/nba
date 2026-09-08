@@ -10,7 +10,7 @@ seeds:
       team moves buildings; do not geocode at scrape time.
     config:
       column_types:
-        team_id: varchar(36)
+        team_id: uuid
         abbreviation: varchar(5)
         arena_name: varchar(100)
         arena_city: varchar(50)

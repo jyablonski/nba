@@ -31,8 +31,8 @@ vi.mock("@/lib/api", () => ({
           win_pct: 0.683,
           games_back: 0,
           conf_games_back: null,
-          streak: null,
-          last_10: null,
+          streak: "W2",
+          last_10: "8-2",
           record_source: "games",
         },
       ],
@@ -56,9 +56,14 @@ describe("standings page", () => {
       expect(screen.getByRole("link", { name: "BOS" })).toBeInTheDocument();
     });
     expect(screen.getByRole("link", { name: "BOS" })).toHaveTextContent("BOS");
-    expect(screen.getByRole("link", { name: "BOS" }).querySelector("img")).toBeNull();
+    expect(screen.getByRole("link", { name: "BOS" }).querySelector("img")).toHaveAttribute(
+      "src",
+      "https://cdn.nba.com/logos/nba/1610612738/primary/L/logo.svg"
+    );
     expect(screen.queryByLabelText("Season")).not.toBeInTheDocument();
     expect(screen.getByText("56–26")).toBeInTheDocument();
+    expect(screen.getByText("W2")).toBeInTheDocument();
+    expect(screen.getByText("8-2")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "BOS" }).closest("tr")).toHaveTextContent("1");
     expect(screen.queryByText(/Official ranks aren't available yet/)).not.toBeInTheDocument();
     expect(

@@ -9,7 +9,7 @@ seeds:
       Update this seed when a franchise rebrands; do not invent colors at scrape time.
     config:
       column_types:
-        team_id: varchar(36)
+        team_id: uuid
         abbreviation: varchar(5)
         primary_color: varchar(7)
         alternate_color: varchar(7)

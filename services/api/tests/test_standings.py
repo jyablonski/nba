@@ -108,6 +108,9 @@ def test_list_standings_sql_overlays_regular_season_records() -> None:
     assert "record_source" in sql
     assert "rank() OVER" in sql
     assert "first_value(" in sql
+    assert "streak_group" in sql
+    assert "lag(" in sql
+    assert "form.last_10" in sql
     assert "conference_rank NULLS LAST" in sql
     assert "gold.dim_teams" in str(LIST_STANDINGS_COUNT)
 

@@ -180,6 +180,15 @@ export function colorForLeader(leader: LeaderSide, colors: PlotColors): string {
   return colors[leader];
 }
 
+export function colorForScoringSide(
+  scoringSide: string | null | undefined,
+  colors: PlotColors
+): string {
+  if (scoringSide === "home") return colors.home;
+  if (scoringSide === "away") return colors.away;
+  return colors.tied;
+}
+
 export function leadSegments<T extends { score_differential: number }>(
   points: T[],
   colors: PlotColors

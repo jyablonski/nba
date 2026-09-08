@@ -9,21 +9,42 @@ from datetime import date, datetime
 from typing import Any
 
 from bs4 import BeautifulSoup, Comment, Tag
-from identity import BREF_PROVIDER, ensure_player, seed_team_catalog
+from identity import (
+    BREF_PROVIDER,
+    ensure_player,
+    is_abbreviated_player_name,
+    seed_team_catalog,
+)
+from sqlalchemy import select
 
 from db import get_session
-from models import Player
+from models import Player, PlayerExternalId
 from scrapers import BREF_BASE_URL, bref_get, current_season, season_start_year, to_int
 from scrapers.contracts_parse import PLAYER_HREF_RE, normalize_player_name
 
 logger = logging.getLogger(__name__)
 
 ROSTER_TABLE_ID = "roster"
+PLAYER_DIRECTORY_TABLE_ID = "players"
 
 
 def team_roster_url(bref_abbreviation: str, season: str | None = None) -> str:
     year = season_start_year(season or current_season())
     return f"{BREF_BASE_URL}/teams/{bref_abbreviation.upper()}/{year}.html"
+
+
+def player_directory_url(letter: str) -> str:
+    normalized = letter.strip().lower()
+    if len(normalized) != 1 or not normalized.isalpha():
+        raise ValueError("BRef player directory letter must be one alphabetic character")
+    return f"{BREF_BASE_URL}/players/{normalized}/"
+
+
+def player_profile_url(external_id: str) -> str:
+    slug = external_id.strip().lower()
+    if not re.fullmatch(r"[a-z0-9]+", slug):
+        raise ValueError("BRef player profile key must be alphanumeric")
+    return f"{BREF_BASE_URL}/players/{slug[0]}/{slug}.html"
 
 
 def _find_roster_table(soup: BeautifulSoup) -> Tag | None:
@@ -40,12 +61,27 @@ def _find_roster_table(soup: BeautifulSoup) -> Tag | None:
     return None
 
 
+def _find_player_directory_table(soup: BeautifulSoup) -> Tag | None:
+    table = soup.find("table", id=PLAYER_DIRECTORY_TABLE_ID)
+    if isinstance(table, Tag):
+        return table
+    for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
+        if f'id="{PLAYER_DIRECTORY_TABLE_ID}"' not in comment and (
+            f"id='{PLAYER_DIRECTORY_TABLE_ID}'" not in comment
+        ):
+            continue
+        nested = BeautifulSoup(str(comment), "html.parser")
+        table = nested.find("table", id=PLAYER_DIRECTORY_TABLE_ID)
+        if isinstance(table, Tag):
+            return table
+    return None
+
+
 def _cell_text(row: Tag, stat: str) -> str | None:
     cell = row.find(["th", "td"], attrs={"data-stat": stat})
     if not isinstance(cell, Tag):
         return None
-    value = cell.get("csk") or cell.get_text(" ", strip=True)
-    return str(value).strip() or None
+    return cell.get_text(" ", strip=True) or None
 
 
 def _player_cell(row: Tag) -> tuple[str | None, str | None]:
@@ -105,6 +141,32 @@ def parse_roster_html(html: str, *, team_id: Any, source_url: str) -> list[dict[
     return rows
 
 
+def parse_player_directory_html(html: str) -> dict[str, str]:
+    """Parse one BRef alphabet directory into ``player slug -> full name``."""
+    soup = BeautifulSoup(html, "html.parser")
+    table = _find_player_directory_table(soup)
+    if table is None:
+        return {}
+    names: dict[str, str] = {}
+    for row in table.select("tbody tr"):
+        if not isinstance(row, Tag) or "thead" in (row.get("class") or []):
+            continue
+        slug, name = _player_cell(row)
+        if slug and name and name.lower() != "player":
+            names[slug] = name
+    return names
+
+
+def parse_player_profile_html(html: str) -> str | None:
+    """Read the canonical display name from a BRef player profile."""
+    soup = BeautifulSoup(html, "html.parser")
+    heading = soup.find("h1")
+    if not isinstance(heading, Tag):
+        return None
+    name = heading.get_text(" ", strip=True)
+    return name or None
+
+
 def _parse_birth_date(value: str | None) -> date | None:
     if not value:
         return None
@@ -133,9 +195,104 @@ def scrape_players(
             all_rows.extend(parse_roster_html(fetch(url), team_id=entry.team_id, source_url=url))
         except Exception:
             logger.exception("BRef roster scrape failed for %s", url)
+
+    directory_names: dict[str, str] = {}
+    for letter in sorted({row["external_id"][0] for row in all_rows if row.get("external_id")}):
+        url = player_directory_url(letter)
+        try:
+            directory_names.update(parse_player_directory_html(fetch(url)))
+        except Exception:
+            logger.exception("BRef player directory scrape failed for %s", url)
+
+    existing_names: dict[str, str] = {}
+    existing_abbreviated: set[str] = set()
+    with get_session() as session:
+        crosswalks = session.scalars(
+            select(PlayerExternalId).where(PlayerExternalId.provider == BREF_PROVIDER)
+        ).all()
+        for crosswalk in crosswalks:
+            external_id = str(crosswalk.external_id)
+            player = session.get(Player, crosswalk.player_id) if crosswalk is not None else None
+            name = getattr(player, "full_name", None)
+            if not isinstance(name, str) or not name:
+                continue
+            if is_abbreviated_player_name(name):
+                existing_abbreviated.add(external_id)
+            else:
+                existing_names[external_id] = name
+
+    unresolved_slugs: set[str] = set(existing_abbreviated - directory_names.keys())
+    for row in all_rows:
+        external_id = row["external_id"]
+        full_name = directory_names.get(external_id) or existing_names.get(external_id)
+        if not full_name:
+            unresolved_slugs.add(external_id)
+            continue
+        first, _, last = full_name.partition(" ")
+        row.update(
+            {
+                "first_name": first,
+                "last_name": last or first,
+                "full_name": full_name,
+                "player_name_normalized": normalize_player_name(full_name),
+            }
+        )
+
+    profile_names: dict[str, str] = {}
+    for external_id in sorted(unresolved_slugs):
+        url = player_profile_url(external_id)
+        try:
+            full_name = parse_player_profile_html(fetch(url))
+        except Exception:
+            logger.exception("BRef player profile scrape failed for %s", url)
+            continue
+        if full_name:
+            profile_names[external_id] = full_name
+    for row in all_rows:
+        full_name = profile_names.get(row["external_id"])
+        if full_name:
+            first, _, last = full_name.partition(" ")
+            row.update(
+                {
+                    "first_name": first,
+                    "last_name": last or first,
+                    "full_name": full_name,
+                    "player_name_normalized": normalize_player_name(full_name),
+                }
+            )
+
+    roster_external_ids = {row["external_id"] for row in all_rows}
+    existing_resolved = sum(
+        1
+        for external_id in existing_abbreviated
+        if external_id not in roster_external_ids
+        and (external_id in directory_names or external_id in profile_names)
+    )
+    logger.info(
+        "Resolved player names: %s from directory, %s from profiles, %s from existing records",
+        sum(1 for row in all_rows if row["external_id"] in directory_names),
+        len(profile_names),
+        existing_resolved,
+    )
+
     written = 0
     with get_session() as session:
         seed_team_catalog(session, scraped_at=scraped_at)
+        for external_id in existing_abbreviated:
+            if external_id in roster_external_ids:
+                continue
+            full_name = directory_names.get(external_id) or profile_names.get(external_id)
+            if not full_name:
+                continue
+            crosswalk = session.get(PlayerExternalId, (BREF_PROVIDER, external_id))
+            player = session.get(Player, crosswalk.player_id) if crosswalk is not None else None
+            if player is None:
+                continue
+            first, _, last = full_name.partition(" ")
+            player.first_name = first
+            player.last_name = last or first
+            player.full_name = full_name
+            player.scraped_at = scraped_at
         for row in all_rows:
             player_id = ensure_player(
                 session,
@@ -163,4 +320,12 @@ def scrape_players(
     return written
 
 
-__all__ = ["parse_roster_html", "scrape_players", "team_roster_url"]
+__all__ = [
+    "parse_player_directory_html",
+    "parse_player_profile_html",
+    "parse_roster_html",
+    "player_directory_url",
+    "player_profile_url",
+    "scrape_players",
+    "team_roster_url",
+]

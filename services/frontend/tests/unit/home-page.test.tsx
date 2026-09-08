@@ -136,7 +136,10 @@ describe("home desk", () => {
     const snapshot = screen.getByText("56–26").closest("li");
     expect(snapshot).toHaveTextContent("1");
     expect(snapshot).toHaveTextContent("BOS");
-    expect(snapshot?.querySelector("img")).toBeNull();
+    expect(snapshot?.querySelector("img")).toHaveAttribute(
+      "src",
+      "https://cdn.nba.com/logos/nba/1610612738/primary/L/logo.svg"
+    );
     expect(screen.queryByText(/Official ranks aren't available yet/)).not.toBeInTheDocument();
     expect(
       screen.queryByText(/Conference rank and Regular Season W–L are from game results/)
