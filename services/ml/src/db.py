@@ -38,7 +38,9 @@ def upsert_rows(
         return 0
     skip_update = set(conflict_columns) | {"id"}
     update_cols = [
-        column.name for column in model.__table__.columns if column.name not in skip_update
+        column.name
+        for column in model.__table__.columns  # ty: ignore[unresolved-attribute]
+        if column.name not in skip_update
     ]
     stmt = insert(model).values(rows)
     stmt = stmt.on_conflict_do_update(

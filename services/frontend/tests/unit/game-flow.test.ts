@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatBiggestRunCaption,
+  formatComebackBadge,
   formatFlowTooltipLabel,
   formatFlowTooltipPlay,
   formatFlowTooltipScore,
@@ -274,5 +275,44 @@ describe("selectBiggestRun", () => {
       { away: 10, home: 0, elapsed: 300 },
     ]);
     expect(selectBiggestRun(earlierWins, teams)?.biggest_run_start_seconds).toBe(0);
+  });
+});
+
+describe("formatComebackBadge", () => {
+  it("narrates a comeback with the entering-fourth deficit", () => {
+    expect(
+      formatComebackBadge({
+        largest_lead_blown: 29,
+        comeback_team_abbreviation: "NYK",
+        winner_margin_entering_fourth: -15,
+      })
+    ).toBe("NYK erased a 29-point deficit, down 15 entering Q4");
+  });
+
+  it("omits the tail when the winner already led entering the fourth", () => {
+    expect(
+      formatComebackBadge({
+        largest_lead_blown: 14,
+        comeback_team_abbreviation: "DET",
+        winner_margin_entering_fourth: 3,
+      })
+    ).toBe("DET erased a 14-point deficit");
+  });
+
+  it("calls out a wire-to-wire win instead", () => {
+    expect(
+      formatComebackBadge({
+        largest_lead_blown: 0,
+        is_wire_to_wire: true,
+        winning_team_abbreviation: "SAS",
+      })
+    ).toBe("SAS led wire to wire");
+  });
+
+  it("stays quiet for the ordinary few-point swing", () => {
+    expect(
+      formatComebackBadge({ largest_lead_blown: 6, comeback_team_abbreviation: "MIA" })
+    ).toBeNull();
+    expect(formatComebackBadge({ largest_lead_blown: null })).toBeNull();
   });
 });

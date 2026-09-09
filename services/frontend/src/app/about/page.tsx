@@ -1,33 +1,22 @@
-"use client";
-
-import { useQuery } from "@tanstack/react-query";
-
-import { api } from "@/lib/api";
-import { formatScrapedAt } from "@/lib/format";
+import { commitUrl, shortSha } from "@/lib/version";
 
 export default function AboutPage() {
-  const statusQuery = useQuery({
-    queryKey: ["status"],
-    queryFn: () => api.getStatus(),
-  });
-  const scraped = formatScrapedAt(statusQuery.data?.last_scraped_at);
+  const sha = shortSha();
+  const href = commitUrl();
 
   return (
     <article className="space-y-8">
       <header>
-        <h1 className="type-about">Baseline</h1>
+        <h1 className="type-about">About</h1>
       </header>
 
       <p className="type-prose">
-        A personal analytics desk for NBA box scores and remaining-contract snapshots. Humans browse
-        the same facts they can also ask about: a bounded set of questions, not a general chatbot.
+        An NBA analytics app covering box scores, player and team stats, contract snapshots, betting
+        odds, and ML-powered win predictions, updated daily throughout the season.
       </p>
 
       <Section title="Sources">
-        <p>
-          Data comes from the feeds below. Some feeds only appear in Ask until a dedicated screen
-          exists.
-        </p>
+        <p>Data comes from the feeds below.</p>
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>
             <span className="font-medium text-foreground">Basketball-Reference</span>: teams,
@@ -40,33 +29,66 @@ export default function AboutPage() {
             moneylines and spreads when a key is configured. A market snapshot, not a book.
           </li>
           <li>
-            <span className="font-medium text-foreground">Reddit</span>: r/nba posts (not comments)
-            when Reddit access is configured. No Baseline Social page yet.
+            <span className="font-medium text-foreground">Reddit</span>: r/nba posts and their top
+            comments when Reddit access is configured. No Baseline Social page yet.
           </li>
         </ul>
       </Section>
 
       <Section title="How the data gets here">
         <p>
-          Those sources are collected and served here. This browser talks to that served data only.
+          The sources are scraped on a schedule, transformed and enriched into analytics tables, and
+          then served out over this app.
         </p>
       </Section>
 
       <Section title="Coverage">
-        <p>
-          Coverage defaults to the latest season. Counts in the header and home strip come from
-          what&apos;s actually here, not invented scale. Contracts are a remaining-year snapshot and
-          are not refreshed every day.
-        </p>
+        <p>Coverage defaults to the latest season only.</p>
       </Section>
 
-      <section>
-        <h2 className="type-module border-b border-rule pb-1">Last scraped</h2>
-        <p className="type-timestamp mt-3">Scraped {scraped}</p>
-        <p className="type-prose mt-3">
-          Same timestamp as the header, not a live feed. Health checks are not displayed.
-        </p>
-      </section>
+      <Section title="Developer">
+        <div className="flex items-center gap-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo/profile.png"
+            alt="Jacob Yablonski"
+            width={72}
+            height={72}
+            className="h-18 w-18 rounded-full border border-rule object-cover"
+          />
+          <div>
+            <p className="font-medium text-foreground">Jacob Yablonski</p>
+            <p className="mt-1 flex gap-3">
+              <a
+                className="underline underline-offset-2"
+                href="https://github.com/jyablonski"
+                target="_blank"
+                rel="noreferrer"
+              >
+                GitHub
+              </a>
+              <a
+                className="underline underline-offset-2"
+                href="https://www.linkedin.com/in/jacobyablonski/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                LinkedIn
+              </a>
+            </p>
+          </div>
+        </div>
+      </Section>
+
+      <Section title="Version">
+        {href ? (
+          <a className="underline underline-offset-2" href={href} target="_blank" rel="noreferrer">
+            {sha}
+          </a>
+        ) : (
+          <p>{sha}</p>
+        )}
+      </Section>
     </article>
   );
 }

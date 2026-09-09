@@ -4,6 +4,9 @@ Claude Desktop (claude_desktop_config.json):
   command: uv
   args: ["--directory", "/path/to/nba-platform/services/mcp", "run", "src/server.py"]
   env: {"CUBE_API_URL": "http://localhost:4000", "CUBEJS_API_SECRET": "your-cube-secret"}
+
+Production Compose sets MCP_TRANSPORT=streamable-http and serves /mcp on port 8000
+inside the container. HTTP clients must send Authorization: Bearer $MCP_API_TOKEN.
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ _SRC_DIR = Path(__file__).resolve().parent
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
+from auth import ApiTokenVerifier
 from cube.analytics import CubeAnalytics
 from cube.client import CubeClient
 from cube.errors import CubeError
@@ -77,6 +81,11 @@ class Settings(BaseSettings):
 
     cube_api_url: str | None = None
     cubejs_api_secret: str | None = None
+    mcp_transport: str = "stdio"
+    mcp_host: str = "127.0.0.1"
+    mcp_port: int = 8000
+    mcp_path: str = "/mcp"
+    mcp_api_token: str | None = None
 
 
 @lru_cache
@@ -94,6 +103,17 @@ def get_analytics() -> CubeAnalytics:
     return CubeAnalytics(get_cube_client())
 
 
+def mcp_auth(settings: Settings) -> ApiTokenVerifier | None:
+    if settings.mcp_transport == "stdio":
+        return None
+    if not settings.mcp_api_token:
+        raise RuntimeError("MCP_API_TOKEN is required for the HTTP MCP transport.")
+    return ApiTokenVerifier(settings.mcp_api_token)
+
+
+settings = get_settings()
+
+
 mcp = FastMCP(
     "NBA Analytics",
     instructions=(
@@ -102,6 +122,7 @@ mcp = FastMCP(
         "Fall back to query_cube with Cube query JSON when named tools do not cover the question. "
         "Do not write SQL. Gold tables are not queryable directly."
     ),
+    auth=mcp_auth(settings),
 )
 
 
@@ -349,4 +370,13 @@ def query_cube(
 
 
 if __name__ == "__main__":
-    mcp.run()
+    transport = settings.mcp_transport
+    if transport == "stdio":
+        mcp.run(transport=transport)
+    else:
+        mcp.run(
+            transport=transport,  # ty: ignore[invalid-argument-type]
+            host=settings.mcp_host,
+            port=settings.mcp_port,
+            path=settings.mcp_path,
+        )

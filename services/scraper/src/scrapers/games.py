@@ -47,7 +47,7 @@ def _find_schedule_tables(soup: BeautifulSoup) -> list[Tag]:
         return tables
     found: list[Tag] = []
     for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
-        if "schedule" not in comment:
+        if "schedule" not in comment:  # ty: ignore[unsupported-operator]
             continue
         nested = BeautifulSoup(str(comment), "html.parser")
         found.extend(
@@ -81,7 +81,7 @@ def _schedule_page_urls(html: str, season: str, base_url: str) -> list[str]:
     urls = [base_url]
     soup = BeautifulSoup(html, "html.parser")
     for link in soup.find_all("a", href=True):
-        url = urljoin(base_url, str(link["href"]))
+        url = urljoin(base_url, str(link["href"]))  # ty: ignore[not-subscriptable]
         if month_pattern.search(url) and url not in urls:
             urls.append(url)
     return urls

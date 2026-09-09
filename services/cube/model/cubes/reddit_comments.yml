@@ -8,6 +8,7 @@ cubes:
         sql: reddit_id
         type: string
         primary_key: true
+        public: true
 
       - name: post_reddit_id
         sql: post_reddit_id

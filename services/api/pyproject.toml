@@ -15,9 +15,10 @@ dependencies = [
 [dependency-groups]
 dev = [
     "httpx2==2.12.0",
-    "pytest==9.1.1",
     "pytest-cov==7.1.0",
+    "pytest==9.1.1",
     "testcontainers[postgres]==4.15.0",
+    "ty==0.0.78",
 ]
 
 [tool.uv]
@@ -54,3 +55,13 @@ markers = [
 filterwarnings = [
     "ignore:The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead\\.:DeprecationWarning:starlette.testclient",
 ]
+
+# Anchors ty to this service so it does not walk up and type-check the whole
+# repo against this venv. Mirrors pytest's pythonpath = ["src"].
+[tool.ty.environment]
+extra-paths = ["src"]
+
+# Check shipped code only: tests pass duck-typed doubles where a concrete class
+# is annotated, which is intentional.
+[tool.ty.src]
+include = ["src"]

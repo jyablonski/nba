@@ -45,6 +45,7 @@ cubes:
         sql: id
         type: string
         primary_key: true
+        public: true
 
       - name: game_id
         sql: game_id

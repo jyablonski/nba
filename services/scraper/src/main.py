@@ -22,7 +22,7 @@ from scrapers.contracts import scrape_contracts
 from scrapers.games import scrape_games, scrape_todays_games
 from scrapers.injuries import scrape_injuries
 from scrapers.odds import scrape_odds
-from scrapers.play_by_play import NoFinalGamesError, scrape_play_by_play
+from scrapers.play_by_play import NoFinalGamesError, repair_encoded_text, scrape_play_by_play
 from scrapers.player_game_logs import scrape_logs_for_games, scrape_player_game_logs
 from scrapers.players import scrape_players
 from scrapers.reddit import DEFAULT_COMMENTS_PER_POST, scrape_reddit
@@ -215,11 +215,17 @@ def scrape_odds_cmd() -> None:
     multiple=True,
     help="Scrape these Final game_ids only (repeatable). Skips the season-wide Finals backfill.",
 )
-def scrape_play_by_play_cmd(season: str | None, game_ids: tuple[str, ...]) -> None:
+@click.option(
+    "--refresh",
+    is_flag=True,
+    default=False,
+    help="Re-fetch games that already have events instead of skipping them.",
+)
+def scrape_play_by_play_cmd(season: str | None, game_ids: tuple[str, ...], refresh: bool) -> None:
     """Upsert Basketball-Reference play-by-play events. Omit --game-id to load a season."""
     ids = list(game_ids) or None
     try:
-        count = scrape_play_by_play(season, game_ids=ids)
+        count = scrape_play_by_play(season, game_ids=ids, refresh=refresh)
     except NoFinalGamesError as exc:
         raise click.ClickException(str(exc)) from exc
     if ids:
@@ -227,6 +233,13 @@ def scrape_play_by_play_cmd(season: str | None, game_ids: tuple[str, ...]) -> No
         return
     target = season or current_season()
     click.echo(f"Upserted {count} play-by-play events for {target}")
+
+
+@cli.command("repair-encoding")
+def repair_encoding_cmd() -> None:
+    """Repair mojibake in player names and play-by-play descriptions already stored."""
+    players_fixed, actions_fixed = repair_encoded_text()
+    click.echo(f"Repaired {players_fixed} player name(s) and {actions_fixed} description(s)")
 
 
 @cli.command("scrape-contracts")

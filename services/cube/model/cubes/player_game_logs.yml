@@ -13,6 +13,7 @@ cubes:
         sql: "CAST(player_id AS VARCHAR) || '-' || game_id"
         type: string
         primary_key: true
+        public: true
 
       - name: player_id
         sql: player_id

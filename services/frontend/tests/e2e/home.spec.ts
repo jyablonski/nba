@@ -38,3 +38,24 @@ test("home standings snapshot deep-links to /standings", async ({ page }) => {
   await expect(page.getByText("Western Conference")).toBeVisible();
   await expectNo2010Range(page);
 });
+
+test("home standings snapshot labels its columns and covers both conferences", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/");
+
+  const snapshot = page.locator("section").filter({ hasText: "Standings snapshot" }).first();
+  await expect(snapshot.getByText("EAST")).toBeVisible();
+  await expect(snapshot.getByText("WEST")).toBeVisible();
+  // Column headers, not just the trailing caption.
+  await expect(snapshot.getByText("W–L", { exact: true })).toHaveCount(2);
+  await expect(snapshot.getByText("Win %", { exact: true })).toHaveCount(2);
+  await expect(snapshot.getByText("50–32")).toBeVisible();
+  await expect(snapshot.getByText(".610")).toBeVisible();
+});
+
+test("home coverage strip no longer counts seasons", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/");
+  await expect(page.getByText("Players in directory")).toBeVisible();
+  await expect(page.getByText("Seasons", { exact: true })).toHaveCount(0);
+});

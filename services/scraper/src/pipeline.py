@@ -211,11 +211,11 @@ def execute_scrape(
     collector = alert if alert is not None else SyncAlert(action)
     if action == "daily":
         games = collector.try_run("todays_games", scrape_todays_games)
-        season = current_season()
+        daily_season = current_season()
         n_standings = collector.try_run(
             "standings",
-            lambda: scrape_standings(season),
-            season=season,
+            lambda: scrape_standings(daily_season),
+            season=daily_season,
         )
         n_injuries = collector.try_run("injuries", scrape_injuries)
         n_odds = collector.try_run("odds", scrape_odds)

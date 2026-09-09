@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { GameFlowChart } from "@/components/charts/game-flow-chart";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { api, queryErrorMessage } from "@/lib/api";
-import { formatLeadShare, formatMatchupTitle } from "@/lib/game-flow";
+import { formatComebackBadge, formatLeadShare, formatMatchupTitle } from "@/lib/game-flow";
 import { formatDate, formatNumber, formatSignedMargin } from "@/lib/format";
 import type { GameFlow } from "@/lib/types";
 
@@ -80,18 +80,28 @@ function GameFlowBody() {
 }
 
 function FlowFacts({ flow }: { flow: GameFlow }) {
+  const comeback = formatComebackBadge(flow);
   return (
-    <div className="flex flex-wrap items-center gap-2 text-sm">
-      <span className="border border-rule bg-accent-soft px-2 py-1 text-foreground">
-        {formatLeadShare("home", flow.home_team_abbreviation, flow.home_lead_pct)}
-      </span>
-      <span className="border border-rule bg-tint px-2 py-1 text-foreground">
-        {formatLeadShare("away", flow.away_team_abbreviation, flow.away_lead_pct)}
-      </span>
-      <span className="text-ink-2">Max lead {formatSignedMargin(flow.max_lead)}</span>
-      <span className="text-ink-2">{formatNumber(flow.lead_changes)} lead changes</span>
-      <span className="text-ink-2">{formatNumber(flow.ties)} ties</span>
-      <span className="text-ink-2">{formatNumber(flow.scoring_play_count)} plays</span>
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="border border-rule bg-accent-soft px-2 py-1 text-foreground">
+          {formatLeadShare("home", flow.home_team_abbreviation, flow.home_lead_pct)}
+        </span>
+        <span className="border border-rule bg-tint px-2 py-1 text-foreground">
+          {formatLeadShare("away", flow.away_team_abbreviation, flow.away_lead_pct)}
+        </span>
+        {comeback ? (
+          <span className="border border-rule bg-tint px-2 py-1 font-medium text-foreground">
+            {comeback}
+          </span>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-ink-2">
+        <span>Max lead {formatSignedMargin(flow.max_lead)}</span>
+        <span>{formatNumber(flow.lead_changes)} lead changes</span>
+        <span>{formatNumber(flow.ties)} ties</span>
+        <span>{formatNumber(flow.scoring_play_count)} plays</span>
+      </div>
     </div>
   );
 }

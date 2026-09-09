@@ -8,6 +8,7 @@ cubes:
         sql: team_id
         type: string
         primary_key: true
+        public: true
 
       - name: abbreviation
         sql: abbreviation

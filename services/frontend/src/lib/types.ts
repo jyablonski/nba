@@ -396,6 +396,23 @@ export type PlayByPlayEvent = {
   description?: string | null;
 };
 
+export type GameCollapse = {
+  game_id: string;
+  season?: string | null;
+  game_date?: string | null;
+  home_team_abbreviation?: string | null;
+  home_score?: number | null;
+  away_team_abbreviation?: string | null;
+  away_score?: number | null;
+  largest_lead_blown: number;
+  blown_lead_team_abbreviation?: string | null;
+  comeback_team_abbreviation?: string | null;
+  blown_lead_period?: number | null;
+  winner_margin_entering_fourth?: number | null;
+  lead_changes?: number | null;
+  overtime_periods?: number | null;
+};
+
 export type GameFlow = {
   game_id: string;
   season: string;
@@ -435,4 +452,15 @@ export type GameFlow = {
   biggest_run_start_seconds?: number | null;
   biggest_run_end_seconds?: number | null;
   biggest_run_label?: string | null;
+  final_period?: number | null;
+  overtime_periods?: number | null;
+  went_to_overtime?: boolean | null;
+  largest_lead_blown?: number | null;
+  blown_lead_team_abbreviation?: string | null;
+  comeback_team_abbreviation?: string | null;
+  blown_lead_period?: number | null;
+  blown_lead_elapsed_seconds?: number | null;
+  is_wire_to_wire?: boolean | null;
+  winner_halftime_margin?: number | null;
+  winner_margin_entering_fourth?: number | null;
 };

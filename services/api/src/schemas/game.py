@@ -110,6 +110,36 @@ class GameFlow(BaseModel):
     biggest_run_start_seconds: float | None = None
     biggest_run_end_seconds: float | None = None
     biggest_run_label: str | None = None
+    final_period: int | None = None
+    overtime_periods: int | None = None
+    went_to_overtime: bool | None = None
+    largest_lead_blown: int | None = None
+    blown_lead_team_abbreviation: str | None = None
+    comeback_team_abbreviation: str | None = None
+    blown_lead_period: int | None = None
+    blown_lead_elapsed_seconds: float | None = None
+    is_wire_to_wire: bool | None = None
+    winner_halftime_margin: int | None = None
+    winner_margin_entering_fourth: int | None = None
+
+
+class GameCollapse(BaseModel):
+    """A game the leading team lost, ranked by how big that lead was."""
+
+    game_id: UUID
+    season: str | None = None
+    game_date: date | None = None
+    home_team_abbreviation: str | None = None
+    home_score: int | None = None
+    away_team_abbreviation: str | None = None
+    away_score: int | None = None
+    largest_lead_blown: int
+    blown_lead_team_abbreviation: str | None = None
+    comeback_team_abbreviation: str | None = None
+    blown_lead_period: int | None = None
+    winner_margin_entering_fourth: int | None = None
+    lead_changes: int | None = None
+    overtime_periods: int | None = None
 
 
 class TeamGameResult(GameResult):

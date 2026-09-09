@@ -14,6 +14,7 @@ dependencies = [
 dev = [
     "pytest==9.1.1",
     "testcontainers[postgres]==4.15.0",
+    "ty==0.0.78",
 ]
 
 [tool.uv]
@@ -37,3 +38,9 @@ markers = [
     "unit: Tests that do not require Docker",
     "integration: Tests that require Docker / Testcontainers Postgres",
 ]
+
+# Anchors ty to this service so it does not walk up and type-check the whole
+# repo against this venv. The repo root is here because the Testcontainers test
+# inserts it into sys.path at runtime to import `testing.postgres_tc`.
+[tool.ty.environment]
+extra-paths = ["migrations", "../.."]

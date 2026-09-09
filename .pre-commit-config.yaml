@@ -25,6 +25,18 @@ repos:
         exclude: ^(package-lock\.json|.*uv\.lock|htmlcov/|.*coverage/)
         entry: node services/frontend/node_modules/prettier/bin/prettier.cjs --write
         pass_filenames: true
+      # ty runs per service: each has its own venv and its own src on the module
+      # path, so a single repo-wide invocation would resolve imports against the
+      # wrong environment. `uv run --directory` provisions that venv on demand,
+      # so this works on a fresh clone and in CI, and it overrides the root
+      # VIRTUAL_ENV that pre-commit exports. Production source only; tests use
+      # duck-typed doubles.
+      - id: ty
+        name: ty
+        language: system
+        pass_filenames: false
+        files: ^services/(api|scraper|mcp|cube|ml|migrate)/.*\.py$
+        entry: bash -c 'for s in api scraper mcp cube ml migrate; do echo "-- ty $s"; uv run --directory "services/$s" ty check || exit 1; done'
       - id: frontend-eslint
         name: frontend eslint
         language: system

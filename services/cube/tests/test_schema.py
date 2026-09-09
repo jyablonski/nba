@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from schema import cube_names, cube_root, load_yaml, validate_schema, view_names
+from schema import cube_names, cube_root, load_cubes, load_yaml, validate_schema, view_names
 
 
 @pytest.mark.unit
@@ -15,6 +15,17 @@ def test_validate_schema() -> None:
     assert "teams" in result["cubes"]
     assert "team_games" in result["cubes"]
     assert (result["root"] / "cube.js").is_file()
+
+
+@pytest.mark.unit
+def test_primary_key_dimensions_are_public() -> None:
+    private_primary_keys = [
+        f"{cube['name']}.{dimension['name']}"
+        for cube in load_cubes()
+        for dimension in cube.get("dimensions", [])
+        if dimension.get("primary_key") and dimension.get("public") is not True
+    ]
+    assert private_primary_keys == []
 
 
 @pytest.mark.unit

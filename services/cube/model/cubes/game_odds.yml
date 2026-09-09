@@ -8,6 +8,7 @@ cubes:
         sql: "odds_event_id || '-' || bookmaker || '-' || market"
         type: string
         primary_key: true
+        public: true
 
       - name: odds_event_id
         sql: odds_event_id

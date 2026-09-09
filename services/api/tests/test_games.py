@@ -305,3 +305,49 @@ def test_list_seasons(client, session, query_result) -> None:
     assert response.status_code == 200
     assert response.json()["data"] == ["2024-25", "2023-24"]
     assert response.json()["meta"]["total"] == 2
+
+
+@pytest.mark.unit
+def test_list_biggest_collapses(client, session, mapping_row, query_result) -> None:
+    session.queue = [
+        query_result(
+            [
+                mapping_row(
+                    {
+                        "game_id": GAME_TWO,
+                        "season": "2025-26",
+                        "game_date": date(2026, 6, 10),
+                        "home_team_abbreviation": "NYK",
+                        "home_score": 107,
+                        "away_team_abbreviation": "SAS",
+                        "away_score": 106,
+                        "largest_lead_blown": 29,
+                        "blown_lead_team_abbreviation": "SAS",
+                        "comeback_team_abbreviation": "NYK",
+                        "blown_lead_period": 2,
+                        "winner_margin_entering_fourth": -15,
+                        "lead_changes": 3,
+                        "overtime_periods": 0,
+                    }
+                )
+            ]
+        )
+    ]
+    response = client.get("/api/v1/games/collapses?limit=5")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["meta"]["total"] == 1
+    collapse = payload["data"][0]
+    assert collapse["largest_lead_blown"] == 29
+    assert collapse["blown_lead_team_abbreviation"] == "SAS"
+    assert collapse["comeback_team_abbreviation"] == "NYK"
+    assert collapse["winner_margin_entering_fourth"] == -15
+
+
+@pytest.mark.unit
+def test_biggest_collapses_query_excludes_wire_to_wire() -> None:
+    from queries.games import LIST_BIGGEST_COLLAPSES
+
+    sql = str(LIST_BIGGEST_COLLAPSES)
+    assert "gold.fct_game_flow" in sql
+    assert "largest_lead_blown > 0" in sql

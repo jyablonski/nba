@@ -15,6 +15,8 @@
 # need `compose build` (Tilt live_update also never rewrites `compose run`
 # images). Rebuild only for Dockerfile / lockfile / package changes:
 #   BUILD=1 ./scripts/refresh-daily.sh
+# Production callers set COMPOSE to the prod overlay so these jobs use the
+# registry-tagged, baked images and the production environment.
 # Do not `compose up postgres` from here — recreating on an existing
 # pgdata volume does not re-run init.sql.
 #
@@ -30,8 +32,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-# Same project as Tilt (`nba` when the repo directory is nba).
-export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "$ROOT")}"
+# Same pinned project as the Makefile, not the directory name: compose
+# namespaces volumes by project, so deriving it would point a renamed checkout
+# at an empty pgdata.
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-nba}"
 
 COMPOSE="${COMPOSE:-docker compose}"
 FORCE="${FORCE:-0}"

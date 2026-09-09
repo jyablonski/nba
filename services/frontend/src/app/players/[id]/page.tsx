@@ -240,7 +240,6 @@ function PlayerProfile() {
                     >
                       Date
                     </SortHead>
-                    <th>PBP</th>
                     <th>Opp</th>
                     <th>Loc</th>
                     <th>Res</th>
@@ -301,6 +300,7 @@ function PlayerProfile() {
                       +/-
                     </SortHead>
                     <th>B2B</th>
+                    <th>PBP</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -449,18 +449,6 @@ function LogRow({ row }: { row: GameLogEntry }) {
   return (
     <tr className={row.is_back_to_back ? "bg-row-b2b" : undefined}>
       <td className="tabular">{formatDate(row.game_date)}</td>
-      <td>
-        {row.game_id ? (
-          <Link
-            href={withSeason(`/games/${row.game_id}`, row.season ?? "")}
-            className="text-primary hover:underline"
-          >
-            PBP
-          </Link>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </td>
       <td className="font-semibold">{row.opponent_abbreviation}</td>
       <td>{locationLabel(row.location)}</td>
       <td className={cn("font-medium", win && "text-primary", loss && "text-destructive")}>
@@ -475,6 +463,18 @@ function LogRow({ row }: { row: GameLogEntry }) {
       <td className="tabular text-right">{formatNumber(row.turnovers)}</td>
       <td className="tabular text-right">{formatSignedMargin(row.plus_minus)}</td>
       <td className="text-muted-foreground">{row.is_back_to_back ? "B2B" : "—"}</td>
+      <td>
+        {row.game_id ? (
+          <Link
+            href={withSeason(`/games/${row.game_id}`, row.season ?? "")}
+            className="text-primary hover:underline"
+          >
+            PBP
+          </Link>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </td>
     </tr>
   );
 }

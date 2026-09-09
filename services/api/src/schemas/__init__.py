@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 
 from schemas.game import (
+    GameCollapse,
     GameFlow,
     GameResult,
     PlayByPlayEvent,
@@ -47,6 +48,7 @@ __all__ = [
     "BackToBackStats",
     "GameLogEntry",
     "HeadToHeadComparison",
+    "GameCollapse",
     "GameFlow",
     "GameResult",
     "ItemResponse",

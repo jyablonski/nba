@@ -13,6 +13,7 @@ select
     source.score_away,
     source.team_id,
     source.player_id,
+    source.secondary_player_id,
     source.action_type,
     source.sub_type,
     source.description,

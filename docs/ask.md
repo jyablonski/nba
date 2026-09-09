@@ -55,4 +55,4 @@ Response `sql` on rules answers is a provenance string (`cube:…`), not a state
 
 ## Planned (not current)
 
-Streaming `/ask`. Production LLM hardening (retries, auth, rate limits, hosted eval). Local OpenAI-compatible / Cursor-MCP provider story: [plans/ask-llm-providers.md](plans/ask-llm-providers.md). Cube SQL API / pre-aggregates. `/ask` “who wins tonight” (Elo is queryable via `get_game_predictions`; there is no rules family and Courtline has no win-prob badge — see [ml.md](ml.md)). Cube on the 12GB production VM (off today; Ask fails clearly without it).
+Streaming `/ask`. Production LLM hardening (retries, auth, rate limits, hosted eval). Local OpenAI-compatible / Cursor-MCP provider story: [plans/ask-llm-providers.md](plans/ask-llm-providers.md). Cube SQL API / pre-aggregates. `/ask` “who wins tonight” (Elo is queryable via `get_game_predictions`; there is no rules family and Courtline has no win-prob badge — see [ml.md](ml.md)).

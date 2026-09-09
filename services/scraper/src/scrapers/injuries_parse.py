@@ -156,7 +156,7 @@ def _find_injuries_table(soup: BeautifulSoup) -> Tag | None:
     if isinstance(table, Tag):
         return table
     for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
-        if "id=" not in comment or "injuries" not in comment:
+        if "id=" not in comment or "injuries" not in comment:  # ty: ignore[unsupported-operator]
             continue
         nested = BeautifulSoup(str(comment), "html.parser")
         found = nested.find("table", id="injuries")
@@ -206,12 +206,12 @@ def parse_injuries_html(html: str, *, source_url: str = INJURIES_URL) -> list[di
         if not isinstance(body, Tag):
             continue
         for row in body.find_all("tr"):
-            if row.get("class") and "thead" in row.get("class", []):
+            if row.get("class") and "thead" in row.get("class", []):  # ty: ignore[unresolved-attribute]
                 continue
-            player_cell = row.find(["th", "td"], attrs={"data-stat": "player"})
-            team_cell = row.find(["th", "td"], attrs={"data-stat": "team_name"})
+            player_cell = row.find(["th", "td"], attrs={"data-stat": "player"})  # ty: ignore[unresolved-attribute]
+            team_cell = row.find(["th", "td"], attrs={"data-stat": "team_name"})  # ty: ignore[unresolved-attribute]
             if not isinstance(team_cell, Tag):
-                team_cell = row.find(["th", "td"], attrs={"data-stat": "team"})
+                team_cell = row.find(["th", "td"], attrs={"data-stat": "team"})  # ty: ignore[unresolved-attribute]
             if not isinstance(player_cell, Tag):
                 continue
             slug, name = _player_slug_and_name(player_cell)
@@ -226,11 +226,11 @@ def parse_injuries_html(html: str, *, source_url: str = INJURIES_URL) -> list[di
                 )
             if bref is None:
                 continue
-            update_cell = row.find(["th", "td"], attrs={"data-stat": "date_update"})
+            update_cell = row.find(["th", "td"], attrs={"data-stat": "date_update"})  # ty: ignore[unresolved-attribute]
             update_raw = None
             if isinstance(update_cell, Tag):
                 update_raw = update_cell.get("csk") or update_cell.get_text(strip=True)
-            injury_cell = row.find(["th", "td"], attrs={"data-stat": "injury"})
+            injury_cell = row.find(["th", "td"], attrs={"data-stat": "injury"})  # ty: ignore[unresolved-attribute]
             description = (
                 injury_cell.get_text(" ", strip=True) if isinstance(injury_cell, Tag) else ""
             )

@@ -8,6 +8,7 @@ cubes:
         sql: "game_id || '-' || CAST(as_of AS VARCHAR) || '-' || model_version"
         type: string
         primary_key: true
+        public: true
 
       - name: game_id
         sql: game_id

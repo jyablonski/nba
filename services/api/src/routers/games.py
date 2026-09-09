@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from dependencies import get_games_repository
 from repositories.games import GamesRepository
 from schemas import (
+    GameCollapse,
     GameFlow,
     GameResult,
     ItemResponse,
@@ -36,6 +37,21 @@ def _validate_season_type(season_type: str | None) -> str | None:
             detail="season_type must be Regular Season, Cup, Playoffs, or PlayIn",
         )
     return mapping[key]
+
+
+@router.get("/collapses", response_model=PaginatedResponse[GameCollapse])
+def list_biggest_collapses(
+    season: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+    repo: GamesRepository = Depends(get_games_repository),
+) -> PaginatedResponse[GameCollapse]:
+    """Games ranked by the biggest lead the losing team gave up."""
+    rows = repo.list_biggest_collapses(season=season, limit=limit)
+    data = [GameCollapse.model_validate(row) for row in rows]
+    return PaginatedResponse(
+        data=data,
+        meta=PaginationMeta(total=len(data), limit=limit, offset=0),
+    )
 
 
 @router.get("", response_model=PaginatedResponse[GameResult])

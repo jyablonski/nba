@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Reset the Oracle Postgres volume, rebuild the local tool images, load a full
+# Reset the Oracle Postgres volume, pull the runtime/job images, load a full
 # season from Basketball-Reference, validate source coverage, then run dbt and
 # Elo before bringing the serving stack back.
 
@@ -12,8 +12,8 @@ COMPOSE="${COMPOSE:-docker compose}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "$ROOT")}"
 export COMPOSE_PROJECT_NAME
 
-# CI currently publishes api/frontend/migrate only. The scraper, dbt, ML, and
-# MCP images are built on the ARM Oracle host below.
+# CI publishes all repo-built runtime/job images. Postgres and Caddy remain
+# upstream images; the Oracle host pulls the repo images from GHCR below.
 IMAGE_PREFIX="${IMAGE_PREFIX-ghcr.io/jyablonski/}"
 IMAGE_TAG="${IMAGE_TAG-$(git rev-parse HEAD)}"
 if [[ -n "$IMAGE_PREFIX" ]]; then
@@ -23,7 +23,7 @@ export IMAGE_PREFIX IMAGE_TAG
 
 SEASONS="${SEASONS:-2025-26}"
 WITH_REDDIT="${WITH_REDDIT:-0}"
-BUILD_TOOLS="${BUILD_TOOLS:-1}"
+BUILD_TOOLS="${BUILD_TOOLS:-0}"
 RESET_VOLUME="${RESET_VOLUME:-1}"
 MIN_FINAL_GAMES="${MIN_FINAL_GAMES:-1200}"
 
@@ -51,7 +51,7 @@ restore_stack() {
   local status=$?
   if [[ "$STACK_DOWN" == "1" ]]; then
     log "restoring production serving stack"
-    if ! compose up -d postgres api frontend mcp caddy; then
+    if ! compose up -d postgres api frontend mcp cube caddy; then
       echo "error: serving stack could not be restored" >&2
       [[ "$status" == "0" ]] && status=1
     fi
@@ -82,7 +82,7 @@ PG_VOLUME="${COMPOSE_PROJECT_NAME}_pgdata"
 log "validating production compose configuration"
 compose config >/dev/null
 log "target seasons: ${season_list[*]}"
-log "serving images: ${IMAGE_PREFIX}nba-api:${IMAGE_TAG}, ${IMAGE_PREFIX}nba-frontend:${IMAGE_TAG}, ${IMAGE_PREFIX}nba-migrate:${IMAGE_TAG}"
+log "repo images: ${IMAGE_PREFIX}nba-api:${IMAGE_TAG}, ${IMAGE_PREFIX}nba-frontend:${IMAGE_TAG}, ${IMAGE_PREFIX}nba-migrate:${IMAGE_TAG}, ${IMAGE_PREFIX}nba-mcp:${IMAGE_TAG}, ${IMAGE_PREFIX}nba-cube:${IMAGE_TAG}, ${IMAGE_PREFIX}nba-scraper:${IMAGE_TAG}, ${IMAGE_PREFIX}nba-dbt:${IMAGE_TAG}, ${IMAGE_PREFIX}nba-ml:${IMAGE_TAG}"
 
 if [[ "$RESET_VOLUME" == "1" ]]; then
   echo
@@ -98,8 +98,8 @@ log "stopping production containers without deleting volumes"
 compose down --remove-orphans
 STACK_DOWN=1
 
-log "pulling serving images"
-compose pull api frontend
+log "pulling repo images"
+compose pull api frontend migrate mcp cube scraper dbt ml
 
 if [[ "$BUILD_TOOLS" == "1" ]]; then
   log "building migrate, scraper, dbt, ML, and MCP images sequentially"

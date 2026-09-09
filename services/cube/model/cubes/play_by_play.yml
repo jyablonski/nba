@@ -8,6 +8,7 @@ cubes:
         sql: "game_id || '-' || CAST(action_number AS VARCHAR) || '-' || CAST(COALESCE(action_id, 0) AS VARCHAR)"
         type: string
         primary_key: true
+        public: true
 
       - name: game_id
         sql: game_id

@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: fct_play_by_play_events
+    description: >
+      Typed play-by-play events (one row per game_id + action_number + action_id).
+      Sibling of fct_play_by_play, which keeps the raw action text; this mart adds
+      the parsed event_type plus shot, foul, turnover, rebound and free-throw
+      detail. See int_play_by_play_events for how the text is parsed.
+    columns:
+      - name: game_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_team_game_results')
+                field: game_id
+      - name: event_type
+        data_tests:
+          - not_null
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["game_id", "action_number", "action_id"]

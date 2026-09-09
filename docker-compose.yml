@@ -63,6 +63,7 @@ services:
       target: ${DOCKER_TARGET:-runtime}
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_GIT_SHA: ${GIT_SHA:-dev}
     env_file: .env
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}

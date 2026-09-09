@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -24,6 +24,25 @@ vi.mock("@/lib/api", () => ({
       ],
       meta: { total: 1, limit: 15, offset: 0 },
     }),
+    listBiggestCollapses: async () => ({
+      data: [
+        {
+          game_id: "0042500410",
+          season: "2025-26",
+          game_date: "2026-06-10",
+          home_team_abbreviation: "NYK",
+          away_team_abbreviation: "SAS",
+          home_score: 107,
+          away_score: 106,
+          largest_lead_blown: 29,
+          blown_lead_team_abbreviation: "SAS",
+          comeback_team_abbreviation: "NYK",
+          blown_lead_period: 2,
+          winner_margin_entering_fourth: -15,
+        },
+      ],
+      meta: { total: 1, limit: 10, offset: 0 },
+    }),
   },
   queryErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "error"),
 }));
@@ -39,17 +58,44 @@ describe("games index", () => {
       </Providers>
     );
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: "Play-by-play →" })).toBeInTheDocument();
+      expect(screen.getAllByRole("link", { name: "Play-by-play →" }).length).toBeGreaterThan(0);
     });
     expect(screen.getByRole("heading", { name: "Game flow" })).toBeInTheDocument();
     expect(screen.getByText("Recent final games")).toBeInTheDocument();
-    expect(screen.getByText("Margin")).toBeInTheDocument();
-    expect(screen.getByText("NYK")).toBeInTheDocument();
-    expect(screen.getByText("SAS")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Play-by-play →" })).toHaveAttribute(
+    // Scoped to the recent-games table: the collapse table below repeats these teams.
+    const recent = within(screen.getAllByRole("table")[0]);
+    expect(recent.getByText("Margin")).toBeInTheDocument();
+    expect(recent.getByText("NYK")).toBeInTheDocument();
+    expect(recent.getByText("SAS")).toBeInTheDocument();
+    expect(recent.getByRole("link", { name: "Play-by-play →" })).toHaveAttribute(
       "href",
       "/games/0042500405"
     );
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+
+  it("ranks the biggest blown leads under the recent games table", async () => {
+    render(
+      <Providers>
+        <GamesPage />
+      </Providers>
+    );
+
+    expect(screen.getByText("Biggest blown leads")).toBeInTheDocument();
+    // The heading renders before either query settles; wait for both tables.
+    await waitFor(() => {
+      expect(screen.getAllByRole("table")).toHaveLength(2);
+    });
+    const collapses = within(screen.getAllByRole("table")[1]);
+    const row = collapses.getByText("29").closest("tr");
+    expect(row).toBeTruthy();
+    expect(row!.textContent).toContain("SAS");
+    expect(row!.textContent).toContain("Q2");
+    expect(row!.textContent).toContain("SAS 106");
+    expect(row!.textContent).toContain("NYK 107");
+    expect(within(row as HTMLElement).getByRole("link")).toHaveAttribute(
+      "href",
+      "/games/0042500410"
+    );
   });
 });

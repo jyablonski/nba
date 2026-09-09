@@ -1,6 +1,6 @@
 # Architecture
 
-Who talks to whom in this monorepo. The root [README](../README.md) has the one-box mermaid and quick start. Ingest and marts live in [data.md](data.md). Courtline screens live in [frontend.md](frontend.md). MCP tools live in [mcp-and-ai.md](mcp-and-ai.md). Agent pins and Make aliases stay in [AGENTS.md](../AGENTS.md).
+Who talks to whom in this monorepo. The root [README](../README.md) has the one-box mermaid and quick start. Ingest and marts live in [data.md](data.md). Cube's semantic model and runtime are in [cube.md](cube.md). Courtline screens live in [frontend.md](frontend.md). MCP tools live in [mcp-and-ai.md](mcp-and-ai.md). Agent pins and Make aliases stay in [AGENTS.md](../AGENTS.md).
 
 ## Purpose
 
@@ -16,7 +16,7 @@ Compose default (`make up` / Tilt, `DOCKER_TARGET=development`): **postgres**, o
 | `tools` | scraper, dbt, ml                            | no — `compose run`                                                 |
 | `cron`  | `refresh-daily` container                   | no; scrape-only entrypoint — prefer [operations.md](operations.md) |
 
-Production overlay (`docker-compose.prod.yml`) is postgres + api + frontend + MCP + Caddy. Cube, Tilt, and profile `cron` stay off. Ask/MCP then fail clearly without `CUBE_API_URL`. Go-live still needs a VM; see [plans/oci-caddy-hosting.md](plans/oci-caddy-hosting.md).
+Production overlay (`docker-compose.prod.yml`) is postgres + api + frontend + Cube + MCP + Caddy. Cube is internal to the Compose network and port 4000 is not published. MCP serves authenticated Streamable HTTP on host port 8001. Tilt and profile `cron` stay off. Ask/MCP fail clearly if Cube or `CUBE_API_URL` is unavailable. Go-live still needs a VM; see [plans/oci-caddy-hosting.md](plans/oci-caddy-hosting.md).
 
 Images use target `runtime` or `development`. There is no Compose `platform:` pin.
 
@@ -53,4 +53,4 @@ Courtline (`services/frontend`) calls only `${NEXT_PUBLIC_API_URL}/api/v1/...`. 
 
 ## Planned (not current)
 
-Public predictions API, Courtline win-prob badge, Courtline Social tab ([plans/social-tab.md](plans/social-tab.md)), Cube on the 12GB VM, always-on scraper/dbt/ml on the 12GB VM.
+Public predictions API, Courtline win-prob badge, Courtline Social tab ([plans/social-tab.md](plans/social-tab.md)), always-on scraper/dbt/ml on the 12GB VM.

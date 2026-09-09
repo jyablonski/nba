@@ -26,6 +26,12 @@ variable "NEXT_PUBLIC_API_URL" {
   default = "http://localhost:8000"
 }
 
+# Shown on /about so a running deploy can be tied back to a commit. CI sets this
+# to the same sha it tags images with; local builds fall back to "dev".
+variable "GIT_SHA" {
+  default = "dev"
+}
+
 # Registry builds also move `:latest` so `make prod-pull` has a default tag;
 # the immutable `:<sha>` tag is what a deploy (and a rollback) pins.
 function "tags" {
@@ -43,7 +49,7 @@ group "default" {
 
 # What docker-compose.prod.yml actually runs. CI builds only this group.
 group "prod" {
-  targets = ["api", "frontend", "migrate", "mcp"]
+  targets = ["api", "frontend", "migrate", "mcp", "cube", "scraper", "dbt", "ml"]
 }
 
 target "_common" {
@@ -70,6 +76,7 @@ target "frontend" {
   tags     = tags("nba-frontend")
   args = {
     NEXT_PUBLIC_API_URL = NEXT_PUBLIC_API_URL
+    NEXT_PUBLIC_GIT_SHA = GIT_SHA
   }
 }
 
