@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: int_playoff_seeds
+    description: >
+      Final playoff seeding (1-10 per conference), which differs from the
+      record-based standings rank whenever a play-in upset happens. Seeds 1-6
+      are locked on record; the three play-in games decide 7-10. Emitted only
+      once all three of a conference's play-in games are final, so a conference
+      mid-play-in yields no rows rather than a half-built bracket.
+    columns:
+      - name: team_id
+        data_tests:
+          - not_null
+      - name: playoff_seed
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 10
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["season", "team_id"]
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["season", "conference", "playoff_seed"]

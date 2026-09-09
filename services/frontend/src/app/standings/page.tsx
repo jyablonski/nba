@@ -8,6 +8,7 @@ import { TeamAbbrLink } from "@/components/team-logo";
 import { useSeason } from "@/hooks/use-season";
 import { api, queryErrorMessage } from "@/lib/api";
 import { formatGamesBack, formatRecord, formatWinPctPlain } from "@/lib/format";
+import { standingsSeed } from "@/lib/team-form";
 import type { StandingRow } from "@/lib/types";
 
 export default function StandingsPage() {
@@ -81,7 +82,7 @@ function ConferenceTable({ title, rows }: { title: string; rows: StandingRow[] }
         <tbody>
           {rows.map((row) => (
             <tr key={`${row.team_id}-${row.season}-${row.season_type}`}>
-              <td className="tabular text-muted-foreground">{row.conference_rank ?? "—"}</td>
+              <td className="tabular text-muted-foreground">{standingsSeed(row) ?? "—"}</td>
               <td>
                 <span className="inline-flex items-center gap-2">
                   <TeamAbbrLink
@@ -106,11 +107,13 @@ function ConferenceTable({ title, rows }: { title: string; rows: StandingRow[] }
 }
 
 function byRank(a: StandingRow, b: StandingRow) {
-  if (a.conference_rank != null && b.conference_rank != null) {
-    return a.conference_rank - b.conference_rank || a.team_name.localeCompare(b.team_name);
+  const seedA = standingsSeed(a);
+  const seedB = standingsSeed(b);
+  if (seedA != null && seedB != null) {
+    return seedA - seedB || a.team_name.localeCompare(b.team_name);
   }
-  if (a.conference_rank != null) return -1;
-  if (b.conference_rank != null) return 1;
+  if (seedA != null) return -1;
+  if (seedB != null) return 1;
   const winDiff = (b.win_pct ?? -1) - (a.win_pct ?? -1);
   if (winDiff !== 0) return winDiff;
   return a.team_name.localeCompare(b.team_name);

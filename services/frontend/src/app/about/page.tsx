@@ -16,7 +16,6 @@ export default function AboutPage() {
       </p>
 
       <Section title="Sources">
-        <p>Data comes from the feeds below.</p>
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>
             <span className="font-medium text-foreground">Basketball-Reference</span>: teams,
@@ -37,8 +36,8 @@ export default function AboutPage() {
 
       <Section title="How the data gets here">
         <p>
-          The sources are scraped on a schedule, transformed and enriched into analytics tables, and
-          then served out over this app.
+          The sources are scraped everyday on a schedule, transformed and enriched into analytics
+          tables, and then served out over this app.
         </p>
       </Section>
 

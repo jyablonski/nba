@@ -7,7 +7,7 @@ test("home desk uses latest-season coverage, not a 2010-11 range", async ({ page
   await page.goto("/");
   await expect(page.getByText("Latest games")).toBeVisible();
   await expect(page.getByText("Standings snapshot")).toBeVisible();
-  await expect(page.getByText("Latest completed games this season.")).toBeVisible();
+  await expect(page.getByText("Latest completed games this season.")).toHaveCount(0);
   await expect(page.locator("dt:text-is('Coverage:') + dd")).toHaveText("2025-26");
   await expectNo2010Range(page);
   await expect(page.getByRole("link", { name: "PBP" })).toBeVisible();

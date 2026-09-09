@@ -17,6 +17,7 @@ import {
   formatWinPctPlain,
 } from "@/lib/format";
 import { withSeason } from "@/lib/nav";
+import { standingsSeed } from "@/lib/team-form";
 import { cn } from "@/lib/utils";
 import type { LeagueGame, StandingRow } from "@/lib/types";
 
@@ -73,7 +74,6 @@ function HomeDesk() {
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="type-module">Latest games</h2>
-              <p className="type-caption mt-1">Latest completed games this season.</p>
             </div>
           </div>
           {gamesQuery.isLoading ? (
@@ -228,7 +228,7 @@ function SnapshotColumn({
       <ol className="space-y-1.5 text-sm">
         {rows.map((row) => (
           <li key={row.team_id} className={cn(SNAPSHOT_GRID, "hover:bg-row-hover")}>
-            <span className="text-muted-foreground">{row.conference_rank ?? "—"}</span>
+            <span className="text-muted-foreground">{standingsSeed(row) ?? "—"}</span>
             <TeamAbbrLink
               teamId={row.team_id}
               abbreviation={row.abbreviation}
@@ -250,11 +250,13 @@ function topConference(rows: StandingRow[], prefix: string) {
 }
 
 function compareSnapshotRows(a: StandingRow, b: StandingRow) {
-  if (a.conference_rank != null && b.conference_rank != null) {
-    return a.conference_rank - b.conference_rank;
+  const seedA = standingsSeed(a);
+  const seedB = standingsSeed(b);
+  if (seedA != null && seedB != null) {
+    return seedA - seedB;
   }
-  if (a.conference_rank != null) return -1;
-  if (b.conference_rank != null) return 1;
+  if (seedA != null) return -1;
+  if (seedB != null) return 1;
   const winDiff = (b.win_pct ?? -1) - (a.win_pct ?? -1);
   if (winDiff !== 0) return winDiff;
   return a.team_name.localeCompare(b.team_name);

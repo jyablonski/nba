@@ -94,8 +94,9 @@ TEAM_ALIASES: dict[str, str] = {
     "washington": "WAS",
 }
 
+# The capability message advertises the "B2B" shorthand, so accept it here too.
 _B2B = re.compile(
-    r"back[\s-]*to[\s-]*backs?",
+    r"back[\s-]*to[\s-]*backs?|\bb2bs?\b",
     re.IGNORECASE,
 )
 _COMPARE = re.compile(

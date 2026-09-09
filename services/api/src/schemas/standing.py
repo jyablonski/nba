@@ -16,6 +16,7 @@ class StandingRow(BaseModel):
     conference: str
     division: str
     conference_rank: int | None = None
+    playoff_seed: int | None = None
     division_rank: int | None = None
     wins: int | None = None
     losses: int | None = None

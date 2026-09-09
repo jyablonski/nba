@@ -70,6 +70,12 @@ services:
     mem_limit: 1g
     environment:
       CUBEJS_DEV_MODE: "false"
+      # Dev mode off makes Cube default its queue/cache driver to Cube Store,
+      # which we do not deploy; a load request then fails with "Cube Store was
+      # specified as queue/cache driver". In-process memory is fine here: one
+      # Cube instance, no pre-aggregations. Adding either would need a real
+      # cubestore service.
+      CUBEJS_CACHE_AND_QUEUE_DRIVER: memory
 
   caddy:
     image: caddy:2-alpine
