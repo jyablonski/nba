@@ -8,7 +8,7 @@ It is a FastMCP server over the Cube semantic layer. Ask uses the same named ope
 
 Local: stdio by default (`uv run src/server.py`). MCP starts with the default Compose stack; scraper and dbt stay in profile `tools`.
 
-Production: Streamable HTTP at `/mcp` on host port 8001. Clients must send `Authorization: Bearer $MCP_API_TOKEN`.
+Production: Streamable HTTP behind Caddy at `https://<host>/mcp`, sharing the site certificate. Clients must send `Authorization: Bearer $MCP_API_TOKEN`, which is why the transport has to be TLS — the container port is not published.
 
 Two separate secrets, easy to confuse:
 

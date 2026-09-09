@@ -25,6 +25,17 @@ baseline.jyablonski.dev {
 		reverse_proxy api:8000
 	}
 
+	# MCP over the existing certificate instead of plain HTTP on 8001. Clients
+	# send Authorization: Bearer $MCP_API_TOKEN, so the transport has to be TLS —
+	# on 8001 that token crossed the wire in the clear.
+	# flush_interval -1 disables response buffering: Streamable HTTP replies can
+	# be SSE streams, and a buffering proxy would stall them.
+	handle /mcp* {
+		reverse_proxy mcp:8000 {
+			flush_interval -1
+		}
+	}
+
 	handle {
 		reverse_proxy frontend:3000
 	}

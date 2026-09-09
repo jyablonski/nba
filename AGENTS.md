@@ -12,7 +12,7 @@ Prefer [docs/](docs/) and root [README.md](README.md) over inventing behavior.
 - `services/ml` — Elo pregame WP job (Python **3.14**, profile `tools`); reads gold Regular Season Finals + schedule, writes `source.game_predictions`
 - `services/api` — FastAPI `/api/v1/*` over `gold`
 - `services/frontend` — Next.js; `NEXT_PUBLIC_API_URL` → API
-- `services/mcp` — FastMCP tools over Cube (named wrappers + `query_cube`; no gold SQL); stdio locally, Streamable HTTP on production port 8001 with `MCP_API_TOKEN`
+- `services/mcp` — FastMCP tools over Cube (named wrappers + `query_cube`; no gold SQL); stdio locally, Streamable HTTP in production behind Caddy at `https://<host>/mcp` with `MCP_API_TOKEN`. Not published to the host: a bearer token needs TLS
 - `services/cube` — Cube YAML over gold; **required** for local Ask/MCP (`make up` / Tilt). Off on the 12GB prod overlay
 - Schemas: `source` (ingest + pipeline gate), `silver` (dbt staging), `gold` (dims/facts)
 - Init: `db/init.sql` creates those schemas empty; Alembic fills `source`

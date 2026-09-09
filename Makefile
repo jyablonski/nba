@@ -6,7 +6,7 @@
 	refresh-daily refresh-daily-once \
 	prod-config prod-up prod-migrate prod-dbt prod-deploy prod-release prod-build prod-pull prod-pull-tools prod-record-deploy \
 	prod-pipeline-status prod-pipeline-enable prod-pipeline-disable prod-refresh prod-refresh-daily prod-refresh-daily-once \
-	prod-health prod-prune prod-check-freshness check-freshness \
+	prod-health prod-prune prod-check-freshness check-freshness prod-caddy-reload \
 	prod-scrape prod-ml admin-jobs prod-admin-jobs test-admin-jobs quality
 
 COMPOSE ?= docker compose
@@ -78,10 +78,20 @@ prod-release: $(PROD_IMAGES) ## Images, migrate, up, caddy reload, health gate, 
 	DOCKER_TARGET=runtime $(COMPOSE_PROD) up -d postgres --wait
 	$(MAKE) prod-migrate
 	$(MAKE) prod-up
-	-$(COMPOSE_PROD) exec -T caddy caddy reload --config /etc/caddy/Caddyfile
+	$(MAKE) prod-caddy-reload
 	$(MAKE) prod-health
 	$(MAKE) prod-record-deploy
 	$(MAKE) prod-prune
+
+# `caddy reload` cannot pick up a changed Caddyfile here. It is a single-file
+# bind mount, and `git pull` replaces the file rather than editing it in place,
+# so the container keeps reading the original inode and reloads stale config.
+# Recreating rebinds the mount. `--no-deps` so this touches only Caddy: caddy
+# depends_on api, and without it a recreate drags the whole chain along.
+# Not prefixed with `-`: a routing change that silently fails to apply is worse
+# than a deploy that stops and says so.
+prod-caddy-reload: ## Recreate Caddy so a changed Caddyfile actually takes effect
+	DOCKER_TARGET=runtime $(COMPOSE_PROD) up -d --force-recreate --no-deps caddy
 
 # After prod-health on purpose: a deploy that never came up must not repoint
 # tomorrow's cron at the images that failed it.
