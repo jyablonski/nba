@@ -1,101 +1,101 @@
 # Operations
 
-Operator loop for a running stack: enable the gate, refresh gold, optional alerts. Scrape CLIs, marts, and Cube stay in [data.md](data.md). Elo score details are in [ml.md](ml.md). Hosting files vs go-live are in [plans/oci-caddy-hosting.md](plans/oci-caddy-hosting.md).
-
-## Purpose
-
-One place for “what do I run today” without restating every ingest command.
+What to run day to day. Scrape commands and marts are in [data.md](data.md).
 
 ## Bring-up
 
 ```bash
 cp .env.example .env
-make up                 # Tilt: postgres, migrate, cube, api, frontend
-make db-migrate         # after new Alembic revisions (exited migrate is not re-run)
+make up             # Tilt: postgres, migrate, cube, api, frontend, mcp
+make db-migrate     # after new Alembic revisions
 ```
 
-Keep `DATABASE_URL` in sync with the Postgres settings. Wipe a stale volume only when you intend to: `docker compose down -v`. Cube is a RAM hog (~400–800 MB), so the production overlay gives it a 1 GB memory limit and keeps it internal to Compose; monitor VM memory when running refresh jobs alongside the always-on stack.
+Keep `DATABASE_URL` in sync with the Postgres settings. `docker compose down -v` deletes the warehouse — only run it deliberately.
 
-## Direct production database access
+Cube uses 400–800 MB, so production caps it at 1 GB. Watch VM memory when a refresh runs alongside the always-on stack.
 
-The production overlay publishes Postgres on `${POSTGRES_PORT:-5432}:5432` for direct tools such as DBeaver. The database remains on port `5432` inside the Compose network, so API, Cube, dbt, and migrations continue using `postgres:5432`. Set `POSTGRES_PORT` in the Oracle host's `.env` if the external port should differ, then run `make prod-up` or `make prod-release` to recreate the mapping.
+## The daily gate
 
-Docker listens on all host interfaces for this mapping. To reach it from a local machine, allow inbound TCP on the selected port in the OCI VCN security list or network security group and any host firewall, then use the Oracle public IP or DNS name in DBeaver:
-
-```text
-Host: <oracle-public-ip-or-dns>
-Port: 5432 (or POSTGRES_PORT)
-Database: POSTGRES_DB
-Username: POSTGRES_USER
-Password: POSTGRES_PASSWORD
-SSL: disabled unless separately configured
-```
-
-The credentials are the values in `/opt/nba/.env`; never paste them into the repository or logs. From the Oracle host, verify the listener with `sudo ss -ltnp | grep ':5432'` and test the OCI path from the workstation with `nc -vz <oracle-public-ip-or-dns> 5432`. Publishing the database port does not expose Cube or change the private Compose URLs.
-
-Production MCP uses Streamable HTTP on `http://<oracle-public-ip-or-dns>:8001/mcp` and requires `Authorization: Bearer <MCP_API_TOKEN>`. Allow inbound TCP 8001 in the OCI VCN security list or network security group and any host firewall. The MCP service remains stdio for local development; `MCP_TRANSPORT=stdio` is the default in `.env`.
-
-First load is manual (not `refresh-daily`): current-season / Courtline smoke is `scrape-all --active-only` (default ingest is the latest season) then dbt `seed`/`run`/`test` via profile `tools`. See [data.md](data.md). Omit `--active-only` only for full career-directory history. Pass `--seasons` for a later backfill. `scrape-all` skips Reddit unless `--with-reddit`. Injuries and odds are current snapshots, not the historical loop.
-
-## Daily path (current)
-
-`source.scrape_pipeline` is **disabled** by default (`enabled=false`, `season_active=false`). That singleton is the source of truth for which scrapes run. `pipeline_runs` still records whether reddit ran and its exit.
+`source.scrape_pipeline` is a single row that decides what runs. It ships **disabled**.
 
 ```bash
-make pipeline-enable                    # enabled + season_active (NBA daily + reddit)
-# reddit-only / off-season: make pipeline-enable PIPELINE_FLAGS=--no-season-active
+make pipeline-enable     # enabled + season_active
 make pipeline-status
-make scrape                             # pipeline scrape only (FORCE=1 bypasses the gate)
-make dbt                                # dbt deps + seed + run + test
-make ml                                 # Elo score then gold copy
-make refresh                            # scrape then dbt then ml (alias: refresh-daily)
-make refresh-daily-once                 # FORCE=1 bypass for a manual test
-
-# Oracle production jobs use the pulled GHCR images and the prod overlay:
-IMAGE_PREFIX=ghcr.io/<owner>/ IMAGE_TAG=latest make prod-pipeline-enable
-IMAGE_PREFIX=ghcr.io/<owner>/ IMAGE_TAG=latest make prod-refresh
-IMAGE_PREFIX=ghcr.io/<owner>/ IMAGE_TAG=latest make prod-refresh-daily-once # FORCE=1 bypass for a manual test
+make scrape              # scrape only; FORCE=1 bypasses the gate
+make dbt                 # deps + build
+make ml                  # Elo score, then the gold copy
+make refresh             # scrape → dbt → ml
 ```
 
-`scripts/refresh-daily.sh` waits for an **existing** healthy Postgres. It will not `compose up postgres` (that recreates Tilt’s container; `init.sql` does not re-run on existing `pgdata`). Local `compose run` bind-mounts host models/src (same as `docker-compose.yml`); YAML/SQL/Python edits need no image rebuild. It skips `compose build` unless `BUILD=1` or `SKIP_BUILD=0` (Dockerfile / lockfile / package changes), then:
+`enabled` is the master switch. `season_active` gates the NBA steps only:
 
-1. Alembic `upgrade head`
-2. `pipeline run-once` (or `--force`) — see gates below
-3. dbt `deps` + `seed` + `run` + `test` (the full project: box scores, standings, **PBP scoring + `fct_game_flow`**, and the rest — no separate PBP job). Skip tests with `RUN_DBT_TEST=0`; skip dbt with `SKIP_DBT=1`.
-4. `ml python -m main score`
-5. `dbt run --select stg_game_predictions+` so gold has tonight’s rows
+|                             | NBA steps                                                                    | Reddit                           |
+| --------------------------- | ---------------------------------------------------------------------------- | -------------------------------- |
+| `enabled` + `season_active` | slate, Finals logs, their PBP, standings, injuries, contracts, odds if keyed | yes                              |
+| `enabled` only              | skipped                                                                      | yes — Reddit is not season-gated |
+| not `enabled`               | skipped                                                                      | skipped                          |
 
-**Gates** (`enabled` is the master switch):
+`FORCE=1` bypasses both. A skipped run exits 0 and does **not** run dbt.
 
-|     | `season_active` (and window if set)                                                                                                                                       | Reddit (no separate flag)                                                                                                         |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| On  | Basketball daily: Scoreboard slate (Final + upcoming), Finals’ logs, **PBP for those Finals only**, standings, injuries, remaining-year contracts, odds if `ODDS_API_KEY` | Everyday r/nba posts (hot + top, `--time-filter day`, limit 50) plus top-10 comments per post. Off-season included. Not team subs |
-| Off | Skip NBA steps                                                                                                                                                            | Still runs if `enabled` (`season_active` does not gate reddit)                                                                    |
+`refresh-daily.sh` runs Alembic, the gated scrape, `dbt build`, Elo, then the gold predictions copy. It waits for an existing healthy Postgres rather than starting one, because recreating Tilt's container would not re-run `init.sql`.
 
-`enabled` but not `season_active`: skip NBA, still run Reddit. Not `enabled`: skip everything (including Reddit). `--force` / `FORCE=1` bypasses `enabled` and the NBA season window so you can test basketball daily; it also runs Reddit. Missing `REDDIT_*` skips reddit HTTP (same pattern as odds). `scrape_mode=none` still skips NBA; Reddit still runs if enabled.
+`dbt build` interleaves each model's tests with the model, so a failing test skips that model's descendants instead of publishing them and failing at the end.
 
-Disabled / nothing to do scrape status `skipped` exits 0 and does **not** run dbt. Reddit-only success still runs dbt. Scrape `failed` or dbt/ml failure exits non-zero.
+## Optional keys
 
-**Not on daily / refresh:** teams/players directory (`scrape-all` / first load). Season-wide `scrape-play-by-play` (no `--game-id`) remains a manual backfill. Daily PBP is today’s Finals only and is enriched in that same dbt step. `--game-id` is ad-hoc recent games, then the same `dbt run`. Ungated `scrape-daily` is basketball only (no Reddit) and does include contracts.
+| Variable            | Unset                              | Set                                                             |
+| ------------------- | ---------------------------------- | --------------------------------------------------------------- |
+| `SLACK_WEBHOOK_URL` | silent                             | one post per **failed** sync, never per step. Success is silent |
+| `ODDS_API_KEY`      | odds skipped, daily still succeeds | The Odds API upcoming slate                                     |
+| `REDDIT_*`          | Reddit skipped                     | r/nba posts and top comments                                    |
 
-## Slack and optional keys
-
-| Env                                          | If unset                                                                    | Behavior when set                                                                                                                                                                                        |
-| -------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SLACK_WEBHOOK_URL`                          | no HTTP                                                                     | **One** Incoming Webhook per failed scrape sync (`pipeline` / `scrape-daily` / `scrape-all` / the scrape step of refresh-daily). Success is silent. Individual CLIs such as `scrape-games` do not alert. |
-| `ODDS_API_KEY`                               | skip odds HTTP; daily still succeeds                                        | The Odds API upcoming h2h/spreads                                                                                                                                                                        |
-| `REDDIT_CLIENT_ID` / `SECRET` / `USER_AGENT` | pipeline skips reddit HTTP; ungated `scrape-reddit` still fails before PRAW | Official Reddit API **posts** + top comments from r/nba → `source.reddit_posts` / `source.reddit_comments` (hot + top; modest comments-per-post)                                                         |
-
-dbt and ml failures fail the shell. They do **not** send a second Slack post.
+dbt and ml failures fail the shell but do not send a second Slack post.
 
 ## Scheduling
 
-Not started by `make up` / Tilt. After `make pipeline-enable`, prefer host cron:
+Three cron entries on the VM. None of this starts with `make up`.
 
-For the Oracle VM, pass the registry coordinates so the prod overlay selects the images pulled from GHCR: `15 8 * * * cd /opt/nba && IMAGE_PREFIX=ghcr.io/<owner>/ IMAGE_TAG=latest make prod-refresh`.
+```cron
+15 8  * * * cd /opt/nba && flock -n /tmp/nba-refresh.lock make prod-refresh >> /opt/nba/logs/refresh-daily.log 2>&1
+45 11 * * * cd /opt/nba && make prod-check-freshness >> /opt/nba/logs/freshness.log 2>&1
+*     * * * * cd /opt/nba && make prod-admin-jobs >> /opt/nba/logs/admin-jobs.log 2>&1
+```
 
-Compose profile `cron` runs `python -m main pipeline run-once` only — **no dbt, no Elo**. Do not treat that container as a full refresh.
+**Use `make prod-refresh`, never `make refresh-daily`.** The latter is the local target: it skips the prod overlay and resolves bare `nba-*:latest` instead of the GHCR images — and it does not fail loudly, because Compose just builds the image on the box from the working tree. `/opt/nba/logs/` must also exist, or the redirect fails before `make` runs and the error goes to mail nobody reads.
 
-## Planned
+The second entry is the **absence check**. Every other signal is emitted _by_ the pipeline, so a pipeline that never starts is completely silent — which is exactly how one outage went unnoticed. It needs only Postgres and `curl`, so it survives the failures that break the refresh. It alerts when `now() - last_success_at` exceeds `STALE_HOURS` (default 26) and exits 0 when the pipeline is intentionally disabled.
 
-Folding ml/dbt into the same Slack collector. Public host cron. Do not invent extra pages per step.
+Cron carries no registry coordinates: `prod-release` writes the tag it deployed to `.env.deploy`, which every make target includes. CI pins `IMAGE_TAG=<sha>`, so the nightly job and the API serving traffic are the same build. Precedence is command line > environment > `.env.deploy` > defaults, so a rollback still wins.
+
+## Admin console
+
+`/admin` shows ingestion, dbt, and ML health, and can re-run jobs. Two independent gates, both **fail closed**:
+
+- **The page** uses GitHub OAuth with an `ADMIN_GITHUB_LOGINS` allowlist. Unset means nobody gets in, including you.
+- **The API** (`/api/v1/admin/*`) needs `Authorization: Bearer $ADMIN_API_TOKEN`. Unset returns 503 — never open.
+
+The token is held server-side and never reaches the browser.
+
+Setup: generate `ADMIN_API_TOKEN` and `AUTH_SECRET`, create a GitHub OAuth app with callback `<origin>/api/auth/callback/github`, then set `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, `AUTH_URL`, and `ADMIN_GITHUB_LOGINS`. All are commented in `.env.example`; with none set the console is simply unreachable.
+
+## Admin jobs
+
+The console queues work into `source.admin_jobs` and `scripts/admin-job-runner.sh` runs it on the host. Four types: `scrape`, `dbt`, `ml`, `refresh`.
+
+The API cannot execute jobs itself — it has no Docker socket, and giving a publicly reachable process one would be root-equivalent on the box. It only ever inserts a row.
+
+What the runner guarantees:
+
+- **One job at a time**, enforced by a partial unique index. A second request gets 409.
+- **Never overlaps the daily refresh** — it shares the same `flock`. A busy lock re-queues the job rather than failing it.
+- **Abandoned jobs are reaped.** A runner killed mid-job would otherwise leave its row `running` forever, wedging the queue. Before claiming, it fails any `running` row whose lock is free and is older than `STALE_JOB_GRACE` (default 5 minutes).
+
+`make test-admin-jobs` exercises all of this against the local stack; it needs a running Postgres, so it is not in CI.
+
+**Deploys are deliberately not a button.** CI runs `make prod-deploy` on push to `main` and `workflow_dispatch` is enabled, so a redeploy is one click in the Actions tab — no SSH, no extra code.
+
+## Also worth knowing
+
+Production publishes Postgres on `POSTGRES_PORT` for tools like DBeaver, while containers keep using `postgres:5432`. Allow the port in the OCI security list and any host firewall; credentials live in `/opt/nba/.env`.
+
+Not built: per-source retry (re-running one failed source rather than a whole step), and folding dbt and ml failures into the Slack collector.

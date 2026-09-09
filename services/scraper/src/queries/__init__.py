@@ -1,6 +1,7 @@
 """SQL constants for the scraper ops pipeline."""
 
 from queries.pipeline_runs import (
+    INSERT_DBT_ONLY_RUN,
     INSERT_PIPELINE_RUN,
     UPDATE_PIPELINE_RUN,
     UPDATE_PIPELINE_RUN_DBT_EXIT,
@@ -10,13 +11,20 @@ from queries.scrape_pipeline import (
     UPDATE_PIPELINE_ENABLED,
     UPDATE_PIPELINE_SUCCESS,
 )
+from queries.scrape_source_runs import (
+    INSERT_SOURCE_RUN,
+    SELECT_SOURCE_RUNS_FOR_RUN,
+)
 from queries.snapshots import DELETE_STALE_GAME_ODDS, DELETE_STALE_PLAYER_INJURIES
 
 __all__ = [
     "DELETE_STALE_GAME_ODDS",
     "DELETE_STALE_PLAYER_INJURIES",
+    "INSERT_DBT_ONLY_RUN",
     "INSERT_PIPELINE_RUN",
+    "INSERT_SOURCE_RUN",
     "SELECT_PIPELINE_CONFIG",
+    "SELECT_SOURCE_RUNS_FOR_RUN",
     "UPDATE_PIPELINE_ENABLED",
     "UPDATE_PIPELINE_RUN",
     "UPDATE_PIPELINE_RUN_DBT_EXIT",

@@ -1,52 +1,58 @@
 # Frontend
 
-The Next.js app in `services/frontend` is the human-facing browser for analytics data. It never talks to Postgres or Cube. Every screen goes through the FastAPI REST API.
+`services/frontend` is the Next.js app users see. It is a thin client: every screen goes through the FastAPI REST API.
 
-## Purpose
-
-Give people a navigable UI for players, teams, standings, remaining-contract snapshots, recent games, and natural-language questions. The frontend is a thin client: layout, search, charts, and loading states around `/api/v1/*` responses.
-
-## Use case
-
-Local developers browse http://localhost:3000 while the API runs on port 8000. A production overlay (`docker-compose.prod.yml` + Caddy) serves the same app at https://baseline.jyablonski.dev with `NEXT_PUBLIC_API_URL` baked to that origin at **image build** time. Coding agents should prefer this doc plus `services/frontend/AGENTS.md` (Next.js package-local rules) over inventing new data paths.
+It never talks to Postgres, Cube, or MCP. Keep it that way — see `services/frontend/AGENTS.md` for package-local rules.
 
 ## How it works
 
-The app uses the App Router with client pages, TanStack Query for fetches, and UI under `src/components`. The typed client in `src/lib/api.ts` builds URLs from `NEXT_PUBLIC_API_URL` (default `http://localhost:8000`) and calls `/api/v1/...`. Empty string must not fall through to localhost in production — bake the public URL in the frontend image ARG.
+App Router, TanStack Query for fetches, UI in `src/components`, typed client in `src/lib/api.ts`.
 
-The public product name is **Baseline**. There is no left sidebar. A single header bar holds the official Baseline lockup (IBM Plex Sans over a forest-green rule with a centered upward arc), primary tabs, and last-scraped watermark. Browser titles are `Baseline` on Home and `Baseline — {page}` elsewhere. The favicon is the official **B on the line** mark (no arc at tab size); the B flips to paper in `prefers-color-scheme: dark` so it stays visible on dark browser chrome. The green rule stays.
+URLs come from `NEXT_PUBLIC_API_URL`, which is a **build-time ARG**. It defaults to `http://localhost:8000`; production bakes the public origin into the image. An empty value must never fall through to localhost.
 
-Primary tabs, in order: **Home · Games · Schedule · Players · Teams · Compare · Ask · About**.
+The product name is **Baseline**. One header bar holds the lockup, tabs, and a last-scraped watermark from `GET /api/v1/status` — never API health.
 
-- `/` — current-season desk: coverage facts from `GET /api/v1/status`, latest completed games (Regular Season, NBA Cup, Play-in, Playoffs; date descending), East/West standings snapshot. Defaults to the latest loaded season (`?season=` still honored; season picker hidden). “Full standings →” goes to `/standings` (deep link, not a tab). Each latest-games row has a **Type** (season type) and a **PBP** link to `/games/[id]`. Official standings supply rank / GB / streak; if those rows are missing, conference rank and Regular Season W–L come from game results. Home **Margin** is the winner’s margin. Standings snapshot stays Regular Season W–L. Team abbreviations show NBA CDN logos resolved from the canonical abbreviation; provider-independent UUIDs are not used as NBA CDN IDs.
-- `/games` — recent final (completed) games picker for play-by-play game flow.
-- `/schedule` — upcoming slate from `GET /api/v1/schedule` (`gold.fct_games_schedule`, status not Final, `game_date` ≥ today). Date, away @ home, status Scheduled, arena if present. Defaults to the latest loaded season (`?season=` still honored; season picker hidden). Empty state is user-facing honesty (“No scheduled games for this season yet”), not an operator runbook. No scores, odds, or win probability. `/games` stays the completed/PBP picker.
-- `/games/[id]` — scoring-play differential chart (home lead positive), time-led %, max lead, lead changes, ties, play count, and the biggest lopsided scoring run (consecutive scoring plays with team+opp points under 25; highlight is computed from the plotted PBP series). Line and dots use each team’s primary brand hex from `GET /api/v1/games/{id}/flow` (`home_*_color` / `away_*_color` via `gold.dim_teams`); if the two primaries are too similar, the away team uses its alternate (then home alternate, then a luminance shift). REST only (`GET /api/v1/games/{id}/flow` + `/play-by-play`). Empty play-by-play → “No play-by-play data available.” / “There's no scoring timeline for this game.” Visitor-facing empty copy only — do not tell the visitor how to ingest. Not live win probability. No in-page final-games dropdown; pick a game from Home PBP links or `/games`.
-- `/players` — directory with search, active-only, optional team filter, checkbox select, pagination, and Compare selected.
-- `/players/[id]` — identity, career bar, game log (latest loaded season + B2B only; `?season=` still honored; season picker hidden; PTS/REB/AST/STL/BLK/TO/+/-; nulls `—`), remaining-contract snapshot, B2B splits, PPG-by-season chart, Add to compare.
-- `/players/compare` — chips, add player, sort by games/PPG/RPG/APG/+/- (`plus_minus`), difference row, empty state. Team/position subtitle is omitted when both are missing (never a lone `—`). With exactly two players, a Career / Head-to-head toggle is shown. Career is warehouse aggregates (2010-11 onwards). Career **+/-** is average box-score plus/minus per game (`career_avg_plus_minus` from `gold.fct_player_game_logs.plus_minus`, 1 decimal like PPG/RPG/APG), not a career sum; nulls render as `—`. Head-to-head is `GET /api/v1/players/compare/head-to-head`: games those two players logged on opposite teams (same `game_id` in `gold.fct_player_game_logs`, not teammates), H2H averages (including +/-), and per-game lines (Min/Pts/Reb/Ast/+/-). Hidden when 1 or 3+ players are selected. Pre-2010 meetings are not counted. Empty career/H2H copy is visitor-facing (“Nothing to compare yet.” / “No head-to-head games to show.”) — no warehouse or ingest runbook.
-- `/teams` — East/West by division; W–L and win % for the latest loaded season (`?season=` still honored; season picker hidden). Prefer official `fct_standings`; if a team/season has no standings row, Regular Season W–L is from `fct_team_game_results` (not play-in/playoffs). Conference rank / GB are derived from that W–L until scrape-standings; streak stays `—`. Each row shows a small NBA CDN logo next to the abbreviation. Below both conference columns, a full-width scatter plots Regular Season `pts_scored_avg` / `pts_allowed_avg` from `GET /api/v1/teams` (`gold.fct_team_game_results` home/away scores; not possession-adjusted ORtg/DRtg — gold has no possessions or ORB). Team logos are markers; the defensive axis is inverted (fewer points allowed at the top). Hidden when those averages are missing.
-- `/teams/[id]` — breadcrumb and identity (`ATL · East · Southeast · arena, city`); latest-season Regular Season W–L / win % / games (prefer official `fct_standings`, else `fct_team_game_results`) / conference rank / GB; Play-in and Playoffs W–L when those games exist (no invented playoff-round labels); Last 10 and streak from official standings, or the last 10 Regular Season Finals if those fields are empty; cap position (BRef remaining-year team total and remaining guaranteed vs official CBA tax/apron seeds, distances, 2023 CBA restriction checklist keyed off `over_luxury_tax` / `over_first_apron` / `over_second_apron` — not a tax bill); game filters (season defaults to latest loaded and the season dropdown is hidden, `?season=` still honored; since, opponent, arena city, All/Home/Away stay visible); filtered `Games N games · record W–L · win %` line; games table (DATE / OPP / RES / SCORE / **Margin** / ARENA; team-centric signed margin); split bars for filtered / home / away.
-- `/standings` — full conference tables for the latest loaded season (`?season=` still honored; season picker hidden). Not a primary tab. Same official-vs-game-results overlay as Home / Teams; missing official LeagueStandings ranks use W–L-derived conference rank / GB. Team cells reuse the same logo + abbreviation link as Home / Teams.
-- `/ask` — live rule-based `POST /api/v1/query` (API → Cube). Sends optional `season` from the latest loaded season (or `?season=` when present). TRY chips include payroll and “Who leads the West?”. The page is a single warehouse Q&A, not a chat: empty until the first submit, then one question bubble and one answer (text + table/links). A new Ask replaces the previous pair; there is no stacked transcript and no persisted history. Standings answers prefer official Cube `standings`; when those rows are missing, ranks come from Regular Season `team_games` W–L (same overlay as Home / Teams / Standings). The page stays at `/ask`. No win-prob badge; injuries/odds/reddit are not Baseline screens. PBP lives on `/games/[id]`, not Ask.
-- `/about` — product name Baseline, sources in plain language (Basketball-Reference, optional Odds API and r/nba posts), how the data gets here, coverage, and last-scraped watermark (`Scraped {formatted timestamp}` from `GET /api/v1/status`, same compact string as the header; missing value is `Scraped —`). Single column; no name-options or current-vs-planned cards. No scrape CLI names, dbt, gold, or pipeline runbook. Injuries / odds / reddit stay labeled as Ask-only where they have no Baseline screen.
+## Pages
 
-Salary/payroll UI is labeled as Basketball-Reference **remaining-year snapshots**. Nulls render as `—`, never `$0`. Last scraped comes from `GET /api/v1/status` (`last_scraped_at` plus honest warehouse counts). The header never shows API health or “API v1 - OK”. If the watermark is missing, it shows `Scraped —`.
+Tabs: **Home · Games · Schedule · Players · Teams · Compare · Ask · About**
 
-The browser never talks to MCP or Cube. `NLP_BACKEND=llm` is an API-side switch only.
+- `/` — coverage facts, latest completed games with PBP links, East/West standings snapshot
+- `/games` — completed-game picker for play-by-play
+- `/games/[id]` — scoring-differential chart, time-led %, max lead, lead changes, biggest scoring run. Team brand colors come from the API; not live win probability
+- `/schedule` — upcoming slate (not Final, date ≥ today). No scores, odds, or WP
+- `/players`, `/players/[id]` — directory with search and filters; profile with career bar, game log, contract snapshot, B2B splits, PPG-by-season
+- `/players/compare` — up to N players, sortable, difference row. With exactly two, a head-to-head toggle shows games they played on opposite teams
+- `/teams`, `/teams/[id]` — conference/division tables, scoring scatter, team profile with cap position and filterable game log
+- `/standings` — full conference tables (deep link, not a tab)
+- `/ask` — posts to `POST /api/v1/query`. One question, one answer, no transcript
+- `/about` — sources and coverage in plain language
+- `/admin` — operator console, GitHub OAuth. Not in the nav. See [operations.md](operations.md)
 
-## Planned (not current)
+Season defaults to the latest loaded season everywhere; `?season=` is still honored but the picker is hidden.
 
-A Baseline **Social** tab (`/social`, nav near Ask / About) is [planned](plans/social-tab.md) only: warehouse-enriched r/nba (then later RSS), FastAPI REST like other pages, not Ask and not a live Reddit client. Injuries / odds / reddit remain **not** Baseline screens until that plan is implemented.
+Standings prefer official `fct_standings`; when those rows are missing, rank and games-behind are derived from Regular Season W–L.
+
+## Rules that keep being worth restating
+
+**Honest empty states.** User-facing copy says "nothing to show yet" — never scrape CLI names, dbt, gold, make targets, or pipeline internals. Those belong in operator docs, not in front of a visitor.
+
+**Salary is a snapshot.** Contract and payroll UI must be labeled a Basketball-Reference **remaining-year snapshot**, not a historical paid ledger. Unmatched names render `—`, never `$0` or an invented number.
+
+**No new backends.** Do not add SQL, Cube, or MCP calls from the browser. `NLP_BACKEND=llm` is an API-side switch only.
+
+**Nulls render `—`.** Including the watermark, which shows `Scraped —` when missing.
 
 ## Running and testing
 
-For a standalone frontend:
+```bash
+cd services/frontend && npm install && npm run dev   # standalone
+make up                                             # full stack with hot reload
+make test-frontend                                  # Vitest
+make test-frontend-e2e                              # Playwright
+```
 
-`cd services/frontend && npm install && npm run dev`
+## Not built
 
-Full stack with hot reload: `make up` (Tilt). Compose builds the frontend image with `NEXT_PUBLIC_API_URL` baked/arg’d for runtime. Unit tests are Vitest (`make test-frontend`); Playwright e2e is separate (`make test-frontend-e2e`). GitHub Actions runs frontend unit tests on pull requests (not Playwright or dbt).
+A Social tab for r/nba content. Injuries, odds, and Reddit have gold marts and are reachable through Ask and MCP, but they are not pages.
 
-## Constraints
-
-Do not add direct SQL, Cube, or MCP calls from the browser; keep the API as the only backend. Salary/payroll UI must label Basketball-Reference **remaining-year snapshots**, not a historical paid-salary ledger. Unmatched contract names stay empty (`—`), not invented numbers. Do not invent betting, streaming Ask, live in-game WP, or a season-leaders API. Game-flow PBP is current; ingest is daily Finals (plus optional `--game-id`), not a full-history backfill. User-facing empty states and errors are honest (“nothing to show yet”) and must not mention scrape CLI names, dbt, gold, source, make targets, or pipeline internals. Keep the `Scraped —` watermark as product status.
+Also not built: betting features, streaming Ask, live in-game win probability, a season-leaders API.

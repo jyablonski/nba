@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     postgres_user: str = "nba_user"
     postgres_password: str = "nba_pass"
     database_url: str = ""
+    champion_model_version: str = "elo-v0"
+    logit_model_version: str = "logit-v1"
+    logit_cold_start_games: int = 10
 
     @model_validator(mode="after")
     def assemble_database_url(self) -> Settings:

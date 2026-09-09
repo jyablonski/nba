@@ -198,9 +198,13 @@ for season in "${season_list[@]}"; do
   [[ -n "${covered_seasons[$season]+x}" ]] || die "$season has no Final games in source.games"
 done
 
-log "running dbt deps, seed, models, and tests"
+# --full-refresh is required, not optional: int_play_by_play_events is
+# incremental, and a reset that preserves the Postgres volume (RESET_VOLUME=0)
+# would otherwise keep its existing rows and only append newly scraped games.
+# A backfill exists to produce a clean warehouse, so rebuild every model.
+log "running dbt deps and build (seeds, models, and tests in DAG order, full refresh)"
 tool dbt sh -c \
-  'dbt deps --profiles-dir . && dbt seed --profiles-dir . && dbt run --profiles-dir . && dbt test --profiles-dir .'
+  'dbt deps --profiles-dir . && dbt build --profiles-dir . --full-refresh'
 
 log "running Elo scoring"
 tool ml python -m main score

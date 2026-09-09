@@ -48,6 +48,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       CUBE_API_URL: http://cube:4000
       CUBEJS_API_SECRET: ${CUBEJS_API_SECRET}
+      # Unset disables /api/v1/admin/* entirely (503), never opens it.
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-}
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
@@ -67,6 +69,16 @@ services:
     env_file: .env
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      # Server-side only. The /admin page holds the API token and never ships
+      # it to the browser, so this must NOT be a NEXT_PUBLIC_ variable.
+      ADMIN_API_URL: http://api:8000
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:-}
+      ADMIN_GITHUB_LOGINS: ${ADMIN_GITHUB_LOGINS:-}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      AUTH_GITHUB_ID: ${AUTH_GITHUB_ID:-}
+      AUTH_GITHUB_SECRET: ${AUTH_GITHUB_SECRET:-}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
+      AUTH_TRUST_HOST: "true"
     ports:
       - "3000:3000"
     depends_on:

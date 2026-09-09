@@ -508,6 +508,7 @@ GAME_PREDICTIONS_DIMENSIONS = [
     "game_predictions.home_team_id",
     "game_predictions.away_team_id",
     "game_predictions.model_wp",
+    "game_predictions.away_wp",
     "game_predictions.market_wp",
     "game_predictions.game_date",
     "game_predictions.season",

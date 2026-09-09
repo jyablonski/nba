@@ -1,7 +1,8 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, Float, Integer, String, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -34,3 +35,14 @@ class GamePrediction(Base):
     scraped_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
+
+
+class ModelArtifact(Base):
+    __tablename__ = "model_artifacts"
+    __table_args__ = {"schema": "source"}
+
+    model_version: Mapped[str] = mapped_column(String(50), primary_key=True)
+    model_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    artifact: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    trained_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    is_champion: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

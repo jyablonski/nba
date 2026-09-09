@@ -8,6 +8,7 @@ from notify import (
     SyncAlert,
     SyncFailedError,
     format_sync_failure_text,
+    infer_rows,
     notify_sync_failures,
 )
 
@@ -137,6 +138,62 @@ def test_sync_alert_try_run_records_and_continues() -> None:
     assert alert.failures[0].season == "2024-25"
     with pytest.raises(SyncFailedError, match="1 scrape step"):
         alert.raise_if_failed()
+
+
+@pytest.mark.unit
+def test_try_run_records_a_step_outcome_per_source() -> None:
+    alert = SyncAlert("pipeline")
+    alert.try_run("standings", lambda: 30, season="2025-26")
+    alert.try_run("odds", lambda: (_ for _ in ()).throw(RuntimeError("429 slow down")))
+    alert.record_skipped("reddit", reason="REDDIT_* unset; no HTTP attempted")
+
+    assert [(step.step, step.status) for step in alert.steps] == [
+        ("standings", "success"),
+        ("odds", "failed"),
+        ("reddit", "skipped"),
+    ]
+
+    standings, odds, reddit = alert.steps
+    assert standings.rows == 30
+    assert standings.season == "2025-26"
+    assert standings.error_type is None
+    assert standings.finished_at >= standings.started_at
+
+    # A failed step still needs its own row, with the error attributed to it.
+    assert odds.error_type == "RuntimeError"
+    assert "429" in (odds.error_detail or "")
+    assert odds.rows is None
+
+    # Skipped is deliberately distinct from success-with-zero-rows: it is what
+    # makes "odds have not run for a week" visible instead of looking healthy.
+    assert reddit.rows is None
+    assert "REDDIT_*" in (reddit.error_detail or "")
+
+
+@pytest.mark.unit
+def test_try_run_rows_override_beats_inference() -> None:
+    alert = SyncAlert("pipeline")
+    alert.try_run("todays_games", lambda: [{"game_id": "a"}, {"game_id": "b"}])
+    alert.try_run("contracts", lambda: (500, 30), rows=lambda result: result[0])
+    assert [step.rows for step in alert.steps] == [2, 500]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("result", "expected"),
+    [
+        (30, 30),
+        (0, 0),
+        ((500, 30), 530),
+        ([{"a": 1}, {"a": 2}], 2),
+        ([], 0),
+        (None, None),
+        (True, None),
+        ("rows", None),
+    ],
+)
+def test_infer_rows(result: object, expected: int | None) -> None:
+    assert infer_rows(result) == expected
 
 
 @pytest.mark.unit

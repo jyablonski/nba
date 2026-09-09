@@ -223,6 +223,36 @@ class PlayerInjury(Base):
     )
 
 
+class PlayerInjuryHistory(Base):
+    __tablename__ = "player_injuries_history"
+    __table_args__ = (
+        UniqueConstraint(
+            "player_id",
+            "team_id",
+            "snapshot_date",
+            name="player_injuries_history_player_team_snapshot_key",
+        ),
+        {"schema": "source"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    player_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.players.player_id"), nullable=False
+    )
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.teams.team_id"), nullable=False
+    )
+    player_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    player_name_normalized: Mapped[str] = mapped_column(String(200), nullable=False)
+    update_date: Mapped[date | None] = mapped_column(Date)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    source_url: Mapped[str] = mapped_column(String(300), nullable=False)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    scraped_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+
 class GameOdds(Base):
     __tablename__ = "game_odds"
     __table_args__ = (

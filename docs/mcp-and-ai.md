@@ -1,77 +1,66 @@
-# MCP and AI
+# MCP
 
-This document separates what exists today from what is only planned. The MCP server is real against the Cube semantic layer (YAML over gold). HTTP natural-language query has two interchangeable backends: an in-house rules engine (the **default**) and an opt-in LLM adapter. Both call Cube. Deeper product features (streaming, auth, public SQL) are not built yet.
+`services/mcp` exposes NBA analytics as MCP tools for LLM hosts like Claude Desktop, so an agent can query the warehouse without writing SQL.
 
-## Purpose
+It is a FastMCP server over the Cube semantic layer. Ask uses the same named operations — see [ask.md](ask.md).
 
-MCP exposes structured NBA analytics tools to LLM hosts (for example Claude Desktop) so an agent can search players, pull game logs, compare careers, filter team records, read remaining-contract / payroll snapshots, pull conference standings, and query schedule / Elo WP / injuries / odds / PBP / reddit without writing SQL. Ad-hoc questions use `query_cube` (Cube query JSON, validated against meta).
+## Running it
 
-## Use case
+Local: stdio by default (`uv run src/server.py`). MCP starts with the default Compose stack; scraper and dbt stay in profile `tools`.
 
-Wire `services/mcp` into an MCP-capable client when you want chat-driven analytics over the same Cube model Ask uses. Operators still need scraper + dbt first; empty `gold` tables mean empty Cube results. MCP and Cube start in the default local and production Compose stacks; scraper and dbt remain in profile `tools`. MCP needs Cube (`CUBE_API_URL`, `CUBEJS_API_SECRET`); Cube down → clear tool error, no gold SQL fallback.
+Production: Streamable HTTP at `/mcp` on host port 8001. Clients must send `Authorization: Bearer $MCP_API_TOKEN`.
 
-## How it works today
+Two separate secrets, easy to confuse:
 
-The server is FastMCP (`uv run src/server.py`, stdio for local clients by default). The production Compose overlay switches it to Streamable HTTP at `/mcp`, listens on container port 8000, and publishes host port 8001. HTTP clients must send `Authorization: Bearer $MCP_API_TOKEN`; this token is separate from `CUBEJS_API_SECRET`, which only authenticates MCP to Cube. It reads Cube (`CUBE_API_URL`, default host `http://localhost:4000`) with `CUBEJS_API_SECRET`. Python pin is **3.14**. It does not open Postgres for query tools.
+- `MCP_API_TOKEN` authenticates a **client to MCP**
+- `CUBEJS_API_SECRET` authenticates **MCP to Cube**
 
-Named tools (Cube wrappers):
+MCP never opens Postgres. Cube down means a clear tool error, never a gold-SQL fallback. Empty gold tables mean empty results — run scraper and dbt first.
+
+## Tools
+
+Player and career:
 
 - `search_players` — fuzzy name search
-- `get_player_game_log` — box scores (season optional)
-- `get_player_back_to_backs` — B2B splits vs overall (`total_back_to_backs`, `games_played_in_b2b` minutes>0, `games_sat_in_b2b`)
-- `get_career_stats` — totals and averages
-- `compare_players` — side-by-side career rows (`stats` optional)
-- `get_team_record` — W/L plus filtered games (opponent, home/away, arena city, season / since)
-- `get_player_contract` — remaining-season salary snapshot; optional `season` reads `player_contracts`
-- `get_team_payroll` — team payroll snapshot; optional `season` reads `team_payroll`
-- `get_standings` — conference table (season and conference optional). Official Cube `standings` first; empty season → Regular Season `team_games` W–L ranks (same overlay as REST)
-- `get_player_season_stats` — PPG / RPG / APG by season
-- `get_games_schedule` — all-status slate (upcoming scores null)
-- `get_game_predictions` — Elo pregame `model_wp`, `as_of`, `model_version` (not a betting line)
-- `get_player_injuries` — current BRef injury snapshot
-- `get_game_odds` — current Odds API slate snapshot (not a book)
-- `get_play_by_play` — actions for one `game_id` (sane limit; season-scoped ingest)
-- `get_reddit_posts` — PRAW rows (limit, optional title search). No Courtline page. Comments live on Cube `reddit_comments` (query via `query_cube`); no named `get_reddit_comments` tool yet
-- `query_cube` — Cube load JSON (`measures`, `dimensions`, `filters`, `timeDimensions`, `limit`); unknown members rejected
+- `get_player_game_log` — box scores, season optional
+- `get_player_season_stats` — PPG/RPG/APG by season
+- `get_career_stats`, `compare_players`
+- `get_player_back_to_backs` — B2B splits vs overall
 
-`query_nba_data` (free-form gold SQL) is **removed**.
+Team and league:
 
-Resources:
+- `get_team_record` — W/L plus filters (opponent, home/away, arena city, season)
+- `get_standings` — conference table; falls back to Regular Season W–L when official rows are missing
+- `get_team_payroll`, `get_player_contract` — remaining-year snapshots, not a paid ledger
 
-- `nba://schema` — Cube meta (cubes, measures, dimensions), not gold DDL
-- `nba://examples` — example questions with tool mappings
+Games and feeds:
 
-Prompts:
+- `get_games_schedule` — all-status slate, upcoming scores null
+- `get_game_predictions` — Elo pregame WP, not a betting line
+- `get_play_by_play` — actions for one game
+- `get_player_injuries`, `get_game_odds` — current snapshots
+- `get_reddit_posts` — r/nba posts; comments are reachable via `query_cube`
 
-- `analyze_player(player_name)` — guided player analysis
-- `compare_careers(player_a, player_b)` — side-by-side compare
-- `team_performance(team_name, city?)` — team record analysis
+Escape hatch:
 
-Example host wiring: run `uv` with `--directory …/services/mcp` and `CUBE_API_URL` / `CUBEJS_API_SECRET` set, as noted in `services/mcp/src/server.py`.
+- `query_cube` — Cube query JSON (`measures`, `dimensions`, `filters`, `timeDimensions`, `limit`). Unknown members are rejected.
 
-## Adding a use case
+Free-form gold SQL (`query_nba_data`) was removed and is not coming back.
 
-Cube member → optional rules intent on `/ask` → same MCP tool (or `query_cube`). Do not add a gold SQL helper in API or MCP.
+## Resources and prompts
 
-## Related surfaces (current)
+- `nba://schema` — Cube meta, not gold DDL
+- `nba://examples` — example questions mapped to tools
+- Prompts: `analyze_player`, `compare_careers`, `team_performance`
 
-FastAPI `POST /api/v1/query` is the only browser NL surface (`/ask` posts here; the frontend does not call MCP or Cube). The API selects a backend from `NLP_BACKEND`:
+## Adding a tool
 
-| Backend             | How to enable                                                                           | What it does                                                                                                                                                                                                                                                                      |
-| ------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **rules** (default) | `NLP_BACKEND=rules` or unset                                                            | In-house regex/alias engine (`NaturalLanguageQueryService` / `RulesNlpProvider`). Families: B2B, season averages, career compare, arena-city W–L, salary/payroll, standings. Each handler is a Cube query. Unrecognized questions get a capability message and HTTP 200, not 501. |
-| **llm** (opt-in)    | `NLP_BACKEND=llm` plus `NLP_LLM_API_KEY`, optional `NLP_LLM_BASE_URL` / `NLP_LLM_MODEL` | Calls an OpenAI-compatible chat API with Cube meta in the system prompt and a tool-calling loop over the **same named Cube operations** as MCP plus `query_cube`. Missing key → HTTP 200 refuse, no tool execution.                                                               |
+Cube member → optional rules intent on `/ask` → the same named MCP tool (or just `query_cube`).
 
-Do not set `NLP_BACKEND=llm` on the public host without a key, spend controls, and a decision to send user questions to a third party.
+Do not add a gold-SQL helper to the API or MCP.
 
-Public `/ask` stays **option A** (rules) unless an operator explicitly flips the backend. Option B (LLM → Cube tools) is the modular adapter above. Option C (LLM → SQL) is not current on HTTP or MCP.
+## Not built
 
-Injuries / odds / PBP / reddit / Elo WP / full slate are queryable via Cube/MCP/Ask tools. Courtline has no new screens for them and no win-prob badge.
+Streaming, production LLM hardening, Cube SQL API and pre-aggregates, a historical paid-salary ledger, and a named `get_reddit_comments` tool.
 
-## Planned (not built)
-
-These ideas appear in product direction but must not be described as present behavior:
-
-Streaming replies in `/ask`. A production-hardened LLM product (retries, auth, rate limits, eval against a hosted model). Cursor Pro as MCP host vs Courtline `/ask` providers: [plans/ask-llm-providers.md](plans/ask-llm-providers.md). Cube SQL API / pre-aggregates. Historical paid-salary ledger (BRef remaining-year snapshot is current). Courtline win-prob badge / “who wins tonight”.
-
-Label anything in this section as future work when writing code or docs elsewhere.
+Injuries, odds, PBP, Reddit, and Elo WP are queryable here but have no dedicated page in the UI.

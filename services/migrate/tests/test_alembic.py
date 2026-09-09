@@ -10,6 +10,7 @@ throwaway Postgres (Testcontainers).
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -37,8 +38,11 @@ EXPECTED_SOURCE_TABLES = {
     "reddit_posts",
     "reddit_comments",
     "player_injuries",
+    "player_injuries_history",
     "game_odds",
     "game_predictions",
+    "model_artifacts",
+    "model_evaluations",
     "play_by_play",
     "player_external_ids",
     "team_external_ids",
@@ -47,6 +51,8 @@ EXPECTED_SOURCE_TABLES = {
     "identity_review_queue",
     "scrape_pipeline",
     "pipeline_runs",
+    "scrape_source_runs",
+    "admin_jobs",
 }
 
 
@@ -75,6 +81,59 @@ def _tables_in_schema(engine: Engine, schema: str) -> set[str]:
             {"schema": schema},
         )
         return {row[0] for row in result}
+
+
+def _revision_graph() -> dict[str, str | None]:
+    """Map revision id -> down_revision by reading the versions directory.
+
+    Deliberately not via Alembic's ScriptDirectory so this stays usable from
+    unit tests with no config or database.
+    """
+    versions = MIGRATE_DIR / "migrations" / "versions"
+    revisions: dict[str, str | None] = {}
+    for path in sorted(versions.glob("*.py")):
+        text_body = path.read_text(encoding="utf-8")
+        revision = re.search(r'^revision: str = "([^"]+)"', text_body, re.MULTILINE)
+        down = re.search(
+            r"^down_revision: str \| Sequence\[str\] \| None = (?:\"([^\"]+)\"|None)",
+            text_body,
+            re.MULTILINE,
+        )
+        assert revision is not None, f"{path.name} has no revision id"
+        assert down is not None, f"{path.name} has no down_revision"
+        revisions[revision.group(1)] = down.group(1)
+    return revisions
+
+
+def _head_revision() -> str:
+    revisions = _revision_graph()
+    heads = set(revisions) - {down for down in revisions.values() if down is not None}
+    assert len(heads) == 1, f"expected exactly one head, found {sorted(heads)}"
+    return heads.pop()
+
+
+@pytest.mark.unit
+def test_revision_chain_has_exactly_one_head() -> None:
+    """Two revisions sharing a down_revision break `alembic upgrade head`.
+
+    Cheap to do by accident whenever migrations are written on parallel
+    branches, and otherwise only surfaces against a real database.
+    """
+    revisions = _revision_graph()
+    assert revisions, "no Alembic revisions found"
+    # alembic_version.version_num is VARCHAR(32).
+    for revision_id in revisions:
+        assert len(revision_id) <= 32, f"revision id too long: {revision_id}"
+
+    parents = {down for down in revisions.values() if down is not None}
+    heads = set(revisions) - parents
+    assert len(heads) == 1, f"expected exactly one head, found {sorted(heads)}"
+
+    bases = [rev for rev, down in revisions.items() if down is None]
+    assert len(bases) == 1, f"expected exactly one base, found {sorted(bases)}"
+
+    missing = parents - set(revisions)
+    assert not missing, f"down_revision points at unknown revisions: {sorted(missing)}"
 
 
 @pytest.mark.unit
@@ -289,7 +348,9 @@ def test_upgrade_head_creates_source_tables(migrated_engine: Engine) -> None:
         }
         assert "scrape_reddit" not in columns
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "0009_source_reddit_comments"
+        # Computed, not hardcoded: a literal here silently rots every time a
+        # revision is added, and CI runs only the unit subset so nothing catches it.
+        assert version == _head_revision()
 
 
 @pytest.mark.integration

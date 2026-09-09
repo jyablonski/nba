@@ -3,8 +3,8 @@ version: 2
 models:
   - name: fct_game_predictions
     description: >
-      Thin gold copy of pregame home win probabilities. Unique on
-      (game_id, as_of, model_version). Pregame only; not live WP.
+      Thin gold copy of the latest champion pregame home win probability per
+      game. Pregame only; not live WP.
     columns:
       - name: game_id
         data_tests:
@@ -14,6 +14,15 @@ models:
                 to: ref('fct_games_schedule')
                 field: game_id
       - name: model_wp
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+                strictly: true
+      - name: away_wp
+        description: Derived away-team probability; exactly 1 - model_wp.
         data_tests:
           - not_null
           - dbt_expectations.expect_column_values_to_be_between:
@@ -32,4 +41,4 @@ models:
     data_tests:
       - dbt_expectations.expect_compound_columns_to_be_unique:
           arguments:
-            column_list: ["game_id", "as_of", "model_version"]
+            column_list: ["game_id", "model_version"]

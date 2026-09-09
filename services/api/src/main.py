@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import games, players, query, schedule, standings, status, teams
+from routers import admin, games, players, query, schedule, standings, status, teams
 
 
 def create_app() -> FastAPI:
@@ -21,6 +21,7 @@ def create_app() -> FastAPI:
     app.include_router(games.seasons_router, prefix="/api/v1", tags=["games"])
     app.include_router(query.router, prefix="/api/v1", tags=["query"])
     app.include_router(status.router, prefix="/api/v1/status", tags=["status"])
+    app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 
     @app.get("/health")
     def health():

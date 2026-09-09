@@ -4,9 +4,10 @@
 	build build-multiarch ensure-buildx-builder remove-buildx-builder sync db-migrate migrate \
 	pipeline-status pipeline-enable pipeline-disable scrape dbt ml refresh \
 	refresh-daily refresh-daily-once \
-	prod-config prod-up prod-migrate prod-dbt prod-deploy prod-release prod-build prod-pull \
+	prod-config prod-up prod-migrate prod-dbt prod-deploy prod-release prod-build prod-pull prod-pull-tools prod-record-deploy \
 	prod-pipeline-status prod-pipeline-enable prod-pipeline-disable prod-refresh prod-refresh-daily prod-refresh-daily-once \
-	prod-health prod-prune quality
+	prod-health prod-prune prod-check-freshness check-freshness \
+	prod-scrape prod-ml admin-jobs prod-admin-jobs test-admin-jobs quality
 
 COMPOSE ?= docker compose
 TILT ?= tilt
@@ -27,6 +28,15 @@ BUILDX_BUILDER ?= nba
 PUBLIC_HOST ?= baseline.jyablonski.dev
 PUBLIC_URL ?= https://$(PUBLIC_HOST)
 export PUBLIC_URL
+# Written by `prod-release` on the server: the exact registry coordinates the
+# last successful deploy installed. Host cron and one-shot scripts pick them up
+# from here, so the daily job cannot run a different build than the containers
+# serving traffic, and the crontab never has to hardcode a tag. Absent on a dev
+# checkout, hence `-include`. The file uses `?=` so precedence stays
+# command line > environment > deployed tag > the defaults below.
+DEPLOY_ENV ?= .env.deploy
+-include $(DEPLOY_ENV)
+
 # Registry coordinates for bake tags and the prod overlay's `image:` refs.
 # Empty IMAGE_PREFIX = local images (`nba-api:latest`) built on this machine;
 # set it (e.g. ghcr.io/jyablonski/) to deploy prebuilt images instead.
@@ -64,13 +74,20 @@ prod-deploy: ## Server: ff-only pull main, then prod-release
 	git pull --ff-only origin main
 	$(MAKE) prod-release
 
-prod-release: $(PROD_IMAGES) ## Images, migrate, up, caddy reload, health gate, prune
+prod-release: $(PROD_IMAGES) ## Images, migrate, up, caddy reload, health gate, record tag, prune
 	DOCKER_TARGET=runtime $(COMPOSE_PROD) up -d postgres --wait
 	$(MAKE) prod-migrate
 	$(MAKE) prod-up
 	-$(COMPOSE_PROD) exec -T caddy caddy reload --config /etc/caddy/Caddyfile
 	$(MAKE) prod-health
+	$(MAKE) prod-record-deploy
 	$(MAKE) prod-prune
+
+# After prod-health on purpose: a deploy that never came up must not repoint
+# tomorrow's cron at the images that failed it.
+prod-record-deploy: ## Persist the deployed registry coordinates for cron and one-shot scripts
+	@printf 'IMAGE_PREFIX ?= %s\nIMAGE_TAG ?= %s\n' '$(IMAGE_PREFIX)' '$(IMAGE_TAG)' > $(DEPLOY_ENV)
+	@echo "prod-record-deploy: $(DEPLOY_ENV) -> IMAGE_PREFIX=$(IMAGE_PREFIX) IMAGE_TAG=$(IMAGE_TAG)"
 
 # `--parallel 1` keeps the Next.js build (2-4GB peak) from racing the others.
 prod-build: ## Build runtime images on this machine (on-box deploy path)
@@ -78,6 +95,13 @@ prod-build: ## Build runtime images on this machine (on-box deploy path)
 
 prod-pull: ## Pull prebuilt runtime images (registry deploy path; needs IMAGE_PREFIX)
 	$(COMPOSE_PROD) pull postgres caddy migrate api frontend mcp cube scraper dbt ml
+
+# `compose run` resolves a tag from the local store and never contacts the
+# registry, so a refresh between deploys would otherwise keep running whatever
+# was cached. Cheap no-op when the digest already matches.
+prod-pull-tools: ## Pull the one-shot images the refresh job runs
+	@test -n "$(IMAGE_PREFIX)" || { echo "prod-pull-tools requires IMAGE_PREFIX=ghcr.io/<owner>/" >&2; exit 1; }
+	$(COMPOSE_PROD) pull migrate scraper dbt ml
 
 prod-pipeline-status: ## Show the production scrape gate using registry images
 	@test -n "$(IMAGE_PREFIX)" || { echo "prod-pipeline-status requires IMAGE_PREFIX=ghcr.io/<owner>/" >&2; exit 1; }
@@ -91,19 +115,64 @@ prod-pipeline-disable: ## Disable the production daily scrape gate
 	@test -n "$(IMAGE_PREFIX)" || { echo "prod-pipeline-disable requires IMAGE_PREFIX=ghcr.io/<owner>/" >&2; exit 1; }
 	COMPOSE="$(COMPOSE_PROD)" $(MAKE) pipeline-disable
 
-prod-refresh: ## Run the production scrape -> dbt -> ml job using registry images
-	@test -n "$(IMAGE_PREFIX)" || { echo "prod-refresh requires IMAGE_PREFIX=ghcr.io/<owner>/" >&2; exit 1; }
+prod-refresh: ## Run the production scrape -> dbt -> ml job on the deployed registry images
+	@test -n "$(IMAGE_PREFIX)" || { echo "prod-refresh requires IMAGE_PREFIX=ghcr.io/<owner>/ or a $(DEPLOY_ENV) written by prod-release" >&2; exit 1; }
+	$(MAKE) prod-pull-tools
 	COMPOSE="$(COMPOSE_PROD)" FORCE=0 ./scripts/refresh-daily.sh
+
+# --full-refresh because this target exists for changed model SQL, which is
+# precisely when an incremental model must be rebuilt instead of appended to.
+# Costs a full int_play_by_play_events rebuild (~2 min); that is the point.
+prod-scrape: ## Production pipeline scrape only (no dbt, no ML)
+	@test -n "$(IMAGE_PREFIX)" || { echo "prod-scrape requires IMAGE_PREFIX=ghcr.io/<owner>/ or a $(DEPLOY_ENV) written by prod-release" >&2; exit 1; }
+	$(MAKE) prod-pull-tools
+	COMPOSE="$(COMPOSE_PROD)" $(MAKE) scrape
+
+prod-ml: ## Production Elo/logit scoring then the gold predictions copy
+	@test -n "$(IMAGE_PREFIX)" || { echo "prod-ml requires IMAGE_PREFIX=ghcr.io/<owner>/ or a $(DEPLOY_ENV) written by prod-release" >&2; exit 1; }
+	$(MAKE) prod-pull-tools
+	COMPOSE="$(COMPOSE_PROD)" $(MAKE) ml
+
+# Drains source.admin_jobs. Runs on the host (cron/systemd), never in a
+# container: executing `make` needs the Docker socket, which the API must not
+# have. See docs/operations.md.
+admin-jobs: ## Claim and run one queued /admin job
+	./scripts/admin-job-runner.sh
+
+# Shell + SQL, so the parts worth testing (atomic claim, flock contention,
+# reaping an abandoned job) only exist against a real database.
+test-admin-jobs: ## E2E the admin job runner against the local stack
+	./scripts/test-admin-jobs.sh
+
+prod-admin-jobs: ## Claim and run one queued /admin job against the prod stack
+	COMPOSE="$(COMPOSE_PROD)" ./scripts/admin-job-runner.sh
 
 prod-dbt: ## Rebuild gold on the server without scraping (needed after new/changed dbt models)
 	@test -n "$(IMAGE_PREFIX)" || { echo "prod-dbt requires IMAGE_PREFIX=ghcr.io/<owner>/" >&2; exit 1; }
+	@set +e; \
 	DOCKER_TARGET=runtime $(COMPOSE_PROD) --profile tools run --rm --no-deps dbt sh -c \
-		'dbt deps --profiles-dir . && dbt seed --profiles-dir . && dbt run --profiles-dir . && dbt test --profiles-dir .'
+		'dbt deps --profiles-dir . && dbt build --profiles-dir . --full-refresh'; \
+	dbt_exit=$$?; \
+	DOCKER_TARGET=runtime $(COMPOSE_PROD) --profile tools run --rm --no-deps scraper \
+		python -m main pipeline record-dbt --dbt-exit $$dbt_exit --detail "make prod-dbt" \
+		>/dev/null || true; \
+	exit $$dbt_exit
 
 prod-refresh-daily: prod-refresh ## Alias for prod-refresh
 
 prod-refresh-daily-once: ## Force one production scrape -> dbt -> ml cycle
+	@test -n "$(IMAGE_PREFIX)" || { echo "prod-refresh-daily-once requires IMAGE_PREFIX=ghcr.io/<owner>/ or a $(DEPLOY_ENV) written by prod-release" >&2; exit 1; }
+	$(MAKE) prod-pull-tools
 	COMPOSE="$(COMPOSE_PROD)" FORCE=1 ./scripts/refresh-daily.sh
+
+# Intentionally does not need IMAGE_PREFIX or any tools image: it talks to the
+# already-running postgres, so it still works when the thing that broke the
+# refresh is the registry, the images, or the make target itself.
+check-freshness: ## Alert if the daily refresh has not succeeded recently
+	./scripts/check-freshness.sh
+
+prod-check-freshness: ## Freshness check against the production stack
+	COMPOSE="$(COMPOSE_PROD)" ./scripts/check-freshness.sh
 
 # Probe from inside the compose network: a deploy must not depend on public DNS
 # or on Caddy already holding a cert. Caddy's alpine image ships busybox wget.
@@ -205,11 +274,20 @@ pipeline-disable: ## Disable scrape gate (safe default / off-season)
 scrape: ## pipeline scrape honoring source.scrape_pipeline (does not run dbt)
 	$(COMPOSE_RUN_TOOLS) scraper python -m main pipeline run-once $(if $(filter 1,$(FORCE)),--force,)
 
-dbt: ## dbt deps + seed + run + test (does not scrape)
+# Records the outcome so /admin reflects a standalone build. Without it the
+# admin view keeps showing the last refresh-daily exit code and a fixed
+# failure never clears. `|| true` on the recording: bookkeeping must not
+# change the exit status of the build itself.
+dbt: ## dbt deps + build (seed, models, and tests in DAG order; does not scrape)
+	@set +e; \
 	$(COMPOSE_RUN_TOOLS) dbt sh -c \
-		'dbt deps --profiles-dir . && dbt seed --profiles-dir . && dbt run --profiles-dir . && dbt test --profiles-dir .'
+		'dbt deps --profiles-dir . && dbt build --profiles-dir .'; \
+	dbt_exit=$$?; \
+	$(COMPOSE_RUN_TOOLS) scraper python -m main pipeline record-dbt \
+		--dbt-exit $$dbt_exit --detail "make dbt" >/dev/null || true; \
+	exit $$dbt_exit
 
-ml: ## Elo score then copy source.game_predictions into gold
+ml: ## Score Elo and logit (when trained) into source.game_predictions
 	$(COMPOSE_RUN_TOOLS) ml python -m main score
 	$(COMPOSE_RUN_TOOLS) dbt sh -c \
 		'dbt deps --profiles-dir . && dbt run --profiles-dir . --select stg_game_predictions+'
@@ -263,8 +341,20 @@ test-api-integration: ## API Testcontainers Postgres
 test-scraper-integration: ## Scraper Testcontainers Postgres
 	cd services/scraper && uv sync --group dev && uv run pytest -m integration --cov-fail-under=0
 
-test-mcp-integration: ## MCP Testcontainers Postgres
-	cd services/mcp && uv sync --group dev && uv run pytest -m integration --cov-fail-under=0
+# MCP is Cube-only and never opens Postgres, so it currently has no
+# integration-marked tests and pytest exits 5 ("no tests collected"). Tolerated
+# rather than removed so the suite is picked up automatically if that changes —
+# without this, `make test-integration` can never pass.
+test-mcp-integration: ## MCP integration tests (none today; MCP is Cube-only)
+	@cd services/mcp && uv sync --group dev && { \
+		uv run pytest -m integration --cov-fail-under=0; \
+		status=$$?; \
+		if [ $$status -eq 5 ]; then \
+			echo "test-mcp-integration: no integration tests collected (MCP is Cube-only)"; \
+			exit 0; \
+		fi; \
+		exit $$status; \
+	}
 
 test-integration: test-migrate test-api-integration test-scraper-integration test-mcp-integration ## All Python integration suites
 

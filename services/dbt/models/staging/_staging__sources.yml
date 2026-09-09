@@ -28,6 +28,10 @@ sources:
           Current Basketball-Reference injury report snapshot. Unique on
           (player_id, team_id). Not a historical
           ledger; history exists only from the day scraping starts.
+      - name: player_injuries_history
+        description: >
+          Append-only daily Basketball-Reference injury snapshots. Unique on
+          (player_id, team_id, snapshot_date).
       - name: game_odds
         description: >
           Current The Odds API upcoming-slate snapshot (h2h / spreads).
@@ -37,6 +41,12 @@ sources:
         description: >
           Pregame home win probabilities written by services/ml. Grain is
           (game_id, as_of, model_version).
+      - name: model_artifacts
+        description: >
+          Versioned ML artifacts and the single configured champion model.
+      - name: model_evaluations
+        description: >
+          Persisted per-season evaluation metrics for versioned ML models.
       - name: play_by_play
         description: >
           Basketball-Reference play-by-play actions. Unique on (game_id, action_number, action_id).

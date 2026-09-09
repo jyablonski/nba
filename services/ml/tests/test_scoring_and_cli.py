@@ -129,6 +129,11 @@ def test_score_and_persist_and_evaluate(monkeypatch: pytest.MonkeyPatch) -> None
     history = [_game("2023-24", True, "h1"), _game("2024-25", False, "h2")]
     upcoming = [_game("2024-25", None, "u1")]
     session = MagicMock()
+    session.execute.return_value.mappings.return_value.first.return_value = {
+        "model_version": "elo-v0",
+        "model_name": "elo",
+        "artifact": {},
+    }
     monkeypatch.setattr("scoring.get_session", lambda: _session(session))
     monkeypatch.setattr("scoring.load_regular_season_finals", lambda sess: history)
     monkeypatch.setattr("scoring.load_upcoming_games", lambda sess: upcoming)
@@ -176,6 +181,34 @@ def test_cli_eval_and_score(monkeypatch: pytest.MonkeyPatch) -> None:
     sc = runner.invoke(cli, ["score"])
     assert sc.exit_code == 0
     assert "written=3" in sc.output
+
+    monkeypatch.setattr(
+        "main.evaluate_logit",
+        lambda: {
+            "n": 2,
+            "logloss": 0.68,
+            "brier": 0.24,
+            "accuracy": 0.55,
+            "home_always_accuracy": 0.58,
+        },
+    )
+    logit_eval = runner.invoke(cli, ["eval-logit"])
+    assert logit_eval.exit_code == 0
+    assert "model=logit" in logit_eval.output
+
+    monkeypatch.setattr(
+        "main.train_model",
+        lambda: {
+            "model_name": "logit",
+            "model_version": "logit-v1",
+            "training_rows": 12,
+            "training_seasons": ["2024-25"],
+            "trained_at": "2024-10-26T08:00:00",
+        },
+    )
+    train = runner.invoke(cli, ["train"])
+    assert train.exit_code == 0
+    assert "training_rows=12" in train.output
 
 
 @pytest.mark.unit

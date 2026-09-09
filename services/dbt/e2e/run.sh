@@ -27,13 +27,11 @@ done
 echo "==> seeding sample rows"
 "${PSQL[@]}" -f "$ROOT/e2e/seed.sql"
 
-echo "==> dbt deps / seed / run / test"
+echo "==> dbt deps / build"
 # Image build bakes dbt_packages; deps still runs here so a development
 # target without a rebuild (or a bind-mounted project) can compile.
 uv run dbt deps --profiles-dir .
-uv run dbt seed --profiles-dir .
-uv run dbt run --profiles-dir .
-uv run dbt test --profiles-dir .
+uv run dbt build --profiles-dir .
 
 echo "==> asserting gold outputs"
 "${PSQL[@]}" <<'SQL'
@@ -56,6 +54,10 @@ DECLARE
   schedule_count integer;
   scheduled_count integer;
   prediction_count integer;
+  prediction_duplicate_count integer;
+  feature_count integer;
+  scheduled_feature_outcome_count integer;
+  scorecard_count integer;
   injury_matched integer;
   scoring_count integer;
   flow_count integer;
@@ -152,6 +154,35 @@ BEGIN
   SELECT count(*) INTO prediction_count FROM gold.fct_game_predictions;
   IF prediction_count < 1 THEN
     RAISE EXCEPTION 'expected >= 1 prediction row, got %', prediction_count;
+  END IF;
+
+  SELECT count(*) INTO prediction_duplicate_count
+  FROM (
+    SELECT game_id, model_version
+    FROM gold.fct_game_predictions
+    GROUP BY game_id, model_version
+    HAVING count(*) > 1
+  ) duplicates;
+  IF prediction_duplicate_count <> 0 THEN
+    RAISE EXCEPTION 'expected one champion prediction per game, got % duplicate groups', prediction_duplicate_count;
+  END IF;
+
+  SELECT count(*) INTO feature_count FROM silver.int_game_features;
+  IF feature_count < 4 THEN
+    RAISE EXCEPTION 'expected >= 4 game feature rows, got %', feature_count;
+  END IF;
+
+  SELECT count(*) INTO scheduled_feature_outcome_count
+  FROM silver.int_game_features
+  WHERE game_id = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+    AND home_won IS NOT NULL;
+  IF scheduled_feature_outcome_count <> 0 THEN
+    RAISE EXCEPTION 'expected scheduled game to have null home_won, got % rows', scheduled_feature_outcome_count;
+  END IF;
+
+  SELECT count(*) INTO scorecard_count FROM gold.fct_prediction_scorecard;
+  IF scorecard_count < 1 THEN
+    RAISE EXCEPTION 'expected >= 1 prediction scorecard row, got %', scorecard_count;
   END IF;
 
   SELECT count(*) INTO injury_matched

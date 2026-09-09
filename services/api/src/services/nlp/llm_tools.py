@@ -148,7 +148,7 @@ def named_tool_schemas() -> list[dict[str, Any]]:
         ),
         _function_schema(
             "get_game_predictions",
-            "Elo pregame home win probability (model_wp, as_of, model_version). Not a betting line.",
+            "Champion pregame home win probability (model_wp; away_wp is 1 - model_wp, as_of, model_version). Not a betting line.",
             {
                 "game_id": {"type": "string"},
                 "upcoming": {"type": "boolean"},

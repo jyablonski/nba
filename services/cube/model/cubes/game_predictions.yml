@@ -1,7 +1,7 @@
 cubes:
   - name: game_predictions
     sql_table: gold.fct_game_predictions
-    description: Elo pregame home win probability (model_wp). Pregame snapshot only; not live WP and not a betting line.
+    description: Champion pregame win probabilities. model_wp is home and away_wp is derived as 1 - model_wp. Pregame snapshot only; not live WP and not a betting line.
 
     dimensions:
       - name: id
@@ -36,6 +36,10 @@ cubes:
 
       - name: model_wp
         sql: model_wp
+        type: number
+
+      - name: away_wp
+        sql: away_wp
         type: number
 
       - name: market_wp

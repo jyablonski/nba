@@ -2,6 +2,11 @@
 
 One POST per sync (pipeline / scrape-daily / scrape-all), never per step.
 Unset or empty ``SLACK_WEBHOOK_URL`` skips HTTP and never fails the scrape.
+
+``SyncAlert`` also collects a per-step outcome for every source it wraps, so
+``source.scrape_source_runs`` can attribute a failure to one source instead
+of one status for the whole sync. Collection only: this module never touches
+the database, the caller that owns the session persists ``steps``.
 """
 
 from __future__ import annotations
@@ -10,7 +15,8 @@ import logging
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import TypeVar
+from datetime import datetime
+from typing import Any, TypeVar
 
 import requests
 
@@ -46,6 +52,38 @@ class StepFailure:
             message=_truncate_error_message(exc),
             season=season,
         )
+
+
+@dataclass(frozen=True)
+class StepOutcome:
+    """One source's result within a sync. Mirrors source.scrape_source_runs."""
+
+    step: str
+    status: str  # success | failed | skipped
+    started_at: datetime
+    finished_at: datetime
+    rows: int | None = None
+    season: str | None = None
+    error_type: str | None = None
+    error_detail: str | None = None
+
+
+def infer_rows(result: Any) -> int | None:
+    """Best-effort row count from whatever a scrape step happened to return.
+
+    Steps are inconsistent by history: some return a count, some the rows
+    themselves, and contracts returns a (contracts, payroll) pair. Callers
+    with something better can pass ``rows=`` to ``try_run``.
+    """
+    if isinstance(result, bool) or result is None:
+        return None
+    if isinstance(result, int):
+        return result
+    if isinstance(result, (list, tuple, set)):
+        if result and all(isinstance(item, int) and not isinstance(item, bool) for item in result):
+            return sum(result)
+        return len(result)
+    return None
 
 
 class SyncFailedError(RuntimeError):
@@ -122,10 +160,15 @@ def notify_sync_failures(
 
 @dataclass
 class SyncAlert:
-    """Collects step failures during one scrape sync and posts at most once."""
+    """Collects step failures during one scrape sync and posts at most once.
+
+    Also collects a ``StepOutcome`` per wrapped step for per-source run
+    history. ``failures`` stays the Slack input and is unchanged.
+    """
 
     sync_name: str
     failures: list[StepFailure] = field(default_factory=list)
+    steps: list[StepOutcome] = field(default_factory=list)
 
     def record(
         self,
@@ -136,20 +179,62 @@ class SyncAlert:
     ) -> None:
         self.failures.append(StepFailure.from_exception(step, exc, season=season))
 
+    def record_skipped(self, step: str, *, reason: str, season: str | None = None) -> None:
+        """A step that was deliberately not attempted (missing key, gated off).
+
+        Distinct from success-with-zero-rows on purpose: it is what makes
+        "odds have not run for a week" visible rather than looking healthy.
+        """
+        now = datetime.now()
+        self.steps.append(
+            StepOutcome(
+                step=step,
+                status="skipped",
+                started_at=now,
+                finished_at=now,
+                season=season,
+                error_detail=reason,
+            )
+        )
+
     def try_run(
         self,
         step: str,
         fn: Callable[[], T],
         *,
         season: str | None = None,
+        rows: Callable[[T], int | None] | None = None,
     ) -> T | None:
+        started_at = datetime.now()
         try:
-            return fn()
+            result = fn()
         except Exception as exc:
             where = f"{step} ({season})" if season else step
             logger.exception("Scrape step %s failed", where)
             self.record(step, exc, season=season)
+            self.steps.append(
+                StepOutcome(
+                    step=step,
+                    status="failed",
+                    started_at=started_at,
+                    finished_at=datetime.now(),
+                    season=season,
+                    error_type=type(exc).__name__,
+                    error_detail=_truncate_error_message(exc),
+                )
+            )
             return None
+        self.steps.append(
+            StepOutcome(
+                step=step,
+                status="success",
+                started_at=started_at,
+                finished_at=datetime.now(),
+                rows=rows(result) if rows is not None else infer_rows(result),
+                season=season,
+            )
+        )
+        return result
 
     def raise_if_failed(self) -> None:
         if self.failures:

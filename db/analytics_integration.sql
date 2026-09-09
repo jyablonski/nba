@@ -144,6 +144,7 @@ CREATE TABLE IF NOT EXISTS gold.fct_standings (
     conf_games_back     REAL NOT NULL,
     streak              VARCHAR(10),
     last_10             VARCHAR(10),
+    playoff_seed        INTEGER,
     PRIMARY KEY (team_id, season, season_type)
 );
 

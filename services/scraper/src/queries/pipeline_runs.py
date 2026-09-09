@@ -12,6 +12,28 @@ INSERT_PIPELINE_RUN = text(
     """
 )
 
+# A dbt invocation with no scrape attached (`make dbt` / `make prod-dbt`).
+# Without this, a standalone dbt run leaves no trace and the admin view keeps
+# reporting the last refresh-daily exit code forever, so a fixed failure never
+# clears on its own.
+INSERT_DBT_ONLY_RUN = text(
+    """
+    INSERT INTO source.pipeline_runs (
+        triggered_by, status, scrape_action, scrape_exit, dbt_exit, detail, finished_at
+    )
+    VALUES (
+        :triggered_by,
+        CASE WHEN :dbt_exit = 0 THEN 'success' ELSE 'failed' END,
+        'dbt',
+        NULL,
+        :dbt_exit,
+        :detail,
+        NOW()
+    )
+    RETURNING run_id
+    """
+)
+
 UPDATE_PIPELINE_RUN = text(
     """
     UPDATE source.pipeline_runs

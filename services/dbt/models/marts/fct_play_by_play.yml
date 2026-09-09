@@ -3,12 +3,19 @@ version: 2
 models:
   - name: fct_play_by_play
     description: >
-      Thin gold pass-through of Basketball-Reference actions. Grain is game_id x
-      action_number x action_id. Season-scoped ingest; do not assume a full-history backfill.
+      Gold Basketball-Reference actions, one row per game_id x action_number x
+      action_id. Carries the raw action columns (scores, action_type, sub_type,
+      description) alongside the typed event detail parsed in
+      int_play_by_play_events: event_type plus shot, foul, turnover, rebound and
+      free-throw fields. Season-scoped ingest; do not assume a full-history backfill.
     columns:
       - name: game_id
         data_tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_team_game_results')
+                field: game_id
       - name: season
         data_tests:
           - not_null
@@ -16,6 +23,9 @@ models:
         data_tests:
           - not_null
       - name: action_id
+        data_tests:
+          - not_null
+      - name: event_type
         data_tests:
           - not_null
     data_tests:

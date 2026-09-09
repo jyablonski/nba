@@ -1,71 +1,60 @@
-# Cube semantic layer
+# Cube
 
-Cube is the semantic query service for NBA analytics. It exposes governed measures and dimensions over the `gold` schema. Ask and MCP use Cube; the browser does not call it directly. There is no gold-SQL fallback.
+Cube is the semantic layer over `gold`. It serves governed measures and dimensions to Ask and MCP. The browser never calls it.
 
-## Role and request flow
+The data path is scraper → `source` → dbt → `silver`/`gold` → Cube → Ask and MCP. Cube reads gold; it never scrapes or builds anything.
 
-The data path is `scraper` → `source` → dbt → `silver` / `gold` → Cube → Ask and MCP. Alembic owns `source`, dbt owns warehouse models, and Cube reads `gold`. Cube does not scrape, run dbt, or write warehouse data. If dbt has not built a gold table, Cube queries can be empty or fail.
+## How it works
 
-Cube lives in [`services/cube`](../services/cube/). [`cube.js`](../services/cube/cube.js) configures Postgres and the model path. YAML cubes are in [`model/cubes`](../services/cube/model/cubes/); reusable views are in [`model/views`](../services/cube/model/views/). A cube defines dimensions, measures, joins, and the gold relation or SQL expression behind them.
+The model lives in [`services/cube`](../services/cube/): YAML cubes in `model/cubes/`, views in `model/views/`, connection in `cube.js`.
 
-The main endpoints are:
+Two endpoints matter:
 
-- `/cubejs-api/v1/meta` — lists available cubes, measures, dimensions, and other queryable members.
-- `/cubejs-api/v1/load` — accepts Cube query JSON: `measures`, `dimensions`, `filters`, `timeDimensions`, `order`, and `limit`.
+- `/cubejs-api/v1/meta` — the queryable members
+- `/cubejs-api/v1/load` — accepts Cube query JSON and generates warehouse SQL internally
 
-Cube validates members and generates warehouse SQL internally. API and MCP send query JSON, not SQL. Their clients use `CUBEJS_API_SECRET`, load Cube meta, validate member names, and turn Cube failures into clear application errors. `Unknown Cube member(s)` means the member was absent from the running instance's meta; the Postgres column may still exist.
+Clients send query JSON, never SQL. They validate member names against meta first, so `Unknown Cube member(s)` means the member is missing from the **running instance's model** — the Postgres column may well exist.
 
-Cube is not a second warehouse. Its results depend on the current `gold` tables and the model in the running image. Refreshing dbt data does not update the model; changing YAML requires development sync locally or a new Cube image in production.
+Cube is not a second warehouse. Results reflect the current gold tables _and_ the model baked into the running image. Refreshing data does not update the model.
 
-## Local and production
+## Local vs production
 
-The local stack starts Cube with `make up` / Tilt. Tilt syncs `cube.js` and `model/` into the development container, and Compose publishes port 4000. Compose clients use `http://cube:4000`; a host process uses `http://localhost:4000`.
+|                   | Local (`make up`)                 | Production                       |
+| ----------------- | --------------------------------- | -------------------------------- |
+| Port 4000         | published                         | **not** published, internal only |
+| Model             | Tilt syncs `cube.js` and `model/` | baked into the image             |
+| `CUBEJS_DEV_MODE` | `true`                            | `false`                          |
+| Memory            | unbounded                         | 1 GB limit                       |
 
-The production overlay starts Cube with Postgres, API, frontend, MCP, and Caddy. Cube is private to the Compose network at `http://cube:4000`; port 4000 is not published. Postgres is separately published on `POSTGRES_PORT` for DBeaver, while containers still use `postgres:5432`. MCP is published on host port 8001 at `/mcp` and requires `MCP_API_TOKEN`. Cube has a 1 GB memory limit.
+A YAML change reaches production only through a new Cube image. Pull it with `make prod-release`.
 
-Production images include the model. A YAML change must be included in the Cube image pushed to GHCR, then pulled by Oracle.
+**Dev mode hides model problems.** It relaxes auth and member-access checks, so a member can work locally and be absent from production meta. Never enable it on the public host.
 
-| Variable                                                                                                   | Purpose                                                                                           |
-| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `CUBE_API_URL`                                                                                             | Cube base URL. Compose uses `http://cube:4000`; local host processes use `http://localhost:4000`. |
-| `CUBEJS_API_SECRET`                                                                                        | Shared Cube/API/MCP request secret. Keep it out of logs and source control.                       |
-| `CUBEJS_DEV_MODE`                                                                                          | Development/security mode. Local defaults to `true`; production sets it to `false`.               |
-| `CUBEJS_DB_TYPE`, `CUBEJS_DB_HOST`, `CUBEJS_DB_PORT`, `CUBEJS_DB_NAME`, `CUBEJS_DB_USER`, `CUBEJS_DB_PASS` | Cube's Postgres connection.                                                                       |
-
-### Development mode and production debugging
-
-`CUBEJS_DEV_MODE=true` makes local iteration easier by relaxing authentication and member-level access checks. This can hide a model problem: a member may work locally but be absent from production meta. Keep production at `false`; do not enable dev mode on the public host. See Cube's [admin/deployment guidance](https://docs.cube.dev/admin) and [dimension visibility documentation](https://docs.cube.dev/reference/data-modeling/dimensions).
-
-Check production meta from the API container, which uses the same network and secret as Ask:
+To inspect production meta, ask from the API container — it shares Cube's network and secret:
 
 ```bash
-$dc exec -T api python -c '
+docker compose exec -T api python -c '
 import os
 from cube.client import CubeClient
-
-meta = CubeClient(
-    os.environ["CUBE_API_URL"],
-    os.environ["CUBEJS_API_SECRET"],
-).meta()
-players = next(c for c in meta["cubes"] if c["name"] == "players")
-print([d["name"] for d in players.get("dimensions", [])])
+meta = CubeClient(os.environ["CUBE_API_URL"], os.environ["CUBEJS_API_SECRET"]).meta()
+print([c["name"] for c in meta["cubes"]])
 '
 ```
 
-After the new image is available:
+## Environment
 
-```bash
-cd /opt/nba
-IMAGE_PREFIX=ghcr.io/<owner>/ IMAGE_TAG=<commit-sha> make prod-release
-```
+| Variable            | Purpose                                                              |
+| ------------------- | -------------------------------------------------------------------- |
+| `CUBE_API_URL`      | `http://cube:4000` in Compose, `http://localhost:4000` from the host |
+| `CUBEJS_API_SECRET` | shared secret for Cube, API, and MCP                                 |
+| `CUBEJS_DEV_MODE`   | `true` locally, `false` in production                                |
+| `CUBEJS_DB_*`       | Cube's Postgres connection                                           |
 
-This pulls tagged images, runs the migration gate, recreates the stack, checks Cube through the API container, and reloads Caddy. If the model changed but meta did not, check the image tag and force-recreate Cube/API; refreshing Postgres data alone is not enough.
+## Primary keys need `public: true`
 
-## Dimension visibility and `public: true`
+This is the most common way to break Ask or MCP with a valid-looking model.
 
-Cube primary-key dimensions are private by default. `primary_key: true` still supports row identity and joins, but Cube may omit the member from `/meta`. Since API and MCP validate members against `/meta`, a hidden key fails before `/load` runs.
-
-Product-facing primary keys need both properties:
+Cube primary keys are **private by default**. `primary_key: true` still supports joins, but Cube omits the member from `/meta` — and since API and MCP validate against meta, the query fails before `/load` ever runs.
 
 ```yaml
 - name: player_id
@@ -75,26 +64,17 @@ Product-facing primary keys need both properties:
   public: true
 ```
 
-This repository explicitly exposes identifiers such as `players.player_id`, `teams.team_id`, and `games_schedule.game_id`. Tests also require every Cube primary-key dimension to declare `public: true`. That setting controls semantic visibility; it does not publish port 4000 or replace authentication.
+Cube tests enforce this on every primary key. `public: true` controls semantic visibility only — it does not publish port 4000 or bypass authentication.
 
-When adding a queryable member:
+## Adding a member
 
-1. Add the dimension or measure to the appropriate Cube YAML over a gold relation.
-2. Set `public: true` if a primary key is used by API, MCP, or Ask.
-3. Update the named operation and tests when adding a rules or MCP wrapper.
+1. Add the dimension or measure to the right cube YAML over a gold relation.
+2. Set `public: true` if it is a primary key used by API, MCP, or Ask.
+3. Update the named operation and its tests if you add a wrapper.
 4. Check `/meta` and run the Cube tests before publishing the image.
 
-Fix model visibility or the requested member list rather than adding a gold-SQL fallback.
+Fix the model or the requested member list. Never add a gold-SQL fallback.
 
-## Rules versus LLM Ask engine
+## Related
 
-`POST /api/v1/query` is the browser-facing Ask endpoint. `NLP_BACKEND` selects its natural-language provider; MCP's direct tools are unchanged.
-
-| Backend         | Configuration                                                                       | Behavior                                                                                                                                                                                                                                                |
-| --------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rules (default) | `NLP_BACKEND=rules` or unset                                                        | Regex/alias classification for supported B2B, season-stat, player-compare, arena-city, salary/payroll, and standings questions. The matched handler calls a named Cube operation. Unsupported questions get a capability message. No LLM key is needed. |
-| LLM (opt-in)    | `NLP_BACKEND=llm`, `NLP_LLM_API_KEY`; optional `NLP_LLM_BASE_URL` / `NLP_LLM_MODEL` | Sends the question to an OpenAI-compatible chat API with Cube meta as context, then uses a bounded tool loop over the same named operations and `query_cube`. It does not generate or execute SQL.                                                      |
-
-Both backends depend on Cube and use the same semantic members. If Cube is down, Ask/MCP reports that the semantic layer is unavailable; neither falls back to gold SQL. Rules is the default because it is deterministic, local, and key-free. LLM is an operator choice with added key, cost, privacy, rate-limit, and model-availability concerns.
-
-Related docs: [Ask and NLP backends](ask.md), [MCP and AI](mcp-and-ai.md), [Data](data.md), and [Operations](operations.md).
+[ask.md](ask.md) · [mcp-and-ai.md](mcp-and-ai.md) · [data.md](data.md) · [operations.md](operations.md)

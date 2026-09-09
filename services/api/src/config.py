@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     nlp_llm_model: str = "gpt-4o-mini"
     cube_api_url: str | None = None
     cubejs_api_secret: str | None = None
+    # Bearer token for /api/v1/admin/*. Unset means the admin routes are
+    # disabled entirely (503), never open.
+    admin_api_token: str | None = None
 
     @property
     def sqlalchemy_url(self) -> str:

@@ -6,6 +6,8 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 import pytest
+from notify import StepOutcome
+from pipeline import finish_run, record_source_runs, start_run
 from sqlalchemy import select, text
 
 from db import get_session, upsert_rows
@@ -21,6 +23,7 @@ from models import (
     TeamExternalId,
     TeamPayroll,
 )
+from queries import SELECT_SOURCE_RUNS_FOR_RUN
 
 TEAM_HOME = UUID("00000000-0000-4000-8000-000000000201")
 TEAM_AWAY = UUID("00000000-0000-4000-8000-000000000202")
@@ -317,3 +320,122 @@ def test_upsert_contracts_payroll_and_play_by_play(db_session_factory) -> None:
         ).one()
         assert row[0] == "Test Player 18' Jump Shot (2 PTS)"
         assert row[1] == "Made"
+
+
+@pytest.mark.integration
+def test_record_source_runs_persists_a_row_per_source(db_session_factory) -> None:
+    """Per-source history against a real schema, not a mocked session.
+
+    Covers the FK to pipeline_runs, the expectation default, and the
+    latest-attempt-per-source read that retry selection depends on.
+    """
+    started = datetime(2026, 9, 9, 8, 15, 0)
+    finished = datetime(2026, 9, 9, 8, 15, 30)
+
+    with get_session() as session:
+        run_id = start_run(session, triggered_by="cron", scrape_action="daily+reddit")
+
+    steps = [
+        StepOutcome(
+            step="standings",
+            status="success",
+            started_at=started,
+            finished_at=finished,
+            rows=30,
+            season="2025-26",
+        ),
+        StepOutcome(
+            step="odds",
+            status="failed",
+            started_at=started,
+            finished_at=finished,
+            error_type="HTTPError",
+            error_detail="429 Too Many Requests",
+        ),
+        StepOutcome(
+            step="reddit",
+            status="skipped",
+            started_at=started,
+            finished_at=finished,
+            error_detail="REDDIT_* unset; no HTTP attempted",
+        ),
+    ]
+    with get_session() as session:
+        record_source_runs(session, run_id, steps)
+
+    with db_session_factory() as session:
+        rows = {
+            row.source_name: row
+            for row in session.execute(SELECT_SOURCE_RUNS_FOR_RUN, {"run_id": run_id})
+        }
+
+    assert set(rows) == {"standings", "odds", "reddit"}
+    assert rows["standings"].status == "success"
+    assert rows["standings"].rows_written == 30
+    assert rows["standings"].error_type is None
+    # Phase 1 records outcomes only; expectations are Phase 2.
+    assert rows["standings"].expectation == "not_checked"
+    assert rows["odds"].status == "failed"
+    assert rows["odds"].error_type == "HTTPError"
+    assert rows["odds"].rows_written is None
+    # Skipped must stay distinct from success-with-zero-rows.
+    assert rows["reddit"].status == "skipped"
+    assert rows["reddit"].rows_written is None
+
+
+@pytest.mark.integration
+def test_record_source_runs_keeps_latest_attempt_and_cascades(db_session_factory) -> None:
+    started = datetime(2026, 9, 9, 8, 15, 0)
+    finished = datetime(2026, 9, 9, 8, 15, 30)
+
+    with get_session() as session:
+        run_id = start_run(session, triggered_by="cron", scrape_action="daily")
+
+    failed = StepOutcome(
+        step="injuries",
+        status="failed",
+        started_at=started,
+        finished_at=finished,
+        error_type="HTTPError",
+        error_detail="503",
+    )
+    recovered = StepOutcome(
+        step="injuries",
+        status="success",
+        started_at=started,
+        finished_at=finished,
+        rows=42,
+    )
+    with get_session() as session:
+        record_source_runs(session, run_id, [failed])
+        record_source_runs(session, run_id, [recovered], attempt=2)
+        finish_run(session, run_id, status="success", scrape_exit=0, detail="retried")
+
+    with db_session_factory() as session:
+        rows = list(session.execute(SELECT_SOURCE_RUNS_FOR_RUN, {"run_id": run_id}))
+        # One row per source: the newest attempt wins, the history stays behind it.
+        assert len(rows) == 1
+        assert rows[0].source_name == "injuries"
+        assert rows[0].status == "success"
+        assert rows[0].attempt == 2
+        assert rows[0].rows_written == 42
+
+        total = session.execute(
+            text("SELECT count(*) FROM source.scrape_source_runs WHERE run_id = :run_id"),
+            {"run_id": run_id},
+        ).scalar_one()
+        assert total == 2, "the failed first attempt must survive as history"
+
+    # Deleting the parent run must not strand per-source rows.
+    with get_session() as session:
+        session.execute(
+            text("DELETE FROM source.pipeline_runs WHERE run_id = :run_id"), {"run_id": run_id}
+        )
+        session.commit()
+
+    with db_session_factory() as session:
+        remaining = session.execute(
+            text("SELECT count(*) FROM source.scrape_source_runs WHERE run_id = :run_id"),
+            {"run_id": run_id},
+        ).scalar_one()
+        assert remaining == 0
