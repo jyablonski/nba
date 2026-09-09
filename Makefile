@@ -4,7 +4,7 @@
 	build build-multiarch ensure-buildx-builder remove-buildx-builder sync db-migrate migrate \
 	pipeline-status pipeline-enable pipeline-disable scrape dbt ml refresh \
 	refresh-daily refresh-daily-once \
-	prod-config prod-up prod-migrate prod-deploy prod-release prod-build prod-pull \
+	prod-config prod-up prod-migrate prod-dbt prod-deploy prod-release prod-build prod-pull \
 	prod-pipeline-status prod-pipeline-enable prod-pipeline-disable prod-refresh prod-refresh-daily prod-refresh-daily-once \
 	prod-health prod-prune quality
 
@@ -94,6 +94,11 @@ prod-pipeline-disable: ## Disable the production daily scrape gate
 prod-refresh: ## Run the production scrape -> dbt -> ml job using registry images
 	@test -n "$(IMAGE_PREFIX)" || { echo "prod-refresh requires IMAGE_PREFIX=ghcr.io/<owner>/" >&2; exit 1; }
 	COMPOSE="$(COMPOSE_PROD)" FORCE=0 ./scripts/refresh-daily.sh
+
+prod-dbt: ## Rebuild gold on the server without scraping (needed after new/changed dbt models)
+	@test -n "$(IMAGE_PREFIX)" || { echo "prod-dbt requires IMAGE_PREFIX=ghcr.io/<owner>/" >&2; exit 1; }
+	DOCKER_TARGET=runtime $(COMPOSE_PROD) --profile tools run --rm --no-deps dbt sh -c \
+		'dbt deps --profiles-dir . && dbt seed --profiles-dir . && dbt run --profiles-dir . && dbt test --profiles-dir .'
 
 prod-refresh-daily: prod-refresh ## Alias for prod-refresh
 

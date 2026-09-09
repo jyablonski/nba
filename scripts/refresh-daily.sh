@@ -32,8 +32,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-# Same project as Tilt (`nba` when the repo directory is nba).
-export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "$ROOT")}"
+# Same pinned project as the Makefile, not the directory name: compose
+# namespaces volumes by project, so deriving it would point a renamed checkout
+# at an empty pgdata.
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-nba}"
 
 COMPOSE="${COMPOSE:-docker compose}"
 FORCE="${FORCE:-0}"
