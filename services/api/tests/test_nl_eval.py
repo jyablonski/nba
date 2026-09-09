@@ -586,3 +586,73 @@ def test_arena_city_zero_games_hides_dump_columns() -> None:
     assert "game_list" not in response.data[0]
     assert "0-0" in response.answer
     assert "loaded warehouse" in response.answer
+
+
+def _capability_examples() -> list[str]:
+    """The examples the capability message advertises, parsed from the message itself.
+
+    Derived rather than hard-coded so the copy and the behaviour cannot drift:
+    editing the message without teaching the rules the new example fails here.
+    """
+    import re
+
+    from services.nl_query import _CAPABILITY
+
+    match = re.search(r"\(e\.g\.\s*(.+?)\)", _CAPABILITY, re.S)
+    assert match, "capability message no longer advertises examples"
+    return [part.strip() for part in match.group(1).split(",") if part.strip()]
+
+
+@pytest.mark.unit
+def test_capability_message_advertises_only_answerable_examples() -> None:
+    service = NaturalLanguageQueryService(FakeCubeAnalytics())
+    examples = _capability_examples()
+    assert len(examples) >= 6
+
+    for question in examples:
+        family = service.classify(question)
+        assert family != "refuse", f"advertised example not classified: {question!r}"
+        answer = service.answer(question).answer
+        assert "I can answer" not in answer, f"advertised example fell back: {question!r}"
+
+
+# The chips on /ask are the other public entry point into the rules engine.
+ASK_SUGGESTIONS = (
+    "How many back-to-backs has Kawhi Leonard played?",
+    "How many more career games has LeBron played than Stephen Curry?",
+    "What is the Warriors' win percentage in Chicago?",
+    "What is Curry's salary?",
+    "What is the Warriors payroll?",
+    "Who leads the West?",
+)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("question", ASK_SUGGESTIONS)
+def test_ask_page_suggestions_are_answerable(question: str) -> None:
+    service = NaturalLanguageQueryService(FakeCubeAnalytics())
+    answer = service.answer(question).answer
+    assert "I can answer" not in answer, f"suggestion chip fell back: {question!r}"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Kawhi B2Bs",
+        "Kawhi b2b",
+        "How many B2Bs has Kawhi Leonard played?",
+        "How many back-to-backs has Kawhi Leonard played?",
+        "Kawhi back to backs",
+    ],
+)
+def test_b2b_shorthand_and_longhand_both_route(question: str) -> None:
+    service = NaturalLanguageQueryService(FakeCubeAnalytics())
+    assert service.classify(question) == "b2b"
+
+
+@pytest.mark.unit
+def test_b2b_shorthand_must_be_a_whole_token() -> None:
+    service = NaturalLanguageQueryService(FakeCubeAnalytics())
+    assert service.classify("Who leads the West?") == "standings"
+    assert service.classify("What is player ab2bc worth?") != "b2b"

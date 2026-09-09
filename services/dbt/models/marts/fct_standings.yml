@@ -6,6 +6,17 @@ models:
       Season-to-date Regular Season standings joined to team attributes.
       Grain is team_id x season x season_type; as_of_date is the scrape watermark.
     columns:
+      - name: playoff_seed
+        description: >
+          Final seed 1-10 after the play-in, or null when the conference has not
+          finished its play-in games. Differs from conference_rank on upsets, so
+          order by this when showing a settled bracket.
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+                max_value: 10
+                row_condition: "playoff_seed is not null"
       - name: team_id
         data_tests:
           - not_null

@@ -36,3 +36,12 @@ export function streakFromGames(games: FormGame[]): string | null {
   }
   return `${first ? "W" : "L"}${count}`;
 }
+
+// The play-in decides seeds 7-10, so a settled bracket outranks record order
+// (POR 42-40 seeded 7th over PHX 45-37). Falls back to record rank mid-season.
+export function standingsSeed(row: {
+  playoff_seed?: number | null;
+  conference_rank?: number | null;
+}): number | null {
+  return row.playoff_seed ?? row.conference_rank ?? null;
+}

@@ -188,6 +188,7 @@ export type StandingRow = StandingSummary & {
   division: string;
   division_rank: number | null;
   conference_rank: number | null;
+  playoff_seed?: number | null;
   win_pct: number | null;
   conf_games_back: number | null;
   streak: string | null;

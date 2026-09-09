@@ -119,7 +119,7 @@ describe("home desk", () => {
       limit: 10,
     });
     expect(screen.queryByLabelText("Season")).not.toBeInTheDocument();
-    expect(screen.getByText("Latest completed games this season.")).toBeInTheDocument();
+    expect(screen.queryByText("Latest completed games this season.")).not.toBeInTheDocument();
     expect(screen.getByText(/^Coverage/)).toBeInTheDocument();
     expect(screen.getAllByText("2025-26").length).toBeGreaterThan(0);
     expect(screen.queryByText(/2010-11/)).not.toBeInTheDocument();

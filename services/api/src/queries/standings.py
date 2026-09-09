@@ -184,7 +184,8 @@ STANDINGS_SELECT = f"""
     s.conf_games_back,
     coalesce(nullif(nullif(btrim(s.streak), ''), '—'), form.streak) AS streak,
     coalesce(nullif(nullif(btrim(s.last_10), ''), '—'), form.last_10) AS last_10,
-    {RECORD_SOURCE} AS record_source
+    {RECORD_SOURCE} AS record_source,
+    s.playoff_seed
 """
 
 LIST_STANDINGS_COUNT = text(
@@ -201,7 +202,7 @@ LIST_STANDINGS = text(
     {STANDINGS_FROM}
     ORDER BY
         t.conference,
-        conference_rank NULLS LAST,
+        coalesce(s.playoff_seed, {DERIVED_CONFERENCE_RANK}) NULLS LAST,
         {RECORD_WIN_PCT} DESC NULLS LAST,
         t.team_name
     LIMIT :limit OFFSET :offset
