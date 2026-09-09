@@ -12,15 +12,22 @@ The main data flow collects NBA data, transforms it into analytics tables, and s
 flowchart LR
   Sources["Basketball-Reference<br/>Optional: Odds API · Reddit"] --> Scraper["Scraper"]
 
-  subgraph Warehouse["Data warehouse"]
-    Source[("Postgres: source<br/>Raw data")] --> dbt["dbt<br/>Clean and model through silver"]
-    dbt --> Analytics[("Postgres: gold<br/>Analytics tables")]
+  subgraph Postgres["Postgres"]
+    Source[("source<br/>Raw data")]
+
+    subgraph dbt["dbt"]
+      Silver[("silver<br/>Staging and intermediate")]
+      Gold[("gold<br/>Analytics tables")]
+    end
+
+    Source --> Silver
+    Silver --> Gold
   end
 
   Scraper --> Source
-  Analytics --> API["FastAPI<br/>REST API"]
+  Gold --> API["FastAPI<br/>REST API"]
   API --> Frontend["Baseline<br/>Next.js web app"]
-  Analytics --> Cube["Cube<br/>Shared metrics"]
+  Gold --> Cube["Cube<br/>Semantic Layer"]
   Cube -->|Ask results| API
   Cube --> MCP["MCP<br/>Tools for AI assistants"]
 ```

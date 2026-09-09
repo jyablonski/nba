@@ -33,3 +33,27 @@ test("games index empty warehouse", async ({ page }) => {
   await page.goto("/games");
   await expect(page.getByText("No completed games to show yet.")).toBeVisible();
 });
+
+test("game flow page narrates the comeback and charts the differential", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/games/0022400002");
+
+  await expect(page.getByRole("heading", { name: /Miami Heat|MIA/ })).toBeVisible();
+  // The badge is the comeback story: deficit erased plus where it stood entering Q4.
+  await expect(page.getByText("BOS erased a 21-point deficit, down 9 entering Q4")).toBeVisible();
+  await expect(page.getByText("Max lead +21")).toBeVisible();
+  await expect(page.getByText("4 lead changes")).toBeVisible();
+  await expect(page.getByText("97 plays")).toBeVisible();
+  await expect(page.getByText("No play-by-play data available.")).toHaveCount(0);
+});
+
+test("blown-leads table links through to that game", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/games");
+
+  const collapses = page.getByRole("table").nth(1);
+  await expect(collapses.getByRole("cell", { name: "Q3", exact: true })).toBeVisible();
+  await collapses.getByRole("link", { name: "Play-by-play →" }).first().click();
+  await expect(page).toHaveURL(/\/games\/0022400002/);
+  await expect(page.getByText("BOS erased a 21-point deficit, down 9 entering Q4")).toBeVisible();
+});

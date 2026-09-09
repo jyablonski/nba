@@ -250,7 +250,7 @@ test-frontend: ## Frontend unit tests with coverage
 	cd services/frontend && npm install && npm run test:coverage
 
 test-frontend-e2e: ## Frontend Playwright e2e
-	cd services/frontend && npm install && npx playwright install chromium && CI=1 npm run test:e2e
+	cd services/frontend && npm install && npx playwright install chromium && CI=1 FORCE_COLOR=1 npm run test:e2e
 
 test-api-integration: ## API Testcontainers Postgres
 	cd services/api && uv sync --group dev && uv run pytest -m integration --cov-fail-under=0

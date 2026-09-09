@@ -72,6 +72,37 @@ CBA seed `nba_cba_caps` is official league levels by season (2024-25 NBA CBA 101
 
 Cube YAML (Ask/MCP): `players` (incl. height/weight/birth_date/first_season/last_season), `player_game_logs` (`back_to_back_games`, `games_played_in_b2b`, `games_sat_in_b2b`), `player_season_stats`, `player_contracts`, `team_payroll`, `teams`, `team_games` (incl. `season_type` so Ask standings can filter Regular Season), `games`, `team_game_results`, `standings` (team×season PK + `conf_games_back`; Ask/MCP `get_standings` falls back to Regular Season `team_games` W–L ranks when official rows are missing), `games_schedule`, `game_predictions`, `player_injuries`, `game_odds`, `play_by_play` (no joins), `reddit_posts`, `reddit_comments`.
 
+## API serving (`services/api`)
+
+The split is simple: **every REST endpoint reads `gold` directly over SQL, and only `POST /api/v1/query` goes through Cube.** The browser never calls Cube. Nothing on a page (games, players, teams, standings, schedule, game flow) depends on Cube being up — a Cube outage takes out Ask and MCP alone, and there is deliberately no gold SQL fallback for those.
+
+Served from gold with SQL:
+
+| Endpoint                                               | Gold source                                                                                                                       |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/games`                                    | `fct_team_game_results` + `dim_teams` (Final only)                                                                                |
+| `GET /api/v1/games/collapses`                          | `fct_game_flow` (largest lead blown, wire-to-wire excluded)                                                                       |
+| `GET /api/v1/games/{id}/flow`                          | `fct_game_flow` + `fct_team_game_results` + `dim_teams`                                                                           |
+| `GET /api/v1/games/{id}/play-by-play`                  | `fct_play_by_play_scoring` (chart series)                                                                                         |
+| `GET /api/v1/schedule`                                 | `fct_games_schedule` + `dim_teams` (not Final, date ≥ today)                                                                      |
+| `GET /api/v1/seasons`                                  | `fct_team_game_results` / `fct_player_game_logs` / `fct_games_schedule`                                                           |
+| `GET /api/v1/players`, `/{id}`                         | `dim_players` + `dim_teams`                                                                                                       |
+| `GET /api/v1/players/{id}/game-log`, `/back-to-backs`  | `fct_player_game_logs`                                                                                                            |
+| `GET /api/v1/players/{id}/season-stats`                | `fct_player_season_stats`                                                                                                         |
+| `GET /api/v1/players/compare`, `/compare/head-to-head` | `dim_players` + `fct_player_game_logs`                                                                                            |
+| `GET /api/v1/teams`, `/{id}`                           | `dim_teams` (+ `fct_standings`, `fct_team_game_results`)                                                                          |
+| `GET /api/v1/teams/{id}/games`, `/record`              | `fct_team_game_results` + `fct_standings`                                                                                         |
+| `GET /api/v1/standings`                                | `fct_standings` + `dim_teams`, deriving rank / GB from `fct_team_game_results` when official rows are missing                     |
+| `GET /api/v1/status`                                   | gold coverage counts plus `source.scrape_pipeline` and `source.*` `scraped_at` watermarks — the only endpoint that reads `source` |
+
+Served through Cube:
+
+| Endpoint             | Path                                                                                                                                                                  |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/query` | `CubeAnalytics` → `/cubejs-api/v1/load`; backs the `/ask` page. Default backend is `rules`; `NLP_BACKEND=llm` is opt-in and still only issues Cube queries, never SQL |
+
+Contracts and payroll have no REST endpoint of their own: they reach the app as `current_season_salary` on `dim_players` and the payroll / cap-flag columns on `dim_teams`, so player and team pages pick them up from the queries above. Injuries, odds, and Reddit are Cube-only today — they have gold marts but no REST route, so they are reachable through Ask and MCP and not through a page. MCP never touches gold SQL; it is Cube-only by design.
+
 ## ML / Cube / migrate
 
 Elo after gold Finals + schedule: [ml.md](ml.md). No public predictions API.

@@ -34,3 +34,17 @@ test("players directory empty warehouse", async ({ page }) => {
   await page.goto("/players");
   await expect(page.getByText("No players yet")).toBeVisible();
 });
+
+test("player game log keeps the PBP link in the last column", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/players");
+  await page.getByRole("link", { name: "Kawhi Leonard" }).first().click();
+  await expect(page).toHaveURL(/\/players\//);
+
+  const log = page
+    .getByRole("table")
+    .filter({ has: page.getByRole("columnheader", { name: "PBP" }) });
+  const headers = log.getByRole("columnheader");
+  await expect(headers.last()).toHaveText("PBP");
+  await expect(headers.first()).toContainText("Date");
+});

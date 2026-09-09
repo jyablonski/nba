@@ -16,6 +16,7 @@ permissions:
 
 jobs:
   quality:
+    name: Quality (lint, format, types)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -30,6 +31,7 @@ jobs:
       - run: make quality
 
   frontend:
+    name: Frontend unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -41,6 +43,7 @@ jobs:
       - run: make test-frontend
 
   frontend-e2e:
+    name: Frontend e2e (Playwright)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -54,6 +57,7 @@ jobs:
       - run: make test-frontend-e2e
 
   dbt-e2e:
+    name: dbt e2e
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -62,6 +66,7 @@ jobs:
       - run: make test-dbt
 
   python:
+    name: Python tests (${{ matrix.service }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -79,6 +84,7 @@ jobs:
   # OCI Ampere A1 is aarch64, so this must be an arm64 runner. Do not swap to
   # ubuntu-latest and qemu-emulate — the Next.js build takes ~10x longer.
   images:
+    name: Build and push images
     if: vars.ENABLE_OCI_DEPLOY == 'true' && github.event_name != 'pull_request'
     needs: [quality, frontend, frontend-e2e, dbt-e2e, python]
     runs-on: ubuntu-24.04-arm
@@ -109,6 +115,7 @@ jobs:
           NEXT_PUBLIC_API_URL: https://baseline.jyablonski.dev
 
   deploy:
+    name: Deploy to Server
     if: vars.ENABLE_OCI_DEPLOY == 'true' && github.event_name != 'pull_request'
     needs: [images]
     runs-on: ubuntu-latest

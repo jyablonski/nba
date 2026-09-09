@@ -51,3 +51,13 @@ test("About credits the developer and names the running build", async ({ page })
   const version = page.locator("section", { has: page.getByRole("heading", { name: "Version" }) });
   await expect(version.locator("div")).toHaveText(/^[0-9a-f]{7}$|^dev$/);
 });
+
+test("About version reports the build and nothing else", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/about");
+
+  const version = page.locator("section", { has: page.getByRole("heading", { name: "Version" }) });
+  // Unbaked dev builds report "dev"; a real image reports a short sha.
+  await expect(version.locator("div")).toHaveText(/^[0-9a-f]{7}$|^dev$/);
+  await expect(page.getByRole("heading", { name: "Developer" })).toBeVisible();
+});

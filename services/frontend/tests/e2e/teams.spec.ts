@@ -42,3 +42,15 @@ test("teams directory empty warehouse", async ({ page }) => {
     page.getByRole("heading", { name: "Team offensive vs defensive rating" })
   ).toHaveCount(0);
 });
+
+test("teams page plots each team as a bare logo marker", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/teams");
+
+  const scatter = page.locator("section[aria-labelledby='team-ratings-heading']");
+  await expect(scatter).toBeVisible();
+  await expect(scatter.getByText("Offensive rating")).toBeVisible();
+  // Markers are the logo image alone; the backing circle was removed.
+  await expect(scatter.locator("image")).toHaveCount(2);
+  await expect(scatter.locator("circle")).toHaveCount(0);
+});
