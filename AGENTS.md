@@ -38,12 +38,14 @@ Prefer [docs/](docs/) and root [README.md](README.md) over inventing behavior.
 - `make quality` — `pre-commit run --all-files` (runs `npm ci` in `services/frontend` if prettier is missing)
 - `make db-migrate` / `make migrate` — Alembic `upgrade head` (source schema)
 - `make scrape` — `pipeline run-once` honoring `source.scrape_pipeline` (`FORCE=1` → `--force`)
-- `make dbt` — dbt `deps` / `seed` / `run` / `test`
+- `make dbt` — dbt `deps` / `build` (seeds, models, and tests in DAG order)
 - `make ml` — Elo `score` then `dbt run --select stg_game_predictions+`
 - `make refresh` — local scrape then dbt then ml (`refresh-daily` alias; `refresh-daily-once` is `FORCE=1`); production uses `make prod-refresh` with the GHCR image variables
 - `make prod-config` / `prod-up` / `prod-migrate` — Caddy overlay (`docker-compose.prod.yml`); not Tilt
 - `make prod-deploy` — server: ff-only pull `main`, then `prod-release` (never `compose down -v`)
-- `make prod-release` — images, migrate, up, caddy reload, `prod-health`, `prod-prune`. `IMAGE_PREFIX` set → `prod-pull` (GHCR); empty → `prod-build` (on-box)
+- `make prod-release` — images, migrate, up, caddy reload, `prod-health`, `prod-record-deploy`, `prod-prune`. `IMAGE_PREFIX` set → `prod-pull` (GHCR); empty → `prod-build` (on-box)
+- `make prod-record-deploy` — writes the deployed `IMAGE_PREFIX`/`IMAGE_TAG` to `.env.deploy`, which every target `-include`s; host cron runs a bare `make prod-refresh` and gets the deployed sha. Precedence: command line > environment > `.env.deploy` > defaults
+- `make prod-pull-tools` — re-pull `migrate scraper dbt ml`; `prod-refresh` runs it first because `compose run` never pulls on its own
 - `make prod-release IMAGE_TAG=<sha>` — rollback to a previously pushed image; does not rebuild and does not touch Alembic
 - `make sync` — refresh uv locks per Python pin
 - Compose profiles: `tools` (scraper/dbt/ml); MCP and Cube are on the default local and production stacks (not a profile)
@@ -57,16 +59,12 @@ Prefer [docs/](docs/) and root [README.md](README.md) over inventing behavior.
 - dbt: no Python unit tests
 - `make test-dbt` runs Alembic then seeds via `docker-compose.e2e.yml` + `services/dbt/e2e/run.sh`
 - Frontend: Vitest coverage; Playwright e2e separately
-- GitHub Actions (`.github/workflows/ci.yml`) runs `make quality` (pre-commit), `make test-frontend`, `make test-frontend-e2e` (Playwright), `make test-dbt` (dbt e2e), and `make test-api|scraper|mcp|cube|ml|migrate-unit` on PR/`main`. Not Testcontainers (`make test-integration`). Then `images` bakes the `prod` bake group for `linux/arm64` on `ubuntu-24.04-arm` and pushes `:<sha>` + `:latest` to GHCR, and `deploy` SSHs `make prod-deploy IMAGE_PREFIX=… IMAGE_TAG=<sha>`. Both run on push to `main` or `workflow_dispatch` only when `ENABLE_OCI_DEPLOY=true` (never on pull_request). Public host is `baseline.jyablonski.dev`.
+- GitHub Actions (`.github/workflows/ci.yml`) runs `make quality` (pre-commit), `make test-frontend`, `make test-frontend-e2e` (Playwright), `make test-dbt` (dbt e2e), `make test-api|scraper|mcp|cube|ml|migrate-unit`, `make test-integration` (Testcontainers), and `make test-admin-jobs` (job runner e2e against a real Postgres in its own Compose project) on PR/`main`. Then `images` bakes the `prod` bake group for `linux/arm64` on `ubuntu-24.04-arm` and pushes `:<sha>` + `:latest` to GHCR, and `deploy` SSHs `make prod-deploy IMAGE_PREFIX=… IMAGE_TAG=<sha>`. Both run on push to `main` or `workflow_dispatch` only when `ENABLE_OCI_DEPLOY=true` (never on pull_request). Public host is `baseline.jyablonski.dev`.
 
-## Docs
+## API surface
 
-- [docs/data.md](docs/data.md) — ingest / dbt / Cube
-- [docs/frontend.md](docs/frontend.md) — Next.js ↔ API
-- [docs/mcp-and-ai.md](docs/mcp-and-ai.md) — MCP tools; rule-based `/api/v1/query`; planned LLM
-- [docs/plans/oci-caddy-hosting.md](docs/plans/oci-caddy-hosting.md) — Caddy/CI files in-repo; public host not live
-- [docs/plans/ml-win-predictions.md](docs/plans/ml-win-predictions.md) — in progress: Elo v0 + upcoming games + BRef injuries + Odds API ingest; logit / Courtline / `/ask` still planned
-- [docs/plans/ask-llm-providers.md](docs/plans/ask-llm-providers.md) — planned: Cursor Pro via MCP (not Courtline `/ask`); local OpenAI-compatible for browser LLM; hosted keys opt-in
+- `/admin` (frontend) and `/api/v1/admin/*` are **current**: ingestion / dbt / ML health, plus `POST /admin/jobs` which **queues** work into `source.admin_jobs` for the host runner (the API never executes it). One pending job at a time, enforced by a partial unique index (409 otherwise). The page is behind GitHub OAuth with an `ADMIN_GITHUB_LOGINS` allowlist; the API needs `Authorization: Bearer $ADMIN_API_TOKEN`. Both fail closed — unset secrets disable them (API returns 503), never open them. The token is server-side only, never `NEXT_PUBLIC_`.
+- `make prod-scrape` / `prod-ml` / `prod-admin-jobs` — production one-shots; `prod-admin-jobs` drains `source.admin_jobs` (cron every minute). Runs on the host, never in a container: executing `make` needs the Docker socket, which the API must not have.
 - `GET /api/v1/status` is **current**: `last_scraped_at` from `source.scrape_pipeline.last_success_at` plus warehouse coverage counts. Do not surface `GET /health` in the UI.
 - `POST /api/v1/query` and `/ask` are **current**. Default backend is **rules** (`NLP_BACKEND=rules`): B2B, season averages, compare, arena-city record, salary/payroll, standings — each family is a Cube query. Unrecognized questions return a capability message, not HTTP 501. `NLP_BACKEND=llm` is an opt-in adapter (Cube meta + `query_cube` / named Cube tools, needs `NLP_LLM_API_KEY`); it is not the public default and does not run SQL. MCP `query_cube` is Cube query JSON only. Cube down → clear Ask/MCP error; no gold SQL fallback. The prod overlay starts Cube internally for Ask/MCP and does not publish port 4000.
 

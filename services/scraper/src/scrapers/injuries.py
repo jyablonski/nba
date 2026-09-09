@@ -13,7 +13,7 @@ from datetime import datetime
 from identity import BREF_PROVIDER, ensure_player, resolve_team_id, seed_team_catalog
 
 from db import get_session, upsert_rows
-from models import PlayerInjury
+from models import PlayerInjury, PlayerInjuryHistory
 from queries.snapshots import DELETE_STALE_PLAYER_INJURIES
 from scrapers import bref_get
 from scrapers.injuries_parse import INJURIES_URL, parse_injuries_html
@@ -62,6 +62,19 @@ def scrape_injuries(*, fetch_html: Callable[[str], str] | None = None) -> int:
             PlayerInjury,
             canonical_rows,
             ["player_id", "team_id"],
+        )
+        history_rows = [
+            {
+                **row,
+                "snapshot_date": scraped_at.date(),
+            }
+            for row in canonical_rows
+        ]
+        upsert_rows(
+            session,
+            PlayerInjuryHistory,
+            history_rows,
+            ["player_id", "team_id", "snapshot_date"],
         )
         session.execute(DELETE_STALE_PLAYER_INJURIES, {"scraped_at": scraped_at})
         session.commit()

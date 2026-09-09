@@ -1,3 +1,13 @@
+{{
+    config(
+        materialized='table',
+        indexes=[{'columns': ['player_id']}, {'columns': ['game_id']}],
+    )
+}}
+
+-- Materialized rather than a view: four partitioned window functions feeding
+-- three marts (dim_players, fct_player_game_logs, fct_player_season_stats),
+-- so a view re-sorted every game log three times per run.
 with game_logs as (
     select * from {{ ref('stg_player_game_logs') }}
 ),

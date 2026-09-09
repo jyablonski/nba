@@ -1,10 +1,15 @@
 -- Sample source data for dbt e2e. Assumes Alembic source tables already exist.
 
 TRUNCATE source.reddit_comments, source.reddit_posts, source.game_predictions,
+    source.model_evaluations, source.model_artifacts, source.player_injuries_history,
     source.game_odds, source.player_injuries, source.standings,
     source.player_game_logs, source.play_by_play, source.games,
     source.player_contracts, source.team_payroll, source.players, source.teams
     RESTART IDENTITY CASCADE;
+
+INSERT INTO source.model_artifacts (
+    model_version, model_name, artifact, trained_at, is_champion
+) VALUES ('elo-v0', 'elo', '{}'::jsonb, NOW(), TRUE);
 
 INSERT INTO source.teams (
     team_id, canonical_slug, abbreviation, full_name, city, nickname, conference, division, scraped_at
@@ -149,7 +154,9 @@ INSERT INTO source.game_predictions (
     model_wp, market_wp, scraped_at
 ) VALUES
     ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', '2024-10-26 12:00:00', 'elo', 'elo-v0',
-     '7bf8726a-a852-452d-b81f-14839127c5fb', 'a96f53b4-0f5c-4cb6-8b88-21ba05224cae', 0.62, 0.58, NOW());
+     '7bf8726a-a852-452d-b81f-14839127c5fb', 'a96f53b4-0f5c-4cb6-8b88-21ba05224cae', 0.62, 0.58, NOW()),
+    ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', '2024-10-24 12:00:00', 'elo', 'elo-v0',
+     'a79dabb2-26c5-443c-bbb4-cabdd8db5958', '7bf8726a-a852-452d-b81f-14839127c5fb', 0.47, 0.51, NOW());
 
 INSERT INTO source.reddit_posts (
     reddit_id, subreddit, title, author, score, num_comments, created_utc,

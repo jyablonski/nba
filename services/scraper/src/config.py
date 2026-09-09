@@ -88,6 +88,18 @@ _REDDIT_REQUIRED = (
 )
 
 
+def missing_odds_env_names(cfg: Settings | None = None) -> list[str]:
+    """Return unset Odds API env var names (empty list if configured).
+
+    Mirrors ``missing_reddit_env_names`` so the pipeline can tell "no key, so
+    we never tried" apart from "we tried and got nothing back".
+    """
+    resolved = cfg if cfg is not None else get_settings()
+    if not str(resolved.odds_api_key or "").strip():
+        return ["ODDS_API_KEY"]
+    return []
+
+
 def missing_reddit_env_names(cfg: Settings | None = None) -> list[str]:
     """Return unset required Reddit env var names (empty list if complete)."""
     resolved = cfg if cfg is not None else get_settings()

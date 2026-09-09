@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# refresh-daily.sh — scrape (gated by source.scrape_pipeline) then dbt then Elo score.
+# refresh-daily.sh — scrape (gated by source.scrape_pipeline), dbt, then model scoring.
 #
 # Default: honors source.scrape_pipeline.enabled.
 # NBA daily also needs season_active / window. r/nba always runs when the
@@ -110,27 +110,25 @@ if [[ "$SKIP_DBT" == "1" ]]; then
   exit 0
 fi
 
-echo "==> dbt seed + run"
+echo "==> dbt build"
 # Full project (including stg/fct play-by-play, scoring series, and fct_game_flow).
 # Daily scrape already wrote today's Finals into source.play_by_play; this run
 # is the enrichment step — not a separate PBP job.
-# deps + seed + run share one container: `compose run --rm` would otherwise
+# `dbt build` runs seeds, models, and each model's tests together in DAG order,
+# so a failing test stops that model's descendants instead of publishing them
+# and reporting the failure afterwards. RUN_DBT_TEST=0 drops the tests only.
+# deps + build share one container: `compose run --rm` would otherwise
 # discard a runtime `dbt deps`. Production images already bake dbt_packages;
 # deps is a no-op then, and covers development images that might not.
+DBT_BUILD_ARGS=""
+if [[ "$RUN_DBT_TEST" != "1" ]]; then
+  DBT_BUILD_ARGS=" --exclude-resource-type test"
+fi
 set +e
 compose_run dbt sh -c \
-  'dbt deps --profiles-dir . && dbt seed --profiles-dir . && dbt run --profiles-dir .'
+  "dbt deps --profiles-dir . && dbt build --profiles-dir .${DBT_BUILD_ARGS}"
 DBT_EXIT=$?
 set -e
-
-if [[ "$RUN_DBT_TEST" == "1" && "$DBT_EXIT" -eq 0 ]]; then
-  echo "==> dbt test"
-  set +e
-  compose_run dbt sh -c \
-    'dbt deps --profiles-dir . && dbt test --profiles-dir .'
-  DBT_EXIT=$?
-  set -e
-fi
 
 if [[ -n "$RUN_ID" ]]; then
   DETAIL="dbt finished with exit ${DBT_EXIT}"

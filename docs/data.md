@@ -1,112 +1,86 @@
 # Data
 
-scrape → `source` → dbt → `silver` / `gold` → API (REST) / Cube → Ask + MCP. Alembic owns `source` DDL; dbt owns silver/gold. Cube YAML sits on gold; it is the Ask/MCP semantic layer. Copy `.env.example` → `.env`. Daily gate / Slack: [operations.md](operations.md). Elo CLI: [ml.md](ml.md).
+scrape → `source` → dbt → `silver`/`gold` → REST and Cube.
 
-`make up` is Tilt: postgres, migrate, cube, api, frontend, mcp. Scraper / dbt / ml are profile `tools` — nothing auto-scrapes. Until dbt creates gold, `GET /api/v1/status` 500s (`gold.fct_*` missing) and Courtline shows `Scraped —`. Ask/MCP need Cube (`CUBE_API_URL`); they do not query gold SQL.
+Alembic owns `source` DDL, dbt owns silver and gold, Cube YAML sits on gold. Nothing auto-scrapes: scraper, dbt, and ml are on profile `tools`.
 
-Always `--no-deps` next to Tilt so Compose does not recreate Postgres.
+Until dbt builds gold, `GET /api/v1/status` fails and the UI shows `Scraped —`.
 
 ## First load
 
-Not `refresh-daily` (gate off by default; daily slate only). New season starts in October.
+Not `refresh-daily` — the daily gate is off by default and only scrapes today's slate.
 
 ```bash
-# smoke — teams, players, BRef contracts, then current season of games / logs / standings
-docker compose --profile tools run --rm --no-deps scraper \
-  python -m main scrape-all --active-only
+# teams, players, contracts, then this season's games / logs / standings
+docker compose --profile tools run --rm --no-deps scraper python -m main scrape-all
 
 # snapshots scrape-all skips
 docker compose --profile tools run --rm --no-deps scraper python -m main scrape-injuries
-# docker compose --profile tools run --rm --no-deps scraper python -m main scrape-odds   # needs ODDS_API_KEY
-# PBP is not on scrape-all. Season-active daily / scrape-daily / pipeline ingest today's Finals only.
-# The same dbt run below builds gold.fct_play_by_play + scoring/flow marts. Do not season-wide backfill for Courtline.
-# Ad-hoc recent games: scrape-play-by-play --game-id <id> (repeatable), then the same dbt run.
 
-# gold — required for API / Courtline / Cube
-docker compose --profile tools run --rm --no-deps dbt sh -c \
-  'dbt deps --profiles-dir . && dbt seed --profiles-dir . && dbt run --profiles-dir . && dbt test --profiles-dir .'
+# gold — required for REST, the UI, and Cube
+make dbt
 
-# optional Elo after Regular Season Finals exist
-docker compose --profile tools run --rm --no-deps ml python -m main score
-docker compose --profile tools run --rm --no-deps dbt sh -c \
-  'dbt run --profiles-dir . --select stg_game_predictions+'
+# optional Elo, once Regular Season Finals exist
+make ml
 ```
 
-Without `--active-only`, game logs iterate all completed games in the selected season and fetch one BRef box score per game. `--active-only` is retained for CLI compatibility and no longer changes the BRef box-score path.
+Always pass `--no-deps` next to Tilt so Compose does not recreate Postgres.
 
-Default ingest is the current season only (`current_season()`, October cutoff). Later backfill: `--seasons 2010-11,2024-25` (comma-separated; rate-limited if you list many seasons). Basketball-Reference HTML is fetched through one shared conservative transport with retries and no name-only identity guesses. `--with-reddit` needs `REDDIT_*`.
+Default ingest is the **current season only**. Backfill later with `--seasons 2010-11,2024-25`.
 
-Done when `curl -s localhost:8000/api/v1/status` is JSON and `gold.fct_team_game_results` has rows. New Alembic revisions after migrate has exited: `make db-migrate`. Shorthand for the gold/Elo compose runs: `make dbt` / `make ml`. Daily gated scrape is `make scrape` / `make refresh` after `make pipeline-enable` ([operations.md](operations.md)).
+You're done when `curl -s localhost:8000/api/v1/status` returns JSON and `gold.fct_team_game_results` has rows.
 
-## Scraper (`services/scraper`)
+## Scraper
 
-Click CLI `python -m main` (Python **3.14**). Upserts only; Alembic must already have created `source` tables.
+Click CLI, `python -m main`. Upserts only — Alembic must have created the tables first.
 
-| Command                                      | Writes                                                                                                          | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scrape-teams` / `scrape-players`            | `source.teams`, `source.players`                                                                                | Teams come from the explicit repo catalog; players come from BRef roster pages.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `scrape-games --season`                      | `source.games`                                                                                                  | Basketball-Reference season schedule; games are resolved by BRef box-score key first, then by a unique season/date/home/away candidate.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `scrape-game-logs --season`                  | `source.player_game_logs`                                                                                       | All `source.players` unless `--active-only` (current-season / Courtline smoke). Daily logs Finals only. Historical / BRef matchup abbrevs (NJN, NOH, BRK, …) alias to the current 30 franchise `team_id`s; `source.teams` stays current-only                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `scrape-standings --season`                  | `source.standings`                                                                                              | Basketball-Reference standings; upsert `(season, season_type, team_id)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `scrape-contracts [--teams]`                 | `source.player_contracts`, `source.team_payroll`                                                                | BRef remaining-year snapshot, not a paid ledger. On season-active daily / `scrape-daily` (~3s/team). Also `scrape-all`. Stores BRK/CHO/PHO alongside BKN/CHA/PHX                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `scrape-injuries`                            | `source.player_injuries`                                                                                        | BRef current snapshot; deletes leavers. On daily. `player_id` match is dbt                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `scrape-odds`                                | `source.game_odds`                                                                                              | The Odds API h2h+spreads if `ODDS_API_KEY`; else skip. Match date+names → `game_id`. No history                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `scrape-reddit`                              | `source.reddit_posts`, `source.reddit_comments`                                                                 | PRAW; needs `REDDIT_CLIENT_ID` / `SECRET` / `USER_AGENT`. Default subreddit `nba` (r/nba). Posts: hot + top for `--time-filter` (default day). Comments: top-N by score per ingested post (`--comments-per-post`, default 10; `replace_more(limit=0)` so we do not walk “load more”). Daily pipeline always attempts r/nba when enabled (or `--force`); not behind `season_active`; modest `--limit` 50 and 10 comments/post. Missing `REDDIT_*` skips HTTP (like odds). Not on ungated `scrape-daily`. Gold `fct_reddit_posts` / `fct_reddit_comments` + Cube; no Courtline page / no named MCP `get_reddit_comments` yet (`query_cube` can hit the cube) |
-| `scrape-play-by-play [--season] [--game-id]` | `source.play_by_play`                                                                                           | Basketball-Reference box-score PBP. **Product path:** season-active daily / `scrape-daily` / pipeline pass today’s Final `game_ids` (same set as game logs), then the same `dbt run` / `dbt build` as every other mart. CLI `--game-id` (repeatable) is ad-hoc recent games only. Omit `--game-id` to backfill every Final already in `source.games` for one season — do not use that for Courtline. Not on `scrape-all`. Gold `fct_play_by_play`, `fct_play_by_play_scoring`, `fct_game_flow`; Cube `get_play_by_play` is still the raw actions cube                                                                                                      |
-| `scrape-daily`                               | Scoreboard today+7 + season schedule + Finals logs + those games' PBP + standings + injuries + odds + contracts | Ungated basketball daily. Reddit is pipeline-only                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `scrape-all [--seasons]`                     | teams, players, contracts, then per-season games / logs / standings                                             | Default current season only. `--seasons 2010-11,2024-25` still backfills those seasons. Logs iterate all `source.players` unless `--active-only`. Skips injuries, odds, reddit, PBP                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Command                           | Writes                                                             |
+| --------------------------------- | ------------------------------------------------------------------ |
+| `scrape-teams` / `scrape-players` | `source.teams`, `source.players`                                   |
+| `scrape-games --season`           | `source.games`                                                     |
+| `scrape-game-logs --season`       | `source.player_game_logs`                                          |
+| `scrape-standings --season`       | `source.standings`                                                 |
+| `scrape-contracts`                | `source.player_contracts`, `source.team_payroll`                   |
+| `scrape-injuries`                 | `source.player_injuries` — current snapshot, deletes leavers       |
+| `scrape-odds`                     | `source.game_odds` — needs `ODDS_API_KEY`, else skipped            |
+| `scrape-reddit`                   | `source.reddit_posts`, `source.reddit_comments` — needs `REDDIT_*` |
+| `scrape-play-by-play`             | `source.play_by_play`                                              |
+| `scrape-daily`                    | the whole basketball daily, ungated                                |
+| `scrape-all [--seasons]`          | teams, players, contracts, then per-season data                    |
 
-Play-by-play product path is **today’s Finals → same day’s dbt**. `refresh-daily` already scrapes those `game_ids` then runs a full `dbt seed`/`run`/`test` (no extra PBP job). Courtline `/games/[id]` reads gold scoring + flow over REST; empty gold → honest empty state until that day’s scrape+dbt. Season-wide `scrape-play-by-play` (no `--game-id`) stays a manual backfill so we do not load the full 8–10M-row history by accident. Optional `SLACK_WEBHOOK_URL`: one alert per failed `scrape-all` / `scrape-daily` / `pipeline` sync; success is silent.
+All Basketball-Reference HTML goes through one shared conservative transport with retries. Identity is never guessed from a name alone.
 
-## dbt (`services/dbt`)
+**Play-by-play is today's Finals only.** The daily scrape passes today's Final game ids, then the same `dbt build` enriches them. Running `scrape-play-by-play` without `--game-id` backfills a whole season and is a deliberate manual operation — the full history is 8–10M rows.
 
-dbt `nba_analytics` (profile `nba`), Python **3.13**. Local: `uv run dbt deps|seed|run|test --profiles-dir .`. Image bakes `dbt deps`. E2E: `make test-dbt`. Local `compose run --no-deps` bind-mounts `models/`, `tests/`, `macros/`, `seeds/`, and the project YAML onto `/app` (scraper/ml/mcp mount `src/`). YAML/SQL/Python edits are picked up without `docker compose build`. Rebuild only after Dockerfile, lockfile, or package (`packages.yml` / `dbt_packages`) changes. Prod overlay resets those volumes. `make up` still does not start profile `tools`.
+## dbt
 
-Staging views: `stg_players`, `stg_teams`, `stg_games` (Final-only), `stg_games_schedule` (all statuses), `stg_player_game_logs`, `stg_player_contracts`, `stg_team_payroll`, `stg_standings`, `stg_player_injuries`, `stg_game_odds`, `stg_game_predictions`, `stg_play_by_play`, `stg_reddit_posts`, `stg_reddit_comments`.
+Project `nba_analytics`, Python 3.13. `make dbt` runs `deps` + `build`. E2E: `make test-dbt`.
 
-Intermediates: `int_player_game_logs_enriched` (location, opponent, B2B). `int_player_contracts_matched` / `int_player_injuries_matched` — unique name, or name+team; collisions stay unmatched (null `player_id`). `int_play_by_play_scoring` — score-change events with parsed clock, elapsed seconds, and home−away differential.
+Local `compose run` bind-mounts models and SQL, so YAML and SQL edits need no rebuild. Rebuild only after Dockerfile, lockfile, or package changes.
 
-Gold tables: `dim_players`, `dim_teams` (arena lat/long from seed `seeds/nba_team_arenas.csv`; primary/alternate brand hex from seed `seeds/nba_team_colors.csv`; current payroll snapshot plus over-tax / over-apron flags vs `seeds/nba_cba_caps.csv`), `fct_player_game_logs`, `fct_player_season_stats`, `fct_team_game_results` (Final-only), `fct_games_schedule`, `fct_game_predictions`, `fct_player_contracts`, `fct_team_payroll` (BRef totals vs official CBA cap/tax/aprons; not a tax bill), `fct_standings`, `fct_player_injuries` (current BRef snapshot), `fct_game_odds` (current Odds API snapshot), `fct_play_by_play` (thin BRef actions), `fct_play_by_play_scoring` (chart series), `fct_game_flow` (time-led / max lead / biggest lopsided scoring run with team+opp points under 25; not live WP), `fct_reddit_posts`, `fct_reddit_comments`. These PBP marts are in the normal `dbt run` / `dbt build`. REST `/standings` and team standing prefer official `fct_standings` rank / GB; when those rows are missing, conference rank and games behind are derived from Regular Season `fct_team_game_results` W–L (win %, then wins, then losses; GB vs the conference leader). `score_margin` on gold games is unsigned winner margin; team-game REST signs it for the requested team.
+**Staging** views mirror source tables one-to-one. **Intermediate** models do the real work — enriched game logs, contract and injury name matching, play-by-play parsing and scoring.
 
-CBA seed `nba_cba_caps` is official league levels by season (2024-25 NBA CBA 101; 2025-26 Hoops Rumors league announcement; 2026-27 [NBA.com](https://www.nba.com/news/nba-salary-cap-2026-27-season)).
+**Gold** holds the product tables: `dim_players`, `dim_teams`, `fct_player_game_logs`, `fct_player_season_stats`, `fct_team_game_results` (Final only), `fct_games_schedule`, `fct_standings`, `fct_player_contracts`, `fct_team_payroll`, `fct_game_predictions`, `fct_player_injuries`, `fct_game_odds`, `fct_play_by_play`, `fct_play_by_play_scoring`, `fct_game_flow`, `fct_reddit_posts`, `fct_reddit_comments`.
 
-Cube YAML (Ask/MCP): `players` (incl. height/weight/birth_date/first_season/last_season), `player_game_logs` (`back_to_back_games`, `games_played_in_b2b`, `games_sat_in_b2b`), `player_season_stats`, `player_contracts`, `team_payroll`, `teams`, `team_games` (incl. `season_type` so Ask standings can filter Regular Season), `games`, `team_game_results`, `standings` (team×season PK + `conf_games_back`; Ask/MCP `get_standings` falls back to Regular Season `team_games` W–L ranks when official rows are missing), `games_schedule`, `game_predictions`, `player_injuries`, `game_odds`, `play_by_play` (no joins), `reddit_posts`, `reddit_comments`.
+Materialization is a real decision here — see `services/dbt/AGENTS.md` for the policy. Two things to know:
 
-## API serving (`services/api`)
+- `int_play_by_play_events` is **incremental**. Its regex parsing costs ~2 minutes to rebuild in full, so changing its SQL needs `--full-refresh`.
+- `fct_play_by_play` carries both the raw actions and the typed event detail. It absorbed a former sibling mart; dbt does not drop removed models, so an existing database needs a one-off `DROP TABLE gold.fct_play_by_play_events`.
 
-The split is simple: **every REST endpoint reads `gold` directly over SQL, and only `POST /api/v1/query` goes through Cube.** The browser never calls Cube. Nothing on a page (games, players, teams, standings, schedule, game flow) depends on Cube being up — a Cube outage takes out Ask and MCP alone, and there is deliberately no gold SQL fallback for those.
+## Serving
 
-Served from gold with SQL:
+**REST reads gold directly over SQL.** Games, players, teams, standings, schedule, and game flow all work whether or not Cube is up.
 
-| Endpoint                                               | Gold source                                                                                                                       |
-| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/games`                                    | `fct_team_game_results` + `dim_teams` (Final only)                                                                                |
-| `GET /api/v1/games/collapses`                          | `fct_game_flow` (largest lead blown, wire-to-wire excluded)                                                                       |
-| `GET /api/v1/games/{id}/flow`                          | `fct_game_flow` + `fct_team_game_results` + `dim_teams`                                                                           |
-| `GET /api/v1/games/{id}/play-by-play`                  | `fct_play_by_play_scoring` (chart series)                                                                                         |
-| `GET /api/v1/schedule`                                 | `fct_games_schedule` + `dim_teams` (not Final, date ≥ today)                                                                      |
-| `GET /api/v1/seasons`                                  | `fct_team_game_results` / `fct_player_game_logs` / `fct_games_schedule`                                                           |
-| `GET /api/v1/players`, `/{id}`                         | `dim_players` + `dim_teams`                                                                                                       |
-| `GET /api/v1/players/{id}/game-log`, `/back-to-backs`  | `fct_player_game_logs`                                                                                                            |
-| `GET /api/v1/players/{id}/season-stats`                | `fct_player_season_stats`                                                                                                         |
-| `GET /api/v1/players/compare`, `/compare/head-to-head` | `dim_players` + `fct_player_game_logs`                                                                                            |
-| `GET /api/v1/teams`, `/{id}`                           | `dim_teams` (+ `fct_standings`, `fct_team_game_results`)                                                                          |
-| `GET /api/v1/teams/{id}/games`, `/record`              | `fct_team_game_results` + `fct_standings`                                                                                         |
-| `GET /api/v1/standings`                                | `fct_standings` + `dim_teams`, deriving rank / GB from `fct_team_game_results` when official rows are missing                     |
-| `GET /api/v1/status`                                   | gold coverage counts plus `source.scrape_pipeline` and `source.*` `scraped_at` watermarks — the only endpoint that reads `source` |
+`GET /api/v1/status` is the only endpoint that reads `source` — it reports scrape watermarks and coverage counts.
 
-Served through Cube:
+**Only `POST /api/v1/query` goes through Cube**, and only Ask and MCP depend on it. There is no gold-SQL fallback for those, by design.
 
-| Endpoint             | Path                                                                                                                                                                  |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/v1/query` | `CubeAnalytics` → `/cubejs-api/v1/load`; backs the `/ask` page. Default backend is `rules`; `NLP_BACKEND=llm` is opt-in and still only issues Cube queries, never SQL |
+Contracts and payroll have no route of their own: they arrive as columns on `dim_players` and `dim_teams`. Injuries, odds, and Reddit have gold marts but no REST route — they are reachable through Ask and MCP only.
 
-Contracts and payroll have no REST endpoint of their own: they reach the app as `current_season_salary` on `dim_players` and the payroll / cap-flag columns on `dim_teams`, so player and team pages pick them up from the queries above. Injuries, odds, and Reddit are Cube-only today — they have gold marts but no REST route, so they are reachable through Ask and MCP and not through a page. MCP never touches gold SQL; it is Cube-only by design.
+## Gotchas
 
-## ML / Cube / migrate
+`score_margin` on gold games is the **unsigned winner margin**; team-game REST signs it for the requested team.
 
-Elo after gold Finals + schedule: [ml.md](ml.md). No public predictions API.
+Salary and payroll are Basketball-Reference **remaining-year snapshots**, not a paid ledger.
 
-Cube: local Tilt/`make up` and the production Compose stack start Cube (depends on postgres/migrate). Ask + MCP query `/cubejs-api/v1/load` and `/meta` with `CUBEJS_API_SECRET`; production keeps Cube internal and does not publish port 4000. REST list/detail stays on gold. `GET /api/v1/schedule` is the Courtline upcoming slate (`fct_games_schedule`, not Final, date ≥ today). `/api/v1/games` stays Final-only `fct_team_game_results`. Cube down → Ask/MCP fail clearly; do not add a gold SQL fallback. Cube SQL API and pre-aggregates are not current.
-
-`make db-migrate` — Alembic `upgrade head`. `db/init.sql` only creates empty schemas. Wipe old `raw` / `ops` / `analytics` volumes with `docker compose down -v` (deletes data).
+`fct_standings` is a season-to-date upsert. Joining it onto a past game does not give you the standings as of that night.

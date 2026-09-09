@@ -96,6 +96,7 @@ def test_scrape_injuries_upserts_and_deletes_stale(monkeypatch: pytest.MonkeyPat
     count = scrape_injuries(fetch_html=lambda url: _html("injuries.html"))
     assert count == 2
     assert captured[0][0]["scraped_at"] is not None
+    assert captured[1][0]["snapshot_date"] == captured[0][0]["scraped_at"].date()
     session.execute.assert_called()
     session.commit.assert_called()
 

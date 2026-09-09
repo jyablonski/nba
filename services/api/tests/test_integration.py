@@ -246,3 +246,214 @@ def test_salary_payroll_and_standings(integration_client) -> None:
     assert body["current_season_payroll"] == 51_000_000
     assert body["standing"]["conference_rank"] == 1
     assert body["standing"]["conference"] == "West"
+
+
+@pytest.mark.integration
+def test_admin_health_against_real_schema(integration_client, postgres_engine) -> None:
+    """Exercise the admin SQL for real.
+
+    DISTINCT ON, the runs-since-success window, and a ten-table UNION ALL of
+    watermarks are the kind of SQL that passes review and fails on Postgres.
+    """
+    from sqlalchemy import text
+
+    from config import Settings, get_settings
+
+    token = "integration-admin-token"
+    integration_client.app.dependency_overrides[get_settings] = lambda: Settings(
+        admin_api_token=token
+    )
+
+    with postgres_engine.begin() as conn:
+        conn.execute(text("UPDATE source.scrape_pipeline SET enabled = true WHERE id = 1"))
+        run_id = conn.execute(
+            text(
+                """
+                INSERT INTO source.pipeline_runs
+                    (triggered_by, status, scrape_action, scrape_exit, dbt_exit, started_at,
+                     finished_at)
+                VALUES ('cron', 'success', 'daily+reddit', 0, 0, now() - interval '1 hour', now())
+                RETURNING run_id
+                """
+            )
+        ).scalar_one()
+        # injuries fails twice then recovers; odds is skipped and has never
+        # succeeded, which is the case runs_since_success has to get right.
+        conn.execute(
+            text(
+                """
+                INSERT INTO source.scrape_source_runs
+                    (run_id, source_name, status, expectation, rows_written, attempt, started_at)
+                VALUES
+                    (:run_id, 'standings', 'success', 'not_checked', 30, 1,
+                     now() - interval '90 minutes'),
+                    (:run_id, 'injuries', 'failed', 'not_checked', NULL, 1,
+                     now() - interval '80 minutes'),
+                    (:run_id, 'injuries', 'failed', 'not_checked', NULL, 2,
+                     now() - interval '70 minutes'),
+                    (:run_id, 'odds', 'skipped', 'not_checked', NULL, 1,
+                     now() - interval '60 minutes')
+                """
+            ),
+            {"run_id": run_id},
+        )
+
+    response = integration_client.get(
+        "/api/v1/admin/health", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    body = response.json()["data"]
+
+    assert body["pipeline"]["enabled"] is True
+    assert body["pipeline"]["action_today"] in {
+        "daily",
+        "season",
+        "noop",
+        "skipped_offseason",
+        "skipped_mode_none",
+    }
+
+    sources = {row["source_name"]: row for row in body["sources"]}
+    assert sources["standings"]["status"] == "success"
+    assert sources["standings"]["runs_since_success"] == 0
+    # Latest attempt wins, and both failures count against the streak.
+    assert sources["injuries"]["status"] == "failed"
+    assert sources["injuries"]["attempt"] == 2
+    assert sources["injuries"]["runs_since_success"] == 2
+    # A skipped source is deliberate, not a failure: it must NOT accrue a
+    # streak, or every NBA source looks broken all off-season.
+    assert sources["odds"]["status"] == "skipped"
+    assert sources["odds"]["last_success_at"] is None
+    assert sources["odds"]["runs_since_success"] == 0
+
+    tables = {row["table_name"] for row in body["freshness"]}
+    assert {"games", "play_by_play", "player_injuries", "reddit_posts"} <= tables
+
+    assert body["dbt"]["last_dbt_exit"] == 0
+    assert body["dbt"]["last_dbt_run_id"] == run_id
+    # Catalog-driven, so this works whether or not dbt has ever run here.
+    assert isinstance(body["dbt"]["gold_tables"], list)
+    assert body["dbt"]["gold_table_count"] == len(body["dbt"]["gold_tables"])
+    assert isinstance(body["ml"], list)
+    assert any(run["run_id"] == run_id for run in body["recent_runs"])
+
+
+@pytest.mark.integration
+def test_admin_health_is_unauthorized_without_the_token(integration_client) -> None:
+    from config import Settings, get_settings
+
+    integration_client.app.dependency_overrides[get_settings] = lambda: Settings(
+        admin_api_token="integration-admin-token"
+    )
+    assert integration_client.get("/api/v1/admin/health").status_code == 401
+
+
+@pytest.mark.integration
+def test_admin_jobs_queue_allows_one_pending_job(integration_client, postgres_engine) -> None:
+    """The single-pending guard is a database index, not an application check.
+
+    A read-then-write check would let two rapid clicks both pass; the partial
+    unique index makes the second insert fail regardless of timing.
+    """
+    from sqlalchemy import text
+
+    from config import Settings, get_settings
+
+    token = "integration-admin-token"
+    integration_client.app.dependency_overrides[get_settings] = lambda: Settings(
+        admin_api_token=token
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with postgres_engine.begin() as conn:
+        conn.execute(text("DELETE FROM source.admin_jobs"))
+
+    first = integration_client.post(
+        "/api/v1/admin/jobs",
+        json={"job_type": "dbt", "requested_by": "jyablonski"},
+        headers=headers,
+    )
+    assert first.status_code == 202
+    job_id = first.json()["data"]["job_id"]
+
+    second = integration_client.post(
+        "/api/v1/admin/jobs",
+        json={"job_type": "refresh", "requested_by": "jyablonski"},
+        headers=headers,
+    )
+    assert second.status_code == 409
+
+    # Once the first job finishes, the queue reopens.
+    with postgres_engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE source.admin_jobs SET status = 'succeeded', exit_code = 0, "
+                "finished_at = now() WHERE job_id = :job_id"
+            ),
+            {"job_id": job_id},
+        )
+
+    third = integration_client.post(
+        "/api/v1/admin/jobs",
+        json={"job_type": "refresh", "requested_by": "jyablonski"},
+        headers=headers,
+    )
+    assert third.status_code == 202
+
+    listed = integration_client.get("/api/v1/admin/jobs", headers=headers)
+    assert listed.status_code == 200
+    assert [job["job_type"] for job in listed.json()] == ["refresh", "dbt"]
+
+    health = integration_client.get("/api/v1/admin/health", headers=headers)
+    assert health.status_code == 200
+    assert len(health.json()["data"]["jobs"]) == 2
+
+    with postgres_engine.begin() as conn:
+        conn.execute(text("DELETE FROM source.admin_jobs"))
+
+
+@pytest.mark.integration
+def test_admin_job_claim_is_atomic(postgres_engine) -> None:
+    """FOR UPDATE SKIP LOCKED: two runners must never claim the same row."""
+    from sqlalchemy import text
+
+    claim = text(
+        """
+        UPDATE source.admin_jobs
+        SET status = 'running', started_at = now()
+        WHERE job_id = (
+            SELECT jobs.job_id FROM source.admin_jobs AS jobs
+            WHERE jobs.status = 'queued'
+            ORDER BY jobs.requested_at
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1
+        )
+        RETURNING job_id
+        """
+    )
+    with postgres_engine.begin() as conn:
+        conn.execute(text("DELETE FROM source.admin_jobs"))
+        conn.execute(
+            text(
+                "INSERT INTO source.admin_jobs (job_type, requested_by) "
+                "VALUES ('dbt', 'jyablonski')"
+            )
+        )
+
+    first_conn = postgres_engine.connect()
+    second_conn = postgres_engine.connect()
+    try:
+        first_tx = first_conn.begin()
+        claimed = first_conn.execute(claim).scalar_one_or_none()
+        assert claimed is not None
+
+        # Second runner, while the first transaction still holds the row.
+        second_tx = second_conn.begin()
+        assert second_conn.execute(claim).scalar_one_or_none() is None
+        second_tx.rollback()
+        first_tx.commit()
+    finally:
+        first_conn.close()
+        second_conn.close()
+        with postgres_engine.begin() as conn:
+            conn.execute(text("DELETE FROM source.admin_jobs"))

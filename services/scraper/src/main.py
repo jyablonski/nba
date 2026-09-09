@@ -10,6 +10,7 @@ from notify import SyncAlert
 from pipeline import (
     load_config,
     mark_scrape_success,
+    record_dbt_only_run,
     run_pipeline_scrape,
     set_enabled,
     update_run_dbt_exit,
@@ -404,6 +405,15 @@ def pipeline_mark_dbt_cmd(run_id: int, dbt_exit: int, detail: str | None) -> Non
     """Record dbt exit code onto an existing source.pipeline_runs row."""
     update_run_dbt_exit(run_id, dbt_exit, detail=detail)
     click.echo(f"Updated run_id={run_id} dbt_exit={dbt_exit}")
+
+
+@pipeline_group.command("record-dbt")
+@click.option("--dbt-exit", required=True, type=int)
+@click.option("--detail", default=None)
+def pipeline_record_dbt_cmd(dbt_exit: int, detail: str | None) -> None:
+    """Log a standalone dbt run (no scrape) to source.pipeline_runs."""
+    run_id = record_dbt_only_run(dbt_exit, detail=detail)
+    click.echo(f"Recorded run_id={run_id} dbt_exit={dbt_exit}")
 
 
 def main() -> None:

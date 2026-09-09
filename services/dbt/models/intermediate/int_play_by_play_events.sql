@@ -1,10 +1,37 @@
+{{
+    config(
+        materialized='incremental',
+        unique_key='game_id',
+        incremental_strategy='delete+insert',
+        on_schema_change='sync_all_columns',
+        indexes=[{'columns': ['game_id']}],
+    )
+}}
+
 -- Basketball-Reference leaves action_type / sub_type null on every row, so the
 -- event vocabulary only exists in the free-text description. This model turns
 -- that text into typed columns (shots with distance, typed fouls and turnovers,
 -- rebounds, free throws, substitutions, challenges) so downstream marts can
--- aggregate events without re-deriving the regexes.
+-- aggregate events without re-deriving the regexes. It carries the raw action
+-- columns through as well, so fct_play_by_play can be a single wide mart
+-- instead of a thin sibling pair over the same 632k-row grain.
+--
+-- Incremental because this is by far the most expensive model in the project:
+-- ~30 regex operations per row over the full play_by_play history. Rebuilding
+-- every row nightly to add one evening's games cost ~132s; scoping it to newly
+-- scraped games makes the daily pass proportional to the slate. Logic changes
+-- here need `dbt build --select int_play_by_play_events+ --full-refresh`.
 with actions as (
     select * from {{ ref('stg_play_by_play') }}
+
+    {% if is_incremental() %}
+        -- A re-scraped game rewrites every one of its rows with a fresh
+        -- scraped_at, so this picks up corrections as well as new games, and
+        -- delete+insert on game_id replaces the old rows wholesale.
+        where scraped_at > (
+            select coalesce(max(scraped_at), '-infinity'::timestamp) from {{ this }}
+        )
+    {% endif %}
 ),
 
 matched as (
@@ -18,7 +45,12 @@ matched as (
         actions.team_id,
         actions.player_id,
         actions.secondary_player_id,
+        actions.score_home,
+        actions.score_away,
+        actions.action_type,
+        actions.sub_type,
         actions.description,
+        actions.scraped_at,
         (regexp_match(actions.description, '(makes|misses) ([23])-pt'))[1] as shot_result,
         (regexp_match(actions.description, '(makes|misses) ([23])-pt'))[2] as shot_points,
         (regexp_match(
@@ -64,7 +96,12 @@ select
     matched.team_id,
     matched.player_id,
     matched.secondary_player_id,
+    matched.score_home,
+    matched.score_away,
+    matched.action_type,
+    matched.sub_type,
     matched.description,
+    matched.scraped_at,
     matched.shot_type,
     matched.turnover_kind,
     matched.violation_kind,

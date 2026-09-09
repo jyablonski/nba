@@ -1,3 +1,13 @@
+{{
+    config(
+        materialized='table',
+        indexes=[{'columns': ['game_id']}],
+    )
+}}
+
+-- Materialized rather than a view: four window functions over the full
+-- play_by_play history, read by both fct_play_by_play_scoring and
+-- fct_game_flow. As a view the entire scan and sort ran once per consumer.
 with actions as (
     select * from {{ ref('stg_play_by_play') }}
 ),

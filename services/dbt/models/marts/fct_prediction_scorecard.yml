@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: fct_prediction_scorecard
+    description: >
+      Per-season out-of-sample prediction metrics. The latest prediction on
+      or before the scheduled game date is scored only against Final games;
+      schedule data has date, not tip-time, precision. All model versions
+      remain visible here even when fct_game_predictions surfaces the champion only.
+    columns:
+      - name: season
+        data_tests:
+          - not_null
+      - name: model_version
+        data_tests:
+          - not_null
+      - name: n
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 1
+      - name: logloss
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 10
+                strictly: true
+      - name: brier
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+      - name: calibration_error
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              arguments:
+                min_value: 0
+                max_value: 1
+                row_condition: "calibration_error is not null"
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["season", "model_name", "model_version"]

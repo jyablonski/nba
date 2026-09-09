@@ -1,5 +1,7 @@
-# Frontend + Python unit tests, pre-commit, both e2e suites, and optional OCI deploy.
-# Does not run Testcontainers (make test-integration).
+# Frontend + Python unit tests, pre-commit, every e2e suite, and optional OCI deploy.
+# Integration suites (Testcontainers) and the admin job runner e2e run here too:
+# they are the only jobs that exercise Alembic against a real database and the
+# gold fixture schema, which is where breakage has historically gone unnoticed.
 # images + deploy run only when ENABLE_OCI_DEPLOY=true and not on pull_request.
 # images builds native arm64 on GitHub's free-for-public-repos ARM runner and
 # pushes all repo-built production/job images to GHCR; the VM only pulls, so no Next.js build ever runs on the 12GB box.
@@ -81,12 +83,57 @@ jobs:
           cache-dependency-glob: services/*/uv.lock
       - run: make test-${{ matrix.service }}
 
+  integration:
+    name: Python integration (Testcontainers)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: "3.14"
+          enable-cache: true
+          cache-dependency-glob: services/*/uv.lock
+      # Applies every Alembic revision to a throwaway Postgres and runs the
+      # API / scraper / MCP suites against a real schema. The unit matrix runs
+      # `-m "not integration"`, so without this nothing ever checks that the
+      # revision chain applies or that the gold fixture matches the queries.
+      - run: make test-integration
+
+  admin-jobs-e2e:
+    name: Admin job runner e2e
+    runs-on: ubuntu-latest
+    # Its own Compose project, like the dbt e2e. The teardown below is
+    # `down -v`, and running that against the default `nba` project would
+    # delete a developer's warehouse if this recipe were ever copied locally.
+    env:
+      COMPOSE_PROJECT_NAME: nba-admin-e2e
+      # Everything here goes through `compose exec`, so the published port is
+      # only a collision risk. Off the default so the job does not depend on
+      # 5432 being free on the runner.
+      POSTGRES_PORT: "55432"
+    steps:
+      - uses: actions/checkout@v7
+      # The runner is shell + SQL against a live database, so this needs a real
+      # Postgres with the source schema applied — not Testcontainers.
+      - name: Start Postgres and apply migrations
+        run: |
+          cp .env.example .env
+          docker compose up -d postgres --wait
+          make db-migrate
+      # Job targets fail fast on the IMAGE_PREFIX guard, which is fine: the
+      # assertions are about claiming, locking, reaping and recording, not
+      # about the work itself succeeding.
+      - run: make test-admin-jobs
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
   # OCI Ampere A1 is aarch64, so this must be an arm64 runner. Do not swap to
   # ubuntu-latest and qemu-emulate — the Next.js build takes ~10x longer.
   images:
     name: Build and push images
     if: vars.ENABLE_OCI_DEPLOY == 'true' && github.event_name != 'pull_request'
-    needs: [quality, frontend, frontend-e2e, dbt-e2e, python]
+    needs: [quality, frontend, frontend-e2e, dbt-e2e, python, integration, admin-jobs-e2e]
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read

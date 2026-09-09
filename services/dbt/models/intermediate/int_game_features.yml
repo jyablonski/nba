@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: int_game_features
+    description: >
+      Regular Season pregame features. Every feature is built from completed
+      games strictly earlier than the scheduled game's date; scheduled games
+      are retained with null cold-start features.
+    columns:
+      - name: game_id
+        data_tests:
+          - unique
+          - not_null
+      - name: season_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Regular Season"]
+      - name: game_date
+        data_tests:
+          - not_null
+      - name: point_diff_diff
+        description: Home minus away season-to-date point differential per game.
+      - name: home_rest_days
+        description: Days since the home team's previous completed game, uncapped.
+      - name: away_rest_days
+        description: Days since the away team's previous completed game, uncapped.
+      - name: min_rest_days
+        description: The lower of the two teams' capped rest-day values; captures shared fatigue.
+      - name: home_travel_miles
+        description: Haversine miles from the home team's previous venue to its current venue.
+      - name: away_travel_miles
+        description: Haversine miles from the away team's previous venue to the current venue.
+      - name: total_travel_miles
+        description: Combined previous-venue-to-current-venue travel for both teams.
+      - name: total_timezone_crossings
+        description: Combined approximate timezone crossings for both teams.
+      - name: h2h_games_before
+        description: Prior meetings in the previous 365 days, never including the current game.
+      - name: home_won
+        description: Outcome for completed games; null for upcoming games.

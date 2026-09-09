@@ -1,7 +1,7 @@
 cubes:
   - name: play_by_play
     sql_table: gold.fct_play_by_play
-    description: Season-scoped Basketball-Reference actions (one row per game_id + action_number + action_id). No joins — do not cartesian.
+    description: Season-scoped Basketball-Reference actions (one row per game_id + action_number + action_id), with the typed event detail parsed from the action text. No joins — do not cartesian.
 
     dimensions:
       - name: id
@@ -60,6 +60,64 @@ cubes:
 
       - name: description
         sql: description
+        type: string
+
+      # Parsed from the free-text description; action_type / sub_type are null
+      # on every Basketball-Reference row, so these are the usable vocabulary.
+      - name: event_type
+        sql: event_type
+        type: string
+
+      - name: shot_type
+        sql: shot_type
+        type: string
+
+      - name: shot_value
+        sql: shot_value
+        type: number
+
+      - name: shot_distance_ft
+        sql: shot_distance_ft
+        type: number
+
+      - name: is_assisted
+        sql: is_assisted
+        type: boolean
+
+      - name: is_blocked
+        sql: is_blocked
+        type: boolean
+
+      - name: is_stolen
+        sql: is_stolen
+        type: boolean
+
+      - name: rebound_side
+        sql: rebound_side
+        type: string
+
+      - name: is_team_rebound
+        sql: is_team_rebound
+        type: boolean
+
+      - name: free_throw_kind
+        sql: free_throw_kind
+        type: string
+
+      - name: turnover_kind
+        sql: turnover_kind
+        type: string
+
+      - name: foul_kind
+        sql: foul_kind
+        type: string
+
+      - name: violation_kind
+        sql: violation_kind
+        type: string
+
+      - name: secondary_player_id
+        sql: secondary_player_id
         type: string
 
     measures:

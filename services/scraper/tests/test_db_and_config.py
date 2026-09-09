@@ -19,6 +19,7 @@ from models import (
     Player,
     PlayerContract,
     PlayerInjury,
+    PlayerInjuryHistory,
     RedditComment,
     RedditPost,
     Standing,
@@ -179,6 +180,8 @@ def test_models_have_source_schema() -> None:
     assert RedditComment.__table__.name == "reddit_comments"
     assert PlayerInjury.__table__.schema == "source"
     assert PlayerInjury.__table__.name == "player_injuries"
+    assert PlayerInjuryHistory.__table__.schema == "source"
+    assert PlayerInjuryHistory.__table__.name == "player_injuries_history"
     assert GameOdds.__table__.schema == "source"
     assert GameOdds.__table__.name == "game_odds"
     assert PlayByPlay.__table__.schema == "source"

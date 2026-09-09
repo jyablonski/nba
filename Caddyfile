@@ -9,6 +9,14 @@
 baseline.jyablonski.dev {
 	encode gzip zstd
 
+	# MUST precede /api/* — NextAuth serves the GitHub OAuth routes from the
+	# Next.js app at /api/auth/*, so sending them to FastAPI would 404 the
+	# callback and break admin sign-in in production. The API has no /api/auth
+	# routes, so nothing is shadowed on that side.
+	handle /api/auth/* {
+		reverse_proxy frontend:3000
+	}
+
 	handle /api/* {
 		reverse_proxy api:8000
 	}

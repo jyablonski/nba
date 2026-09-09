@@ -19,16 +19,18 @@ not CREATE TABLES.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Literal
 
-from notify import SyncAlert, SyncFailedError
+from notify import StepOutcome, SyncAlert, SyncFailedError
 from sqlalchemy.orm import Session
 
-from config import missing_reddit_env_names
+from config import missing_odds_env_names, missing_reddit_env_names
 from db import get_session
 from queries.pipeline_runs import (
+    INSERT_DBT_ONLY_RUN,
     INSERT_PIPELINE_RUN,
     UPDATE_PIPELINE_RUN,
     UPDATE_PIPELINE_RUN_DBT_EXIT,
@@ -38,6 +40,7 @@ from queries.scrape_pipeline import (
     UPDATE_PIPELINE_ENABLED,
     UPDATE_PIPELINE_SUCCESS,
 )
+from queries.scrape_source_runs import INSERT_SOURCE_RUN
 from scrapers import current_season
 from scrapers.contracts import scrape_contracts
 from scrapers.games import scrape_games, scrape_todays_games
@@ -210,7 +213,7 @@ def execute_scrape(
     """Run the scrape implied by ``action``. Returns (rows_or_games, detail)."""
     collector = alert if alert is not None else SyncAlert(action)
     if action == "daily":
-        games = collector.try_run("todays_games", scrape_todays_games)
+        games = collector.try_run("todays_games", scrape_todays_games, rows=len)
         daily_season = current_season()
         n_standings = collector.try_run(
             "standings",
@@ -218,8 +221,16 @@ def execute_scrape(
             season=daily_season,
         )
         n_injuries = collector.try_run("injuries", scrape_injuries)
-        n_odds = collector.try_run("odds", scrape_odds)
-        contracts = collector.try_run("contracts", scrape_contracts)
+        # scrape_odds returns 0 when unkeyed, which would otherwise record a
+        # healthy-looking success and hide "odds have not run for a week".
+        if missing_odds_env_names():
+            collector.record_skipped("odds", reason="ODDS_API_KEY unset; no HTTP attempted")
+            n_odds = 0
+        else:
+            n_odds = collector.try_run("odds", scrape_odds)
+        contracts = collector.try_run(
+            "contracts", scrape_contracts, rows=lambda result: sum(result)
+        )
         standings_count = 0 if n_standings is None else n_standings
         injuries_count = 0 if n_injuries is None else n_injuries
         odds_count = 0 if n_odds is None else n_odds
@@ -233,6 +244,11 @@ def execute_scrape(
             f"odds: {odds_count}; contracts: {n_contracts}; payroll: {n_payroll}."
         )
         if not games:
+            # Record the game-dependent steps rather than omitting them: an
+            # absent row is indistinguishable from a step that silently stopped
+            # existing, and off-days are the common case.
+            for game_step in ("player_game_logs", "play_by_play"):
+                collector.record_skipped(game_step, reason="No completed games today")
             collector.raise_if_failed()
             return (
                 snapshot_count,
@@ -287,6 +303,7 @@ def execute_reddit(alert: SyncAlert | None = None) -> int | None:
     collector = alert if alert is not None else SyncAlert("reddit")
     if missing_reddit_env_names():
         logger.info("REDDIT_* unset; skipping reddit scrape")
+        collector.record_skipped("reddit", reason="REDDIT_* unset; no HTTP attempted")
         return 0
     return collector.try_run(
         "reddit",
@@ -337,6 +354,37 @@ def mark_scrape_success(session: Session, *, scrape_date: date | None = None) ->
         UPDATE_PIPELINE_SUCCESS,
         {"scrape_date": scrape_date or date.today()},
     )
+
+
+def record_source_runs(
+    session: Session,
+    run_id: int,
+    steps: Sequence[StepOutcome],
+    *,
+    attempt: int = 1,
+) -> None:
+    """Persist one row per source for this run.
+
+    Best-effort: per-source history must never be the reason a scrape that
+    otherwise succeeded gets reported as failed.
+    """
+    for step in steps:
+        session.execute(
+            INSERT_SOURCE_RUN,
+            {
+                "run_id": run_id,
+                "source_name": step.step,
+                "status": step.status,
+                "expectation": "not_checked",
+                "rows_written": step.rows,
+                "season": step.season,
+                "attempt": attempt,
+                "error_type": step.error_type,
+                "error_detail": step.error_detail,
+                "started_at": step.started_at,
+                "finished_at": step.finished_at,
+            },
+        )
 
 
 def run_pipeline_scrape(
@@ -420,6 +468,13 @@ def run_pipeline_scrape(
                 reddit_ran=reddit_ran,
                 reddit_exit=reddit_exit,
             )
+        # Separate session: per-source history is observability, and must not
+        # be able to roll back or fail the run bookkeeping above.
+        try:
+            with get_session() as session:
+                record_source_runs(session, run_id, alert.steps)
+        except Exception:
+            logger.exception("Failed to record per-source run history for run_id=%s", run_id)
     finally:
         if status == "failed":
             alert.notify()
@@ -433,6 +488,25 @@ def run_pipeline_scrape(
         "reddit_ran": reddit_ran,
         "reddit_exit": reddit_exit,
     }
+
+
+def record_dbt_only_run(dbt_exit: int, *, detail: str | None = None) -> int:
+    """Log a dbt run that had no scrape attached, returning the new run_id.
+
+    `make dbt` and `make prod-dbt` run dbt directly rather than through
+    refresh-daily, so there is no run row to mark. Recording one keeps the
+    admin view honest: a fixed failure clears on the next successful build
+    instead of showing the last refresh's exit code indefinitely.
+    """
+    with get_session() as session:
+        run_id = int(
+            session.execute(
+                INSERT_DBT_ONLY_RUN,
+                {"triggered_by": "dbt", "dbt_exit": dbt_exit, "detail": detail},
+            ).scalar_one()
+        )
+        session.commit()
+    return run_id
 
 
 def update_run_dbt_exit(run_id: int, dbt_exit: int, *, detail: str | None = None) -> None:

@@ -19,6 +19,8 @@ from pipeline import (
     in_season_window,
     load_config,
     mark_scrape_success,
+    record_dbt_only_run,
+    record_source_runs,
     run_pipeline_scrape,
     set_enabled,
     should_run_reddit,
@@ -27,7 +29,9 @@ from pipeline import (
 )
 
 from queries import (
+    INSERT_DBT_ONLY_RUN,
     INSERT_PIPELINE_RUN,
+    INSERT_SOURCE_RUN,
     SELECT_PIPELINE_CONFIG,
     UPDATE_PIPELINE_ENABLED,
     UPDATE_PIPELINE_RUN,
@@ -73,6 +77,19 @@ def _row(**overrides) -> SimpleNamespace:
     )
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
+
+
+class _session_ctx:
+    """Stand-in for get_session()'s context manager."""
+
+    def __init__(self, session):
+        self.session = session
+
+    def __enter__(self):
+        return self.session
+
+    def __exit__(self, *exc):
+        return False
 
 
 @pytest.mark.unit
@@ -260,6 +277,118 @@ def test_execute_scrape_collects_multiple_failures(monkeypatch: pytest.MonkeyPat
         "player_game_logs",
         "standings",
     ]
+
+
+@pytest.mark.unit
+def test_daily_records_skipped_sources_rather_than_omitting_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Off-day + unkeyed odds must leave rows, not gaps.
+
+    An absent row reads the same as a source that quietly stopped existing,
+    which is the failure this table is meant to make visible.
+    """
+    monkeypatch.setattr("pipeline.missing_odds_env_names", lambda: ["ODDS_API_KEY"])
+    monkeypatch.setattr("pipeline.scrape_todays_games", lambda: [])
+    monkeypatch.setattr("pipeline.scrape_standings", lambda season: 30)
+    monkeypatch.setattr("pipeline.scrape_injuries", lambda: 12)
+    monkeypatch.setattr("pipeline.scrape_contracts", lambda: (500, 30))
+
+    alert = SyncAlert("pipeline")
+    execute_scrape("daily", _config(), alert=alert)
+
+    by_step = {step.step: step for step in alert.steps}
+    assert by_step["odds"].status == "skipped"
+    assert "ODDS_API_KEY" in (by_step["odds"].error_detail or "")
+    # Present-but-skipped, not missing entirely.
+    assert by_step["player_game_logs"].status == "skipped"
+    assert by_step["play_by_play"].status == "skipped"
+    assert "No completed games today" in (by_step["play_by_play"].error_detail or "")
+    # Explicit rows= keeps contracts from reporting a games count or a bare tuple.
+    assert by_step["contracts"].rows == 530
+    assert by_step["todays_games"].rows == 0
+    assert alert.failures == []
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(("dbt_exit", "expected"), [(0, 7), (1, 7)])
+def test_record_dbt_only_run_logs_a_standalone_build(
+    monkeypatch: pytest.MonkeyPatch, dbt_exit: int, expected: int
+) -> None:
+    """`make dbt` has no run row to mark, so it opens its own.
+
+    Without this a fixed dbt failure never clears in the admin view: the last
+    refresh-daily exit code would be reported indefinitely.
+    """
+    session = MagicMock()
+    session.execute.return_value.scalar_one.return_value = expected
+    monkeypatch.setattr("pipeline.get_session", lambda: _session_ctx(session))
+
+    assert record_dbt_only_run(dbt_exit, detail="make dbt") == expected
+    session.execute.assert_called_once_with(
+        INSERT_DBT_ONLY_RUN,
+        {"triggered_by": "dbt", "dbt_exit": dbt_exit, "detail": "make dbt"},
+    )
+    session.commit.assert_called_once()
+
+
+@pytest.mark.unit
+def test_record_source_runs_writes_one_row_per_step() -> None:
+    from datetime import datetime
+
+    from notify import StepOutcome
+
+    started = datetime(2026, 9, 9, 8, 15, 0)
+    finished = datetime(2026, 9, 9, 8, 15, 30)
+    steps = [
+        StepOutcome(
+            step="standings",
+            status="success",
+            started_at=started,
+            finished_at=finished,
+            rows=30,
+            season="2025-26",
+        ),
+        StepOutcome(
+            step="odds",
+            status="failed",
+            started_at=started,
+            finished_at=finished,
+            error_type="HTTPError",
+            error_detail="429",
+        ),
+    ]
+    session = MagicMock()
+    record_source_runs(session, 42, steps)
+
+    assert session.execute.call_count == 2
+    first = session.execute.call_args_list[0]
+    assert first.args[0] is INSERT_SOURCE_RUN
+    assert first.args[1] == {
+        "run_id": 42,
+        "source_name": "standings",
+        "status": "success",
+        "expectation": "not_checked",
+        "rows_written": 30,
+        "season": "2025-26",
+        "attempt": 1,
+        "error_type": None,
+        "error_detail": None,
+        "started_at": started,
+        "finished_at": finished,
+    }
+    second = session.execute.call_args_list[1].args[1]
+    assert second["source_name"] == "odds"
+    assert second["status"] == "failed"
+    assert second["error_type"] == "HTTPError"
+    assert second["rows_written"] is None
+
+
+@pytest.mark.unit
+def test_record_source_runs_no_steps_is_a_noop() -> None:
+    session = MagicMock()
+    record_source_runs(session, 42, [])
+    session.execute.assert_not_called()
 
 
 @pytest.mark.unit

@@ -8,7 +8,7 @@ Named tools: search_players, get_player_game_log, get_player_back_to_backs, get_
 
 Salary and payroll numbers are Basketball-Reference remaining-year snapshots, not a historical paid-salary ledger. When a season is passed, player_contracts / team_payroll are remaining-year rows for that season — still not a paid ledger.
 
-get_game_predictions returns Elo pregame model_wp with as_of and model_version. It is not a betting line and not live win probability.
+get_game_predictions returns the champion pregame model_wp and derived away_wp with as_of and model_version. It is not a betting line and not live win probability.
 
 get_game_odds is a current market snapshot, not a book. get_player_injuries is a current BRef snapshot. get_play_by_play is season-scoped ingest with a row limit.
 

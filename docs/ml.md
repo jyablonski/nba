@@ -1,40 +1,42 @@
-# Pregame Elo (current)
+# ML: pregame Elo
 
-How to run the ratings job today. Pipeline hook and ingest caveats are also in [data.md](data.md) and [operations.md](operations.md). Backlog (logit, Courtline badge, `/ask` picks) stays in [plans/ml-win-predictions.md](plans/ml-win-predictions.md) — do not treat that plan’s older “not built” phases as current.
+Elo v0 is a one-shot job on Compose profile `tools`, not an always-on service and not a betting product.
 
-## Purpose
+The successor model is planned in `docs/plans/ml-v2.md`; nothing there is built.
 
-Elo v0 is a one-shot **3.14** job on Compose profile `tools`. It is not an always-on service and not a betting product.
+## What it does
 
-## What it does now
+Reads Regular Season **Final** rows from `gold.fct_team_game_results` and walk-forwards ratings: start 1500, home advantage +100, K=20, regress 25% toward 1500 at each season boundary.
 
-Reads Regular Season **Final** rows from `gold.fct_team_game_results` (no playoffs). Walk-forwards ratings: start 1500, home-court +100 Elo, K=20, 25% regress toward 1500 at season change. Scores upcoming `game_id`s from `gold.fct_games_schedule` where status is not Final.
+Scores upcoming games from `gold.fct_games_schedule` and writes `source.game_predictions`:
 
-Writes `source.game_predictions` (`model_name=elo`, `model_version=elo-v0`). Grain is `game_id` + `as_of` + `model_version`. `model_wp` is home win probability. `market_wp` is copied from matched h2h odds when present (calibrator, not the label).
+- `model_name=elo`, `model_version=elo-v0`
+- grain is `game_id` + `as_of` + `model_version`, so a game can be rescored later
+- `model_wp` is the **home** win probability; the away side is `1 - model_wp`
+- `market_wp` is copied from matching odds when present — a calibration reference, not the label
 
-`refresh-daily` then runs `dbt run --select stg_game_predictions+` so `gold.fct_game_predictions` has the batch. Same `game_id` can gain a later `as_of`.
+Playoffs are excluded from training and holdout. Injuries and odds are ingested daily but are **not** Elo features.
 
-Injuries and odds are **ingested** on daily (odds key-gated). Injuries are **not** Elo features in v0.
+## Running it
 
-## Commands
-
-After scrape + dbt so gold Finals and schedule exist:
+Needs gold Finals and schedule to exist, so run it after scrape + dbt.
 
 ```bash
+make ml     # score, then the dbt copy into gold.fct_game_predictions
+
+# or directly
 docker compose --profile tools run --rm --no-deps ml python -m main eval
 docker compose --profile tools run --rm --no-deps ml python -m main score
-# local checkout:
-cd services/ml && uv run python -m main eval && uv run python -m main score
 ```
 
-`eval` prints holdout-season (last Regular Season in gold) logloss, Brier, accuracy, and home-always accuracy. It does not write.
+`eval` prints holdout log loss, Brier, accuracy, and the always-pick-home baseline. It writes nothing.
 
-`score` fits on all loaded Regular Season Finals and upserts a new `as_of` batch. `make ml` is the score + gold copy; `make refresh` / `refresh-daily-once` already call it after dbt; ml failure fails the script (no extra Slack).
+`score` fits on all loaded Regular Season Finals and upserts a new `as_of` batch. `make refresh` already runs it after dbt; an ml failure fails the whole script.
 
 Unit tests: `make test-ml` (90% coverage gate, no Docker).
 
-## What is not shipped
+## Not built
 
-No public predictions API. No Courtline win-prob badge. No `/ask` “who wins tonight”. No live / in-game WP. No playoffs in train or holdout. No historical injury/odds backfill as training features.
+No public predictions endpoint, no win-probability badge in the UI, no "who wins tonight" in Ask, no live in-game WP, and no historical injury or odds backfill as training features.
 
-Do not join `gold.fct_standings` onto a historical game and call it “rank that night” — that table is a season-to-date upsert.
+One trap worth naming: **do not join `gold.fct_standings` onto a past game and call it "rank that night."** That table is a season-to-date upsert, so doing so leaks the future into the past.
