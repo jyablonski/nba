@@ -2,7 +2,7 @@
 # IMAGE_PREFIX/IMAGE_TAG select prebuilt registry images; unset means the local
 # `nba-*:latest` this box built. Set PUBLIC_URL to move off baseline.jyablonski.dev
 # (the Caddyfile hardcodes the same host separately — ACME needs it there).
-# Cube runs on the production Compose network for Ask/MCP, but is not published to the host. Postgres is intentionally published for direct DBeaver access. REST over gold still works independently.
+# Cube and MCP run on the production Compose network and are not published to the host; Caddy serves MCP at /mcp over TLS. Postgres is intentionally published for direct DBeaver access.
 # Usage: DOCKER_TARGET=runtime docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres api frontend mcp cube caddy
 # `ports: !reset []` (not a bare `[]`) is required so Compose drops the base file's published ports.
 services:
@@ -54,9 +54,10 @@ services:
     image: ${IMAGE_PREFIX:-}nba-mcp:${IMAGE_TAG:-latest}
     volumes: !reset []
     mem_limit: 512m
-    # Public MCP endpoint: http://<oracle-host>:8001/mcp
-    ports:
-      - "${MCP_HOST_PORT:-8001}:8000"
+    # No published port: Caddy serves MCP at https://<host>/mcp over the existing
+    # certificate. Publishing 8001 meant clients sent Authorization: Bearer
+    # $MCP_API_TOKEN over plain HTTP, and it was an internet-facing port that
+    # bypassed the proxy entirely.
     environment:
       MCP_TRANSPORT: streamable-http
       MCP_HOST: 0.0.0.0

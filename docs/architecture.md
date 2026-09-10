@@ -14,7 +14,7 @@ The rule this doc exists to protect: **the browser never opens Postgres, scrape 
 | `tools` | scraper, dbt, ml                            | `compose run` only                                    |
 | `cron`  | scrape-only container                       | prefer host cron — see [operations.md](operations.md) |
 
-Production (`docker-compose.prod.yml`) adds Caddy and drops Tilt. Cube stays internal to the Compose network; port 4000 is not published. MCP serves authenticated Streamable HTTP on host port 8001.
+Production (`docker-compose.prod.yml`) adds Caddy and drops Tilt. Cube and MCP stay internal to the Compose network — nothing but Caddy publishes a port. MCP is served at `https://<host>/mcp` over the same certificate.
 
 ## Schemas and who writes them
 
