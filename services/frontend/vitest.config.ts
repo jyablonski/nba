@@ -18,6 +18,9 @@ export default defineConfig({
         "src/app/**",
         "src/components/layout/sidebar.tsx",
         "src/**/*.d.ts",
+        // Type declarations only: no runtime code to execute, so v8 reports it
+        // as 0% forever and it just adds noise to the report.
+        "src/lib/types.ts",
       ],
       thresholds: {
         lines: 90,

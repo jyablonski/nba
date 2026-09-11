@@ -231,6 +231,7 @@ LIST_BIGGEST_COLLAPSES = text(
     FROM gold.fct_game_flow AS flow
     WHERE flow.largest_lead_blown > 0
       AND (:season IS NULL OR flow.season = :season)
+      AND (:blown_lead_team IS NULL OR flow.blown_lead_team_abbreviation = :blown_lead_team)
     ORDER BY flow.largest_lead_blown DESC, flow.game_date DESC
     LIMIT :limit
     """

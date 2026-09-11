@@ -298,11 +298,14 @@ export const api = {
       )
     ),
 
-  listBiggestCollapses: async (params: { season?: string; limit?: number } = {}) =>
+  listBiggestCollapses: async (
+    params: { season?: string; blown_lead_team?: string; limit?: number } = {}
+  ) =>
     asPaginated<GameCollapse>(
       await fetchApi(
         `/api/v1/games/collapses${buildQuery({
           season: params.season,
+          blown_lead_team: params.blown_lead_team,
           limit: params.limit ?? 10,
         })}`
       )

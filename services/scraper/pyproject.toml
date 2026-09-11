@@ -30,7 +30,8 @@ requires = ["hatchling==1.32.0"]
 build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+# `../..` is the repo root, for the shared `testing.postgres_tc` helpers.
+pythonpath = ["src", "../.."]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
@@ -39,8 +40,6 @@ addopts = [
     "-v",
     "--tb=short",
     "--strict-markers",
-    "-m",
-    "not integration",
     "--cov=src",
     "--cov-report=term-missing",
     "--cov-report=html",
@@ -53,7 +52,7 @@ markers = [
 ]
 
 # Anchors ty to this service so it does not walk up and type-check the whole
-# repo against this venv. Mirrors pytest's pythonpath = ["src"].
+# repo against this venv. Mirrors the `src` entry in pytest's pythonpath.
 # The `# ty: ignore` comments in src/scrapers are BeautifulSoup stub
 # imprecision: find_all/find are typed as returning PageElement, but the
 # parsers only reach them on Tag. Not runtime bugs.

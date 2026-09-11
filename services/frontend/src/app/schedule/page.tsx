@@ -45,7 +45,6 @@ function ScheduleBody() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="type-eyebrow">Upcoming slate</p>
           <h1 className="type-page">Schedule</h1>
           <p className="mt-1 text-sm text-ink-2">
             Scheduled games from today onward. Scores stay empty until the game is Final. Not odds

@@ -12,7 +12,6 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -20,12 +19,9 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
-MIGRATE_DIR = Path(__file__).resolve().parents[1]
-REPO_ROOT = MIGRATE_DIR.parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+from testing.postgres_tc import docker_available, start_postgres_container
 
-from testing.postgres_tc import docker_available, start_postgres_container  # noqa: E402
+MIGRATE_DIR = Path(__file__).resolve().parents[1]
 
 EXPECTED_SOURCE_TABLES = {
     "players",

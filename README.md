@@ -49,4 +49,4 @@ Postgres holds three schemas: `source` for ingested data, `silver` for cleaned i
 
 ## Documentation
 
-See the [docs](docs/) for architecture, data pipelines, modeling, app features, and development and operations guides.
+See the [docs](docs/) for architecture, data pipelines, modeling, app features, brand resources, testing, and development and operations guides.

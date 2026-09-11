@@ -1,18 +1,3 @@
-node_modules
-.next
-out
-coverage
-htmlcov
-playwright-report
-test-results
+# Prettier 3 already honors .gitignore, so only tracked files need listing here.
+# npm rewrites the lockfile on install, so reformatting it just creates churn.
 package-lock.json
-uv.lock
-*.uv.lock
-target
-dbt_packages
-logs
-.venv
-.pytest_cache
-.ruff_cache
-.ty_cache
-.coverage

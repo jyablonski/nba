@@ -35,8 +35,6 @@ addopts = [
     "-v",
     "--tb=short",
     "--strict-markers",
-    "-m",
-    "not integration",
     "--cov=src",
     "--cov-report=term-missing",
     "--cov-report=html",

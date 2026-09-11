@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("recharts", async () => {
@@ -10,6 +10,7 @@ vi.mock("recharts", async () => {
 });
 
 import { GameFlowChart, GameFlowTooltip } from "@/components/charts/game-flow-chart";
+import { FALLBACK_AWAY, FALLBACK_HOME } from "@/lib/team-colors";
 import { SeasonLineChart } from "@/components/charts/season-line-chart";
 import { StatBarChart } from "@/components/charts/stat-bar-chart";
 import {
@@ -156,7 +157,10 @@ describe("charts", () => {
       />
     );
     expect(screen.getByText("Q1 · 3:06")).toBeInTheDocument();
-    expect(screen.getByText("NYK 8 – SAS 18 (+10)")).toBeInTheDocument();
+    const flowScore = document.querySelector(".recharts-tooltip-item-value") as HTMLElement;
+    expect(flowScore).toHaveTextContent("NYK 8 – SAS 18 (+10)");
+    expect(within(flowScore).getByText("NYK")).toHaveStyle({ color: FALLBACK_AWAY });
+    expect(within(flowScore).getByText("SAS")).toHaveStyle({ color: FALLBACK_HOME });
     expect(screen.getByText("J. Brunson 2pt Driving Layup")).toBeInTheDocument();
     expect(screen.queryByText(/1630167|player_id/)).not.toBeInTheDocument();
     const { container: ratings } = render(
@@ -207,10 +211,10 @@ describe("charts", () => {
       "href",
       "https://cdn.nba.com/logos/nba/1610612756/primary/L/logo.svg"
     );
-    expect(image).toHaveAttribute("width", "42.5");
-    expect(image).toHaveAttribute("height", "42.5");
-    expect(image).toHaveAttribute("x", "18.75");
-    expect(image).toHaveAttribute("y", "18.75");
+    expect(image).toHaveAttribute("width", "51");
+    expect(image).toHaveAttribute("height", "51");
+    expect(image).toHaveAttribute("x", "14.5");
+    expect(image).toHaveAttribute("y", "14.5");
     expect(image).not.toHaveAttribute("clip-path");
     expect(logo.querySelector("text")).toBeNull();
     expect(logo.querySelector("title")).toBeNull();

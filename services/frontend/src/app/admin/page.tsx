@@ -395,7 +395,7 @@ function AdminHeader() {
   return (
     <header className="flex items-center justify-between gap-4">
       <div>
-        <h1 className="type-about">Admin</h1>
+        <h1 className="type-page">Admin</h1>
         <p className="text-sm text-muted-foreground">Ingestion, dbt, and ML health. Read-only.</p>
       </div>
       <SignOutButton />

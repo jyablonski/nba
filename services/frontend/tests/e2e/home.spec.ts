@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { expectNo2010Range, mockApi } from "./helpers";
+import { API_FAILURE_DETAIL, expectNo2010Range, mockApi } from "./helpers";
 
 test("home desk uses latest-season coverage, not a 2010-11 range", async ({ page }) => {
   await mockApi(page);
@@ -58,4 +58,10 @@ test("home coverage strip no longer counts seasons", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("Players in directory")).toBeVisible();
   await expect(page.getByText("Seasons", { exact: true })).toHaveCount(0);
+});
+
+test("home surfaces the API failure instead of the empty-warehouse copy", async ({ page }) => {
+  await mockApi(page, { fail: true });
+  await page.goto("/");
+  await expect(page.getByText(API_FAILURE_DETAIL).first()).toBeVisible();
 });

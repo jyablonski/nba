@@ -33,7 +33,6 @@ ignore = ["E501"]
 "services/api/src/dependencies.py" = ["B008"]
 "services/mcp/src/server.py" = ["E402"]
 "**/tests/**" = ["E501", "SIM117"]
-"testing/**" = ["E402"]
 
 [tool.ruff.lint.isort]
 known-first-party = [

@@ -1,4 +1,8 @@
-"""Testcontainers Postgres helpers shared by api / scraper / mcp / migrate tests."""
+"""Testcontainers Postgres helpers and gold fixtures shared by the service test suites.
+
+Importable because each service's pytest config puts the repo root on
+`pythonpath`; nothing here is installed as a dependency.
+"""
 
 from __future__ import annotations
 
@@ -11,10 +15,13 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+_HERE = Path(__file__).resolve().parent
+REPO_ROOT = _HERE.parent
+# Compose bootstraps the empty schemas from db/; the gold schema and seed exist
+# only for tests, so they live next to the helper that applies them.
 INIT_SQL = REPO_ROOT / "db" / "init.sql"
-GOLD_SCHEMA_SQL = REPO_ROOT / "db" / "analytics_integration.sql"
-GOLD_SEED_SQL = REPO_ROOT / "db" / "analytics_integration_seed.sql"
+GOLD_SCHEMA_SQL = _HERE / "analytics_integration.sql"
+GOLD_SEED_SQL = _HERE / "analytics_integration_seed.sql"
 MIGRATE_DIR = REPO_ROOT / "services" / "migrate"
 
 

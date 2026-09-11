@@ -22,7 +22,6 @@ describe("about page", () => {
     expect(within(sources!).getByText("Basketball-Reference")).toBeInTheDocument();
     expect(within(sources!).getByText("The Odds API")).toBeInTheDocument();
     expect(within(sources!).getByText(/r\/nba posts and their top\s+comments/)).toBeInTheDocument();
-    expect(within(sources!).getByText(/No Baseline Social page yet/)).toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "How the data gets here" })).toBeInTheDocument();
     expect(screen.getByText(/transformed and enriched/)).toBeInTheDocument();

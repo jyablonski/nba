@@ -1,5 +1,11 @@
 import { commitUrl, shortSha } from "@/lib/version";
 
+const SOURCE_URL = {
+  bref: "https://www.basketball-reference.com",
+  odds: "https://the-odds-api.com",
+  reddit: "https://www.reddit.com/r/nba",
+};
+
 export default function AboutPage() {
   const sha = shortSha();
   const href = commitUrl();
@@ -7,7 +13,7 @@ export default function AboutPage() {
   return (
     <article className="space-y-8">
       <header>
-        <h1 className="type-about">About</h1>
+        <h1 className="type-page">About</h1>
       </header>
 
       <p className="type-prose">
@@ -18,18 +24,17 @@ export default function AboutPage() {
       <Section title="Sources">
         <ul className="mt-3 list-disc space-y-2 pl-5">
           <li>
-            <span className="font-medium text-foreground">Basketball-Reference</span>: teams,
-            players, the season slate, box scores, standings, play-by-play, remaining-year player
-            salaries, team payroll, and the current injury report. Snapshots, not a paid ledger or
-            injury history.
+            <SourceLink href={SOURCE_URL.bref}>Basketball-Reference</SourceLink>: teams, players,
+            the season slate, box scores, standings, play-by-play, remaining-year player salaries,
+            team payroll, and the current injury report.
           </li>
           <li>
-            <span className="font-medium text-foreground">The Odds API</span>: upcoming NBA
-            moneylines and spreads when a key is configured. A market snapshot, not a book.
+            <SourceLink href={SOURCE_URL.odds}>The Odds API</SourceLink>: upcoming NBA game
+            moneylines and spreads.
           </li>
           <li>
-            <span className="font-medium text-foreground">Reddit</span>: r/nba posts and their top
-            comments when Reddit access is configured. No Baseline Social page yet.
+            <SourceLink href={SOURCE_URL.reddit}>Reddit</SourceLink>: r/nba posts and their top
+            comments.
           </li>
         </ul>
       </Section>
@@ -89,6 +94,21 @@ export default function AboutPage() {
         )}
       </Section>
     </article>
+  );
+}
+
+// Bold like the plain labels it replaced, plus the underline the other outbound
+// links in this page use.
+function SourceLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      className="font-medium text-foreground underline underline-offset-2"
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+    >
+      {children}
+    </a>
   );
 }
 

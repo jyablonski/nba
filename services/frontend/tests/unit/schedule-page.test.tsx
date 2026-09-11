@@ -48,7 +48,6 @@ describe("schedule page", () => {
     });
     expect(screen.queryByLabelText("Season")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Schedule" })).toBeInTheDocument();
-    expect(screen.getByText("Upcoming slate")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "LAL" })).toBeInTheDocument();
     expect(screen.getByText("@")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "GSW" })).toBeInTheDocument();

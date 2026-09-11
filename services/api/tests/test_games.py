@@ -345,9 +345,34 @@ def test_list_biggest_collapses(client, session, mapping_row, query_result) -> N
 
 
 @pytest.mark.unit
+def test_list_biggest_collapses_filters_by_blown_lead_team(
+    client, session, mapping_row, query_result
+) -> None:
+    session.queue = [query_result([])]
+    response = client.get("/api/v1/games/collapses?blown_lead_team=sas")
+    assert response.status_code == 200
+    assert response.json()["data"] == []
+    # Lowercase in, uppercase bound: gold stores abbreviations uppercased.
+    _, params = session.calls[-1]
+    assert params["blown_lead_team"] == "SAS"
+
+
+@pytest.mark.unit
+def test_list_biggest_collapses_without_team_binds_null(
+    client, session, mapping_row, query_result
+) -> None:
+    session.queue = [query_result([])]
+    response = client.get("/api/v1/games/collapses")
+    assert response.status_code == 200
+    _, params = session.calls[-1]
+    assert params["blown_lead_team"] is None
+
+
+@pytest.mark.unit
 def test_biggest_collapses_query_excludes_wire_to_wire() -> None:
     from queries.games import LIST_BIGGEST_COLLAPSES
 
     sql = str(LIST_BIGGEST_COLLAPSES)
     assert "gold.fct_game_flow" in sql
     assert "largest_lead_blown > 0" in sql
+    assert ":blown_lead_team IS NULL OR flow.blown_lead_team_abbreviation = :blown_lead_team" in sql

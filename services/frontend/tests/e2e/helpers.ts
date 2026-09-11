@@ -12,11 +12,31 @@ export const PRIMARY_NAV = [
 
 export type MockApiOptions = {
   empty?: boolean;
+  /** Answer every /api/v1 call with a 500 so ErrorState paths are reachable. */
+  fail?: boolean;
+  /** Delay every /api/v1 answer, so loading states actually paint. */
+  delayMs?: number;
+  /**
+   * Pad the blown-leads fixture to this many rows, all blown by MIA. The
+   * single default row cannot reproduce layout shifts that depend on a full
+   * table's height.
+   */
+  collapseRows?: number;
 };
+
+/** Detail the failing mock returns; ErrorState renders it verbatim. */
+export const API_FAILURE_DETAIL = "Warehouse unavailable";
 
 export async function mockApi(page: Page, options: MockApiOptions = {}) {
   await page.addInitScript((opts: MockApiOptions) => {
     const empty = Boolean(opts.empty);
+    const fail = Boolean(opts.fail);
+    const delayMs = Number(opts.delayMs ?? 0);
+    const collapseRows = Number(opts.collapseRows ?? 1);
+    // Every intercepted URL, so specs can assert on the query params a control
+    // actually sent rather than inferring it from unchanged mock rows.
+    const calls: string[] = [];
+    (window as unknown as { __API_CALLS__: string[] }).__API_CALLS__ = calls;
     const json = (body: unknown, status = 200) =>
       new Response(JSON.stringify(body), {
         status,
@@ -28,6 +48,13 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
       const url = String(input instanceof Request ? input.url : input);
       if (!url.includes("/api/v1/")) {
         return originalFetch(input, init);
+      }
+      calls.push(url);
+      if (delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+      if (fail) {
+        return json({ detail: "Warehouse unavailable" }, 500);
       }
 
       if (url.includes("/query")) {
@@ -318,8 +345,22 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
                   pts_scored_avg: 116.4,
                   pts_allowed_avg: 109.2,
                 },
+                {
+                  team_id: 1610612748,
+                  abbreviation: "MIA",
+                  team_name: "Miami Heat",
+                  conference: "East",
+                  division: "Southeast",
+                  city: "Miami",
+                  nickname: "Heat",
+                  wins: 44,
+                  losses: 38,
+                  win_pct: 0.537,
+                  pts_scored_avg: 111.2,
+                  pts_allowed_avg: 110.9,
+                },
               ],
-          meta: { total: empty ? 0 : 2, limit: 50, offset: 0 },
+          meta: { total: empty ? 0 : 3, limit: 50, offset: 0 },
         });
       }
 
@@ -469,28 +510,43 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
 
       // Must precede the generic /games branch.
       if (url.includes("/games/collapses")) {
+        const blownLeadTeam = new URL(url, window.location.origin).searchParams.get(
+          "blown_lead_team"
+        );
+        const rows = empty
+          ? []
+          : [
+              {
+                game_id: "0022400002",
+                season: "2025-26",
+                game_date: "2024-11-02",
+                home_team_abbreviation: "BOS",
+                away_team_abbreviation: "MIA",
+                home_score: 118,
+                away_score: 115,
+                largest_lead_blown: 21,
+                blown_lead_team_abbreviation: "MIA",
+                comeback_team_abbreviation: "BOS",
+                blown_lead_period: 3,
+                winner_margin_entering_fourth: -9,
+                lead_changes: 4,
+                overtime_periods: 0,
+              },
+            ];
+        const padded =
+          rows.length === 0
+            ? rows
+            : Array.from({ length: collapseRows }, (_, index) => ({
+                ...rows[0],
+                game_id: index === 0 ? rows[0].game_id : `002240100${index}`,
+                largest_lead_blown: rows[0].largest_lead_blown - index,
+              }));
+        const filtered = blownLeadTeam
+          ? padded.filter((row) => row.blown_lead_team_abbreviation === blownLeadTeam)
+          : padded;
         return json({
-          data: empty
-            ? []
-            : [
-                {
-                  game_id: "0022400002",
-                  season: "2025-26",
-                  game_date: "2024-11-02",
-                  home_team_abbreviation: "BOS",
-                  away_team_abbreviation: "MIA",
-                  home_score: 118,
-                  away_score: 115,
-                  largest_lead_blown: 21,
-                  blown_lead_team_abbreviation: "MIA",
-                  comeback_team_abbreviation: "BOS",
-                  blown_lead_period: 3,
-                  winner_margin_entering_fourth: -9,
-                  lead_changes: 4,
-                  overtime_periods: 0,
-                },
-              ],
-          meta: { total: empty ? 0 : 1, limit: 10, offset: 0 },
+          data: filtered,
+          meta: { total: filtered.length, limit: 10, offset: 0 },
         });
       }
 
@@ -521,6 +577,27 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
       return json({ data: [] });
     };
   }, options);
+}
+
+/** Every /api/v1 URL the page has requested so far, in order. */
+export async function apiCalls(page: Page): Promise<string[]> {
+  return page.evaluate(
+    () => (window as unknown as { __API_CALLS__?: string[] }).__API_CALLS__ ?? []
+  );
+}
+
+/** Wait until some request carried `fragment`, then return the matching URLs. */
+export async function waitForApiCall(page: Page, fragment: string): Promise<string[]> {
+  await expect
+    .poll(async () => (await apiCalls(page)).filter((url) => url.includes(fragment)).length)
+    .toBeGreaterThan(0);
+  return (await apiCalls(page)).filter((url) => url.includes(fragment));
+}
+
+/** The most recent /api/v1 URL containing `fragment`, or undefined. */
+export async function lastApiCall(page: Page, fragment: string): Promise<string | undefined> {
+  const calls = await apiCalls(page);
+  return calls.filter((url) => url.includes(fragment)).at(-1);
 }
 
 export function primaryNav(page: Page) {
