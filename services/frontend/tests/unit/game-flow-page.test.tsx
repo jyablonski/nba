@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -23,6 +23,7 @@ vi.mock("@/lib/api", () => ({
 
 import GameFlowPage from "@/app/games/[id]/page";
 import { GameFlowTooltip } from "@/components/charts/game-flow-chart";
+import { FALLBACK_AWAY, FALLBACK_HOME } from "@/lib/team-colors";
 import { Providers } from "@/components/providers";
 
 describe("game flow page", () => {
@@ -180,7 +181,11 @@ describe("game flow page", () => {
     );
 
     expect(screen.getByText("Q1 · 8:36")).toBeInTheDocument();
-    expect(screen.getByText("NYK 16 – SAS 2 (-14)")).toBeInTheDocument();
+    const score = document.querySelector(".recharts-tooltip-item-value") as HTMLElement;
+    expect(score).toHaveTextContent("NYK 16 – SAS 2 (-14)");
+    // Abbreviations carry their side's plot colour, not the body ink.
+    expect(within(score).getByText("NYK")).toHaveStyle({ color: FALLBACK_AWAY });
+    expect(within(score).getByText("SAS")).toHaveStyle({ color: FALLBACK_HOME });
     expect(screen.getByText("J. Brunson 2pt Driving Layup")).toBeInTheDocument();
   });
 });

@@ -35,9 +35,8 @@ export default function TeamProfilePage() {
 function TeamProfile() {
   const params = useParams<{ id: string }>();
   const teamId = params.id;
-  const { season: requestedSeason, seasons } = useSeason();
+  const { season: requestedSeason } = useSeason();
   const [seasonOverride, setSeasonOverride] = useState<string | null>(null);
-  const [sinceSeason, setSinceSeason] = useState("");
   const [opponentId, setOpponentId] = useState("");
   const [arenaCity, setArenaCity] = useState("");
   const [location, setLocation] = useState<"all" | "home" | "away">("all");
@@ -55,7 +54,6 @@ function TeamProfile() {
 
   const recordParams = {
     season: season || undefined,
-    since_season: sinceSeason || undefined,
     opponent_team_id: opponentId || undefined,
     location: location === "all" ? undefined : location,
     arena_city: arenaCity || undefined,
@@ -143,7 +141,6 @@ function TeamProfile() {
 
   function resetFilters() {
     setSeasonOverride(null);
-    setSinceSeason("");
     setOpponentId("");
     setArenaCity("");
     setLocation("all");
@@ -224,15 +221,6 @@ function TeamProfile() {
 
       <div className="flex flex-wrap items-end gap-3 border-y border-border py-3">
         <p className="mr-2 type-eyebrow">Filter games</p>
-        <LabeledSelect
-          label="Since"
-          value={sinceSeason}
-          onChange={setSinceSeason}
-          options={[
-            { value: "", label: "—" },
-            ...seasons.map((item) => ({ value: item, label: item })),
-          ]}
-        />
         <LabeledSelect
           label="Opponent"
           value={opponentId}

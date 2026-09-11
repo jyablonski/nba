@@ -59,7 +59,7 @@ export function TeamLogoMarker({
   payload?: TeamRatingPoint;
 }) {
   if (cx == null || cy == null || payload == null) return null;
-  const size = 42.5;
+  const size = 51;
   const logoUrl = teamLogoUrl(payload.abbreviation);
   return (
     <g>

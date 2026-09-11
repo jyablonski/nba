@@ -1,6 +1,6 @@
 .PHONY: up down stop logs \
 	test test-api test-scraper test-mcp test-cube test-ml test-frontend test-frontend-e2e test-dbt \
-	test-migrate test-migrate-unit test-api-integration test-scraper-integration test-mcp-integration test-integration \
+	test-migrate \
 	build build-multiarch ensure-buildx-builder remove-buildx-builder sync db-migrate migrate \
 	pipeline-status pipeline-enable pipeline-disable scrape dbt ml refresh \
 	refresh-daily refresh-daily-once \
@@ -310,13 +310,12 @@ refresh-daily: refresh ## alias for refresh
 refresh-daily-once: ## Force one scrape→dbt→ml cycle; bind-mounts host files; does not recreate postgres
 	FORCE=1 ./scripts/refresh-daily.sh
 
-test: test-api test-scraper test-mcp test-cube test-ml test-frontend test-dbt ## Run all automated suites (unit + dbt e2e)
+# Every suite runs its integration tests inline: the Testcontainers fixtures skip
+# themselves when Docker is not reachable, so there is nothing to deselect.
+test: test-api test-scraper test-mcp test-cube test-ml test-migrate test-frontend test-dbt ## Run all automated suites (unit + integration + dbt e2e)
 
 test-migrate: ## Alembic unit tests + upgrade head on throwaway Postgres
 	cd services/migrate && uv sync --group dev && uv run pytest
-
-test-migrate-unit: ## Alembic unit tests only (no Testcontainers; CI PR path)
-	cd services/migrate && uv sync --group dev && uv run pytest -m "not integration"
 
 quality: ## Repo pre-commit hooks on all files (ruff --fix fails CI if it leaves a dirty tree)
 	@if [ ! -x services/frontend/node_modules/prettier/bin/prettier.cjs ]; then \
@@ -324,13 +323,13 @@ quality: ## Repo pre-commit hooks on all files (ruff --fix fails CI if it leaves
 	fi
 	uv run --group local pre-commit run --all-files
 
-test-api: ## API unit tests with coverage (excludes integration)
+test-api: ## API tests with coverage (Testcontainers suites skip without Docker)
 	cd services/api && uv sync --group dev && uv run pytest
 
-test-scraper: ## Scraper unit tests with coverage (excludes integration)
+test-scraper: ## Scraper tests with coverage (Testcontainers suites skip without Docker)
 	cd services/scraper && uv sync --group dev && uv run pytest
 
-test-mcp: ## MCP unit tests with coverage (excludes integration)
+test-mcp: ## MCP unit tests with coverage (Cube-only; never opens Postgres)
 	cd services/mcp && uv sync --group dev && uv run pytest
 
 test-cube: ## Cube schema unit tests with coverage
@@ -344,29 +343,6 @@ test-frontend: ## Frontend unit tests with coverage
 
 test-frontend-e2e: ## Frontend Playwright e2e
 	cd services/frontend && npm install && npx playwright install chromium && CI=1 FORCE_COLOR=1 npm run test:e2e
-
-test-api-integration: ## API Testcontainers Postgres
-	cd services/api && uv sync --group dev && uv run pytest -m integration --cov-fail-under=0
-
-test-scraper-integration: ## Scraper Testcontainers Postgres
-	cd services/scraper && uv sync --group dev && uv run pytest -m integration --cov-fail-under=0
-
-# MCP is Cube-only and never opens Postgres, so it currently has no
-# integration-marked tests and pytest exits 5 ("no tests collected"). Tolerated
-# rather than removed so the suite is picked up automatically if that changes —
-# without this, `make test-integration` can never pass.
-test-mcp-integration: ## MCP integration tests (none today; MCP is Cube-only)
-	@cd services/mcp && uv sync --group dev && { \
-		uv run pytest -m integration --cov-fail-under=0; \
-		status=$$?; \
-		if [ $$status -eq 5 ]; then \
-			echo "test-mcp-integration: no integration tests collected (MCP is Cube-only)"; \
-			exit 0; \
-		fi; \
-		exit $$status; \
-	}
-
-test-integration: test-migrate test-api-integration test-scraper-integration test-mcp-integration ## All Python integration suites
 
 test-dbt: ## dbt e2e against a seeded ephemeral Postgres
 	COMPOSE_PROJECT_NAME=nba-e2e $(COMPOSE) -p nba-e2e -f docker-compose.e2e.yml build migrate dbt

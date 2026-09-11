@@ -134,7 +134,6 @@ describe("team profile", () => {
     expect(screen.getByText("Taxpayer mid-level exception")).toBeInTheDocument();
 
     expect(screen.queryByLabelText("Season")).not.toBeInTheDocument();
-    expect(screen.getByText("Since")).toBeInTheDocument();
     expect(screen.getByText("Arena city")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "88 games · 56–32 | 63.6%" })).toBeInTheDocument();
     expect(screen.getByText("Margin")).toBeInTheDocument();

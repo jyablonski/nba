@@ -15,14 +15,19 @@ import {
 import { EmptyState } from "@/components/query-state";
 import {
   formatBiggestRunCaption,
+  flowTooltipScoreParts,
   formatFlowTooltipLabel,
   formatFlowTooltipPlay,
-  formatFlowTooltipScore,
   periodLabel,
   quarterAxisTicks,
   selectBiggestRun,
 } from "@/lib/game-flow";
-import { colorForScoringSide, resolvePlotColors, TIED_COLOR } from "@/lib/team-colors";
+import {
+  colorForScoringSide,
+  type PlotColors,
+  resolvePlotColors,
+  TIED_COLOR,
+} from "@/lib/team-colors";
 import type { GameFlow, PlayByPlayEvent } from "@/lib/types";
 
 const tooltipStyle = {
@@ -37,17 +42,22 @@ const tooltipStyle = {
 
 const FLOW_LINE_COLOR = TIED_COLOR;
 
+// `colors` is optional because recharts clones this element to inject
+// active/payload; the fallback is the same neutral pair the plot starts from.
 export function GameFlowTooltip({
   active,
   payload,
+  colors = resolvePlotColors({}),
 }: {
   active?: boolean;
   payload?: ReadonlyArray<{ payload?: ChartPoint; value?: unknown }>;
+  colors?: PlotColors;
 }) {
   if (!active || !payload?.length) return null;
   const point = payload[0]?.payload;
   if (!point) return null;
   const play = formatFlowTooltipPlay(point);
+  const score = flowTooltipScoreParts(point.score_differential, point);
   return (
     <div className="recharts-default-tooltip" style={tooltipStyle}>
       <p className="recharts-tooltip-label" style={{ margin: 0 }}>
@@ -57,7 +67,10 @@ export function GameFlowTooltip({
         <span className="recharts-tooltip-item-name">Score</span>
         <span className="recharts-tooltip-item-separator"> : </span>
         <span className="recharts-tooltip-item-value">
-          {formatFlowTooltipScore(point.score_differential, point)}
+          <span style={{ color: colors.away, fontWeight: 600 }}>{score.away}</span>
+          {` ${score.scoreAway} – `}
+          <span style={{ color: colors.home, fontWeight: 600 }}>{score.home}</span>
+          {` ${score.scoreHome} (${score.signed})`}
         </span>
       </p>
       {play ? (
@@ -220,7 +233,7 @@ export function GameFlowChart({
                 }}
               />
             ) : null}
-            <Tooltip content={<GameFlowTooltip />} />
+            <Tooltip content={<GameFlowTooltip colors={plotColors} />} />
             <Line
               type="linear"
               data={data}

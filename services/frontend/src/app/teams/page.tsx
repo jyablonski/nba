@@ -37,7 +37,7 @@ function TeamsDirectory() {
 
   return (
     <div>
-      <h1 className="type-page leading-none">Teams</h1>
+      <h1 className="type-page">Teams</h1>
 
       {teamsQuery.isLoading ? (
         <div className="mt-1">

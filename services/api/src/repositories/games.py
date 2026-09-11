@@ -60,8 +60,13 @@ class GamesRepository:
         rows = self.db.execute(LIST_SCHEDULE, params)
         return int(total), [dict(row._mapping) for row in rows]
 
-    def list_biggest_collapses(self, *, season: str | None, limit: int) -> list[dict]:
-        rows = self.db.execute(LIST_BIGGEST_COLLAPSES, {"season": season, "limit": limit})
+    def list_biggest_collapses(
+        self, *, season: str | None, blown_lead_team: str | None, limit: int
+    ) -> list[dict]:
+        rows = self.db.execute(
+            LIST_BIGGEST_COLLAPSES,
+            {"season": season, "blown_lead_team": blown_lead_team, "limit": limit},
+        )
         return [dict(row._mapping) for row in rows]
 
     def list_seasons(self) -> list[str]:

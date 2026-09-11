@@ -1,10 +1,10 @@
 # Baseline — logo resources
 
-Direction **5c, "B on the line"**: the wordmark set in ink with the baseline as a green rule
-beneath it and the centre arc rising out of that rule. The standalone mark is the same line
-under a single B.
+Direction **5c, "B on the line"**: the wordmark set in ink with the baseline as a green rule beneath it and the centre arc rising out of that rule. The standalone mark is the same line under a single B.
 
 ## Files
+
+The art lives in `services/frontend/public/logo/`, so every file below is also served at `/logo/<name>`. There is no second copy anywhere — edit these in place.
 
 | File                                                 | Use                                                       |
 | ---------------------------------------------------- | --------------------------------------------------------- |
@@ -13,9 +13,10 @@ under a single B.
 | `baseline-mark.svg`                                  | Square mark, transparent ground.                          |
 | `baseline-mark-on-paper.svg`                         | Square mark on the app paper tone.                        |
 | `baseline-mark-reversed.svg`                         | Square mark, paper on green.                              |
-| `favicon.svg`                                        | Browser tab icon (scalable).                              |
+| `favicon.svg`                                        | Scalable tab icon. Dark-scheme variant drops the paper.   |
 | `favicon-16.png`, `favicon-32.png`, `favicon-64.png` | Raster tab icons. 16px drops the arc.                     |
 | `apple-touch-icon-180.png`                           | iOS home screen.                                          |
+| `profile.png`                                        | Author portrait on `/about`.                              |
 
 ## Colour
 
@@ -39,15 +40,10 @@ IBM Plex Sans, 600 for the wordmark, 700 for the standalone B, tracking −0.03e
 
 ## Fonts in SVG
 
-The SVGs reference IBM Plex Sans by name and fall back to Helvetica/Arial where it is not
-installed. For print or third-party tools, open the SVG and convert the text to outlines first.
+The SVGs reference IBM Plex Sans by name and fall back to Helvetica/Arial where it is not installed. For print or third-party tools, open the SVG and convert the text to outlines first.
 
-The primary lockup uses a tight `0 12 198 47` viewBox. In the header, size it by height (30px) with automatic width so the wordmark cap height stays aligned with the navigation text.
+The primary lockup uses a tight `0 12 198 59` viewBox. In the header, size it by height (30px) with automatic width so the wordmark cap height stays aligned with the navigation text.
 
-## Favicon markup
+## Tab icons
 
-```html
-<link rel="icon" href="/logo/favicon.svg" type="image/svg+xml" />
-<link rel="icon" href="/logo/favicon-32.png" sizes="32x32" />
-<link rel="apple-touch-icon" href="/logo/apple-touch-icon-180.png" />
-```
+The app does not hand-write `<link rel="icon">` tags. Next.js serves the tab icons from file conventions in `services/frontend/src/app/` — `icon.svg`, `apple-icon.png`, and `favicon.ico` — which are separate files from the `public/logo/` set above. `icon.svg` is `favicon.svg` with the B converted to outlines, so it renders without IBM Plex Sans installed; re-derive it if the mark ever changes.

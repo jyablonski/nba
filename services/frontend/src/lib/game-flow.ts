@@ -139,6 +139,39 @@ function formatClockSeconds(seconds: number): string {
   return tenth === 0 ? mmss : `${mmss}.${tenth}`;
 }
 
+export type FlowScoreParts = {
+  away: string;
+  home: string;
+  scoreAway: number;
+  scoreHome: number;
+  signed: string;
+};
+
+/** Split out so the tooltip can tint each abbreviation with its team colour. */
+export function flowTooltipScoreParts(
+  value: unknown,
+  point: {
+    score_away: number;
+    score_home: number;
+    away_abbreviation?: string | null;
+    home_abbreviation?: string | null;
+  }
+): FlowScoreParts {
+  const differential = Number(value);
+  const signed = Number.isNaN(differential)
+    ? String(value)
+    : differential > 0
+      ? `+${differential}`
+      : String(differential);
+  return {
+    away: point.away_abbreviation || "Away",
+    home: point.home_abbreviation || "Home",
+    scoreAway: point.score_away,
+    scoreHome: point.score_home,
+    signed,
+  };
+}
+
 export function formatFlowTooltipScore(
   value: unknown,
   point: {
@@ -148,15 +181,8 @@ export function formatFlowTooltipScore(
     home_abbreviation?: string | null;
   }
 ): string {
-  const differential = Number(value);
-  const signed = Number.isNaN(differential)
-    ? String(value)
-    : differential > 0
-      ? `+${differential}`
-      : String(differential);
-  const away = point.away_abbreviation || "Away";
-  const home = point.home_abbreviation || "Home";
-  return `${away} ${point.score_away} – ${home} ${point.score_home} (${signed})`;
+  const parts = flowTooltipScoreParts(value, point);
+  return `${parts.away} ${parts.scoreAway} – ${parts.home} ${parts.scoreHome} (${parts.signed})`;
 }
 
 export function formatFlowTooltipLabel(point?: {

@@ -71,7 +71,10 @@ describe("games index", () => {
       "href",
       "/games/0042500405"
     );
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    // The only select on this page is the blown-leads team filter; the games
+    // table itself is still unfiltered.
+    expect(screen.getAllByRole("combobox")).toHaveLength(1);
+    expect(screen.getByLabelText("Blew it")).toHaveValue("");
   });
 
   it("ranks the biggest blown leads under the recent games table", async () => {
@@ -90,6 +93,9 @@ describe("games index", () => {
     const row = collapses.getByText("29").closest("tr");
     expect(row).toBeTruthy();
     expect(row!.textContent).toContain("SAS");
+    // Opponent column: the team that completed the comeback.
+    expect(within(row as HTMLElement).getByText("NYK", { exact: true })).toBeInTheDocument();
+    expect(collapses.getByRole("columnheader", { name: "Opponent" })).toBeInTheDocument();
     expect(row!.textContent).toContain("Q2");
     expect(row!.textContent).toContain("SAS 106");
     expect(row!.textContent).toContain("NYK 107");

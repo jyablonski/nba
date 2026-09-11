@@ -103,14 +103,10 @@
   --ct-control-header: 32px;
   --ct-control-page: 34px;
   --ct-control-ask: 44px;
-  --ct-fs-about: 44px;
-  --ct-ls-about: -0.03em;
   --ct-fs-entity: 36px;
   --ct-ls-entity: -0.025em;
   --ct-fs-page: 32px;
   --ct-ls-page: -0.02em;
-  --ct-fs-home: 27px;
-  --ct-ls-home: -0.015em;
   --ct-fs-hero: 30px;
   --ct-fs-stat: 26px;
   --ct-fs-wordmark: 20px;
@@ -182,12 +178,6 @@
 }
 
 @layer components {
-  .type-about {
-    font-size: var(--ct-fs-about);
-    font-weight: 600;
-    letter-spacing: var(--ct-ls-about);
-  }
-
   .type-entity {
     font-size: var(--ct-fs-entity);
     font-weight: 600;
@@ -198,12 +188,6 @@
     font-size: var(--ct-fs-page);
     font-weight: 600;
     letter-spacing: var(--ct-ls-page);
-  }
-
-  .type-home-lead {
-    font-size: var(--ct-fs-home);
-    font-weight: 600;
-    letter-spacing: var(--ct-ls-home);
   }
 
   .type-hero-stat {

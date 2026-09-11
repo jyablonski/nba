@@ -25,6 +25,8 @@ requires = ["hatchling==1.32.0"]
 build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
+# `../..` is the repo root, for the shared `testing.postgres_tc` helpers.
+pythonpath = ["../.."]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
@@ -40,7 +42,7 @@ markers = [
 ]
 
 # Anchors ty to this service so it does not walk up and type-check the whole
-# repo against this venv. The repo root is here because the Testcontainers test
-# inserts it into sys.path at runtime to import `testing.postgres_tc`.
+# repo against this venv. The repo root mirrors pytest's pythonpath, which is
+# how the Testcontainers test imports `testing.postgres_tc`.
 [tool.ty.environment]
 extra-paths = ["migrations", "../.."]

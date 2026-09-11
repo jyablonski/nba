@@ -60,8 +60,7 @@ function HomeDesk() {
   return (
     <div className="flex flex-col gap-[34px]">
       <section className="space-y-3">
-        <p className="type-eyebrow">{season || "—"}</p>
-        <h1 className="type-home-lead">Box scores, game logs, and splits.</h1>
+        <h1 className="type-page">Box scores, game logs, and splits.</h1>
         <dl className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-2">
           <Fact label="Coverage" value={coverageSeason} />
           <Fact label="Players in directory" value={statusQuery.isPending ? "—" : players} />

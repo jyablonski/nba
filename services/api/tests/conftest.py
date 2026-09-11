@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from uuid import UUID
 
 import pytest
@@ -10,12 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from dependencies import get_cube_analytics, get_db
 from main import create_app
-
-REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from testing.postgres_tc import (  # noqa: E402
+from testing.postgres_tc import (
     bootstrap_engine,
     docker_available,
     start_postgres_container,
@@ -88,9 +81,13 @@ class QueryResult:
 class ScriptedSession:
     def __init__(self) -> None:
         self.queue: list[QueryResult] = []
+        # Every (statement, params) pair, so a test can assert on the values a
+        # router actually bound rather than only on the rows it returned.
+        self.calls: list[tuple[object, dict | None]] = []
         self.closed = False
 
     def execute(self, stmt, params=None):
+        self.calls.append((stmt, params))
         if not self.queue:
             raise AssertionError(f"Unexpected SQL execute: {stmt} {params}")
         return self.queue.pop(0)

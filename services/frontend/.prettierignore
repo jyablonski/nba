@@ -1,7 +1,7 @@
-node_modules
-.next
-out
-coverage
+# Prettier honors .gitignore, but only the one in its working directory — and
+# `npm run format` runs from here, so the repo-root rules do not apply. These
+# are the tracked-or-locally-ignored paths that services/frontend/.gitignore
+# does not already cover.
+package-lock.json
 playwright-report
 test-results
-package-lock.json

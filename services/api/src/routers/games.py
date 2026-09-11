@@ -42,11 +42,18 @@ def _validate_season_type(season_type: str | None) -> str | None:
 @router.get("/collapses", response_model=PaginatedResponse[GameCollapse])
 def list_biggest_collapses(
     season: Annotated[str | None, Query()] = None,
+    blown_lead_team: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 10,
     repo: GamesRepository = Depends(get_games_repository),
 ) -> PaginatedResponse[GameCollapse]:
     """Games ranked by the biggest lead the losing team gave up."""
-    rows = repo.list_biggest_collapses(season=season, limit=limit)
+    # Abbreviation, not team_id: gold.fct_game_flow denormalizes both sides to
+    # abbreviations and never carries the ids.
+    rows = repo.list_biggest_collapses(
+        season=season,
+        blown_lead_team=blown_lead_team.upper() if blown_lead_team else None,
+        limit=limit,
+    )
     data = [GameCollapse.model_validate(row) for row in rows]
     return PaginatedResponse(
         data=data,
