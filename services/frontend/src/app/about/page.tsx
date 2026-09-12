@@ -52,11 +52,11 @@ export default function AboutPage() {
 
       <Section title="Background">
         <p>
-          The app has been running in some form since 2021, originally as separate ingestion, dbt,
-          API, and dashboard repos. It was rebuilt in September 2026 as a single monorepo platform,
-          keeping largely the same data on a new foundation: a Cube semantic layer over the
-          warehouse, an MCP server so AI assistants can query it directly, and Elo-based pregame win
-          probabilities.
+          The app has been running in some form since 2021, originally as a handful of separate
+          services in different repos. It was rebuilt in September 2026 as a single monorepo
+          platform, keeping largely the same data on a new foundation: a Cube semantic layer over
+          the warehouse, an MCP server so AI assistants can query it directly, and Elo-based pregame
+          win probabilities.
         </p>
       </Section>
 
