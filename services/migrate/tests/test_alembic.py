@@ -49,6 +49,8 @@ EXPECTED_SOURCE_TABLES = {
     "pipeline_runs",
     "scrape_source_runs",
     "admin_jobs",
+    "transactions",
+    "transaction_participants",
 }
 
 

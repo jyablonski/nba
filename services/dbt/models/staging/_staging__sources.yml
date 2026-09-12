@@ -51,6 +51,15 @@ sources:
         description: >
           Basketball-Reference play-by-play actions. Unique on (game_id, action_number, action_id).
           Opt-in current-season ingest; not a full-history backfill.
+      - name: transactions
+        description: >
+          Basketball-Reference transactions log. Grain is transaction_key,
+          sha256(transaction_date|description).
+      - name: transaction_participants
+        description: >
+          Teams and players named by a transaction, resolved from href slugs.
+          Unique on (transaction_key, participant_type, bref_slug, direction);
+          a team sending and receiving in one trade is two rows.
       - name: reddit_posts
         description: >
           PRAW submission ingest. Unique on reddit_id. No Courtline page.

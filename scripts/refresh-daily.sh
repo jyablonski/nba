@@ -141,7 +141,7 @@ if [[ "$DBT_EXIT" -ne 0 ]]; then
   exit "$DBT_EXIT"
 fi
 
-echo "==> ml score (Elo pregame)"
+echo "==> ml score (Elo + logit pregame)"
 compose_run ml python -m main score
 
 echo "==> dbt copy source.game_predictions → gold.fct_game_predictions"

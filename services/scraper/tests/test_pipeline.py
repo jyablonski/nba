@@ -13,8 +13,10 @@ from pipeline import (
     PipelineConfig,
     compose_run_action,
     decide_action,
+    execute_contracts,
     execute_reddit,
     execute_scrape,
+    execute_transactions,
     finish_run,
     in_season_window,
     load_config,
@@ -23,7 +25,9 @@ from pipeline import (
     record_source_runs,
     run_pipeline_scrape,
     set_enabled,
+    should_run_contracts,
     should_run_reddit,
+    should_run_transactions,
     start_run,
     update_run_dbt_exit,
 )
@@ -193,6 +197,56 @@ def test_should_run_reddit_when_pipeline_allowed() -> None:
     assert compose_run_action("daily", True) == "daily+reddit"
     assert compose_run_action("daily", False) == "daily"
     assert compose_run_action("season", True) == "season+reddit"
+    assert compose_run_action("skipped_offseason", False, False) == "skipped_offseason"
+    assert compose_run_action("skipped_offseason", True, True) == "contracts+reddit"
+    assert compose_run_action("daily", True, True) == "daily+contracts+reddit"
+    assert (
+        compose_run_action("skipped_offseason", True, True, True) == "contracts+transactions+reddit"
+    )
+    assert compose_run_action("daily", True, True, True) == "daily+contracts+transactions+reddit"
+
+
+@pytest.mark.unit
+def test_should_run_contracts_ignores_season_active() -> None:
+    """Payroll moves in the offseason, so contracts follow ``enabled`` alone."""
+    assert should_run_contracts(_config(enabled=True, season_active=False)) is True
+    assert should_run_contracts(_config(enabled=True, season_active=True)) is True
+    assert should_run_contracts(_config(enabled=False)) is False
+    assert should_run_contracts(_config(enabled=False, season_active=True)) is False
+    assert should_run_contracts(_config(enabled=False), force=True) is True
+
+
+@pytest.mark.unit
+def test_should_run_transactions_ignores_season_active() -> None:
+    """The transactions log is busiest in the offseason."""
+    assert should_run_transactions(_config(enabled=True, season_active=False)) is True
+    assert should_run_transactions(_config(enabled=True, season_active=True)) is True
+    assert should_run_transactions(_config(enabled=False)) is False
+    assert should_run_transactions(_config(enabled=False), force=True) is True
+
+
+@pytest.mark.unit
+def test_execute_transactions_reports_transaction_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """rows= counts transactions, not the participant total beside it."""
+    monkeypatch.setattr("pipeline.scrape_transactions", lambda: (40, 95))
+    alert = SyncAlert("pipeline")
+    assert execute_transactions(alert) == (40, 95)
+    by_step = {step.step: step for step in alert.steps}
+    assert by_step["transactions"].rows == 40
+    assert alert.failures == []
+
+
+@pytest.mark.unit
+def test_execute_contracts_reports_combined_rows(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Explicit rows= keeps contracts from reporting a bare tuple."""
+    monkeypatch.setattr("pipeline.scrape_contracts", lambda: (500, 30))
+    alert = SyncAlert("pipeline")
+    assert execute_contracts(alert) == (500, 30)
+    by_step = {step.step: step for step in alert.steps}
+    assert by_step["contracts"].rows == 530
+    assert alert.failures == []
 
 
 @pytest.mark.unit
@@ -201,7 +255,6 @@ def test_execute_scrape(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("pipeline.scrape_standings", lambda season: 30)
     monkeypatch.setattr("pipeline.scrape_injuries", lambda: 4)
     monkeypatch.setattr("pipeline.scrape_odds", lambda: 0)
-    monkeypatch.setattr("pipeline.scrape_contracts", lambda: (8, 2))
     monkeypatch.setattr("pipeline.current_season", lambda: "2025-26")
     pbp_calls: list[object] = []
     monkeypatch.setattr(
@@ -209,12 +262,11 @@ def test_execute_scrape(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda **kwargs: pbp_calls.append(kwargs) or 7,
     )
     count, detail = execute_scrape("daily", _config())
-    assert count == 44
+    assert count == 34
     assert "standings: 30" in detail
     assert "injuries: 4" in detail
     assert "odds: 0" in detail
-    assert "contracts: 8" in detail
-    assert "payroll: 2" in detail
+    assert "contracts" not in detail
     assert pbp_calls == []
 
     monkeypatch.setattr(
@@ -222,11 +274,10 @@ def test_execute_scrape(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr("pipeline.scrape_logs_for_games", lambda games: 10)
     count, detail = execute_scrape("daily", _config())
-    assert count == 61
+    assert count == 51
     assert "2 game" in detail
     assert "standings: 30" in detail
     assert "pbp: 7" in detail
-    assert "contracts: 8" in detail
     assert pbp_calls == [{"game_ids": ["1", "2"]}]
 
     monkeypatch.setattr("pipeline.scrape_games", lambda season: 82)
@@ -292,7 +343,6 @@ def test_daily_records_skipped_sources_rather_than_omitting_them(
     monkeypatch.setattr("pipeline.scrape_todays_games", lambda: [])
     monkeypatch.setattr("pipeline.scrape_standings", lambda season: 30)
     monkeypatch.setattr("pipeline.scrape_injuries", lambda: 12)
-    monkeypatch.setattr("pipeline.scrape_contracts", lambda: (500, 30))
 
     alert = SyncAlert("pipeline")
     execute_scrape("daily", _config(), alert=alert)
@@ -304,8 +354,7 @@ def test_daily_records_skipped_sources_rather_than_omitting_them(
     assert by_step["player_game_logs"].status == "skipped"
     assert by_step["play_by_play"].status == "skipped"
     assert "No completed games today" in (by_step["play_by_play"].error_detail or "")
-    # Explicit rows= keeps contracts from reporting a games count or a bare tuple.
-    assert by_step["contracts"].rows == 530
+    assert "contracts" not in by_step
     assert by_step["todays_games"].rows == 0
     assert alert.failures == []
 
@@ -433,6 +482,8 @@ def test_run_pipeline_scrape_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
     session.execute.return_value.one.return_value = _row(enabled=False)
     session.execute.return_value.scalar_one.return_value = 7
     monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
     result = run_pipeline_scrape(today=date(2026, 1, 15))
     assert result["status"] == "skipped"
     assert result["action"] == "skipped_disabled"
@@ -442,7 +493,7 @@ def test_run_pipeline_scrape_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
     session.execute.return_value.one.return_value = _row(scrape_mode="season", target_season=None)
     monkeypatch.setattr("pipeline.execute_reddit", lambda alert=None: 4)
     result = run_pipeline_scrape(today=date(2026, 1, 15))
-    assert result["action"] == "reddit"
+    assert result["action"] == "contracts+transactions+reddit"
     assert result["status"] == "success"
     assert result["reddit_ran"] is True
 
@@ -453,11 +504,13 @@ def test_run_pipeline_scrape_success_and_failure(monkeypatch: pytest.MonkeyPatch
     session.execute.return_value.one.return_value = _row()
     session.execute.return_value.scalar_one.return_value = 9
     monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
     monkeypatch.setattr("pipeline.execute_scrape", lambda action, config, alert=None: (3, "ok"))
     monkeypatch.setattr("pipeline.execute_reddit", lambda alert=None: 4)
     result = run_pipeline_scrape(force=True, today=date(2026, 1, 15))
     assert result["status"] == "success"
-    assert result["action"] == "daily+reddit"
+    assert result["action"] == "daily+contracts+transactions+reddit"
     assert "ok" in result["detail"]
     assert "r/nba" in result["detail"]
     assert result["reddit_ran"] is True
@@ -478,6 +531,8 @@ def test_run_pipeline_scrape_notifies_once_on_failure(monkeypatch: pytest.Monkey
     session.execute.return_value.one.return_value = _row()
     session.execute.return_value.scalar_one.return_value = 9
     monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
     monkeypatch.setattr(
         "pipeline.execute_scrape",
         lambda action, config, alert=None: (_ for _ in ()).throw(RuntimeError("boom")),
@@ -505,6 +560,8 @@ def test_run_pipeline_scrape_success_and_skip_do_not_notify(
     session.execute.return_value.one.return_value = _row()
     session.execute.return_value.scalar_one.return_value = 9
     monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
     monkeypatch.setattr("pipeline.missing_reddit_env_names", lambda: ["REDDIT_CLIENT_ID"])
     monkeypatch.setattr("pipeline.execute_scrape", lambda action, config, alert=None: (3, "ok"))
     posted: list[object] = []
@@ -523,6 +580,8 @@ def test_run_pipeline_scrape_success_and_skip_do_not_notify(
 def test_update_run_dbt_exit(monkeypatch: pytest.MonkeyPatch) -> None:
     session = MagicMock()
     monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
     update_run_dbt_exit(3, 0, detail="dbt ok")
     session.execute.assert_called_once_with(
         UPDATE_PIPELINE_RUN_DBT_EXIT,
@@ -566,6 +625,8 @@ def test_run_pipeline_reddit_on_season_off(monkeypatch: pytest.MonkeyPatch) -> N
     )
     session.execute.return_value.scalar_one.return_value = 11
     monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
     executed: list[str] = []
     monkeypatch.setattr(
         "pipeline.execute_scrape",
@@ -574,12 +635,22 @@ def test_run_pipeline_reddit_on_season_off(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(
         "pipeline.execute_reddit", lambda alert=None: executed.append("reddit") or 4
     )
+    # This test is the one proving contracts run with the season gate shut, so
+    # its stub records the call instead of silently succeeding.
+    monkeypatch.setattr(
+        "pipeline.execute_contracts",
+        lambda alert=None: executed.append("contracts") or (5, 1),
+    )
+    monkeypatch.setattr(
+        "pipeline.execute_transactions",
+        lambda alert=None: executed.append("transactions") or (9, 20),
+    )
     result = run_pipeline_scrape(today=date(2026, 8, 1))
     assert result["status"] == "success"
-    assert result["action"] == "reddit"
+    assert result["action"] == "contracts+transactions+reddit"
     assert result["reddit_ran"] is True
     assert result["reddit_exit"] == 0
-    assert executed == ["reddit"]
+    assert executed == ["contracts", "transactions", "reddit"]
     assert "r/nba" in result["detail"]
 
 
@@ -589,6 +660,8 @@ def test_run_pipeline_season_on_always_reddits(monkeypatch: pytest.MonkeyPatch) 
     session.execute.return_value.one.return_value = _row()
     session.execute.return_value.scalar_one.return_value = 12
     monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
     executed: list[str] = []
     monkeypatch.setattr(
         "pipeline.execute_scrape",
@@ -600,7 +673,7 @@ def test_run_pipeline_season_on_always_reddits(monkeypatch: pytest.MonkeyPatch) 
     )
     result = run_pipeline_scrape(today=date(2026, 1, 15))
     assert result["status"] == "success"
-    assert result["action"] == "daily+reddit"
+    assert result["action"] == "daily+contracts+transactions+reddit"
     assert result["reddit_ran"] is True
     assert executed == ["nba", "reddit"]
 
@@ -611,6 +684,8 @@ def test_run_pipeline_both_on(monkeypatch: pytest.MonkeyPatch) -> None:
     session.execute.return_value.one.return_value = _row()
     session.execute.return_value.scalar_one.return_value = 13
     monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
     executed: list[str] = []
     monkeypatch.setattr(
         "pipeline.execute_scrape",
@@ -621,7 +696,7 @@ def test_run_pipeline_both_on(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     result = run_pipeline_scrape(today=date(2026, 1, 15))
     assert result["status"] == "success"
-    assert result["action"] == "daily+reddit"
+    assert result["action"] == "daily+contracts+transactions+reddit"
     assert result["reddit_ran"] is True
     assert result["reddit_exit"] == 0
     assert executed == ["nba", "reddit"]
@@ -636,6 +711,8 @@ def test_run_pipeline_disabled_skips_reddit(monkeypatch: pytest.MonkeyPatch) -> 
     )
     session.execute.return_value.scalar_one.return_value = 14
     monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
     executed: list[str] = []
     monkeypatch.setattr(
         "pipeline.execute_scrape",
@@ -651,7 +728,7 @@ def test_run_pipeline_disabled_skips_reddit(monkeypatch: pytest.MonkeyPatch) -> 
 
     result = run_pipeline_scrape(force=True, today=date(2026, 1, 15))
     assert result["status"] == "success"
-    assert result["action"] == "daily+reddit"
+    assert result["action"] == "daily+contracts+transactions+reddit"
     assert executed == ["nba", "reddit"]
 
 
@@ -664,6 +741,8 @@ def test_run_pipeline_force_also_runs_reddit(monkeypatch: pytest.MonkeyPatch) ->
     )
     session.execute.return_value.scalar_one.return_value = 15
     monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
     executed: list[str] = []
     monkeypatch.setattr(
         "pipeline.execute_scrape",
@@ -674,7 +753,7 @@ def test_run_pipeline_force_also_runs_reddit(monkeypatch: pytest.MonkeyPatch) ->
     )
     result = run_pipeline_scrape(force=True, today=date(2026, 8, 1))
     assert result["status"] == "success"
-    assert result["action"] == "daily+reddit"
+    assert result["action"] == "daily+contracts+transactions+reddit"
     assert result["reddit_ran"] is True
     assert executed == ["nba", "reddit"]
 
@@ -689,6 +768,8 @@ def test_run_pipeline_reddit_failure_records_exit(monkeypatch: pytest.MonkeyPatc
     )
     session.execute.return_value.scalar_one.return_value = 16
     monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
     monkeypatch.setattr("pipeline.execute_scrape", lambda *args, **kwargs: (0, "nba"))
     monkeypatch.setattr("pipeline.missing_reddit_env_names", lambda: [])
     monkeypatch.setattr(
@@ -710,6 +791,8 @@ def test_run_pipeline_nba_failure_still_runs_reddit(monkeypatch: pytest.MonkeyPa
     session.execute.return_value.one.return_value = _row()
     session.execute.return_value.scalar_one.return_value = 17
     monkeypatch.setattr("pipeline.get_session", lambda: _session(session))
+    monkeypatch.setattr("pipeline.execute_contracts", lambda alert=None: (0, 0))
+    monkeypatch.setattr("pipeline.execute_transactions", lambda alert=None: (0, 0))
 
     def fake_nba(action, config, alert=None):
         if alert is not None:

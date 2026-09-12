@@ -16,6 +16,7 @@ from repositories.social import SocialRepository
 from repositories.standings import StandingsRepository
 from repositories.status import StatusRepository
 from repositories.teams import TeamsRepository
+from repositories.transactions import TransactionsRepository
 
 
 def get_db() -> Generator[Session]:
@@ -48,6 +49,10 @@ def get_standings_repository(db: Session = Depends(get_db)) -> StandingsReposito
 
 def get_status_repository(db: Session = Depends(get_db)) -> StatusRepository:
     return StatusRepository(db)
+
+
+def get_transactions_repository(db: Session = Depends(get_db)) -> TransactionsRepository:
+    return TransactionsRepository(db)
 
 
 def get_admin_repository(db: Session = Depends(get_db)) -> AdminRepository:

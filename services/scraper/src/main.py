@@ -29,6 +29,7 @@ from scrapers.players import scrape_players
 from scrapers.reddit import DEFAULT_COMMENTS_PER_POST, scrape_reddit
 from scrapers.standings import scrape_standings
 from scrapers.teams import scrape_teams
+from scrapers.transactions import scrape_transactions
 
 
 def _parse_optional_date(value: str | None) -> date | None:
@@ -85,6 +86,15 @@ def scrape_all(seasons: str | None, active_only: bool, with_reddit: bool) -> Non
         n_contracts, n_payroll = contracts
         click.echo(f"Player contracts: {n_contracts}; team payroll rows: {n_payroll}")
     for season in season_list:
+        transactions = alert.try_run(
+            "transactions",
+            lambda s=season: scrape_transactions(s),
+            season=season,
+            rows=lambda result: result[0],
+        )
+        if transactions is not None:
+            n_transactions, n_participants = transactions
+            click.echo(f"Transactions {season}: {n_transactions}; participants: {n_participants}")
         n_games = alert.try_run("games", lambda s=season: scrape_games(s), season=season)
         if n_games is not None:
             click.echo(f"Games {season}: {n_games}")
@@ -185,6 +195,14 @@ def scrape_reddit_cmd(subreddit: str, limit: int, time_filter: str, comments_per
     if name.lower().startswith("r/"):
         name = name[2:].strip()
     click.echo(f"Upserted {count} reddit posts from r/{name or 'nba'}")
+
+
+@cli.command("scrape-transactions")
+@click.option("--season", default=None, help='Season string, e.g. "2025-26". Default: current.')
+def scrape_transactions_cmd(season: str | None) -> None:
+    """Upsert one season's Basketball-Reference transactions log."""
+    n_transactions, n_participants = scrape_transactions(season)
+    click.echo(f"Transactions: {n_transactions}; participants: {n_participants}")
 
 
 @cli.command("scrape-injuries")

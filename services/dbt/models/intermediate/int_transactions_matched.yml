@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: int_transactions_matched
+    description: >
+      Transaction participants joined to canonical teams and players. The
+      scraper resolves ids from href slugs; this model only records whether
+      that link landed, via match_method.
+    columns:
+      - name: transaction_key
+        data_tests:
+          - not_null
+      - name: match_method
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["external_id", "unmatched"]

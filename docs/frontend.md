@@ -14,18 +14,21 @@ The product name is **Baseline**. One header bar holds the lockup, tabs, and a l
 
 ## Pages
 
-Tabs: **Home · Games · Schedule · Players · Teams · Compare · Ask · About**
+Tabs: **Home · Schedule · Players · Teams · Ask · Social · About** — the list in `src/lib/nav.ts`.
+
+`/games`, `/standings`, `/players/compare`, and `/admin` are reachable routes with no tab of their own.
 
 - `/` — coverage facts, latest completed games with PBP links, East/West standings snapshot
 - `/games` — completed-game picker for play-by-play
 - `/games/[id]` — scoring-differential chart, time-led %, max lead, lead changes, biggest scoring run. Team brand colors come from the API; not live win probability
 - `/schedule` — upcoming slate (not Final, date ≥ today). No scores, odds, or WP
 - `/players`, `/players/[id]` — directory with search and filters; profile with career bar, game log, contract snapshot, B2B splits, PPG-by-season
-- `/players/compare` — up to N players, sortable, difference row. With exactly two, a head-to-head toggle shows games they played on opposite teams
+- `/players/compare` — up to N players, sortable, difference row. With exactly two, a head-to-head toggle shows games they played on opposite teams. Reached by selecting players on `/players`, not from the nav
 - `/teams`, `/teams/[id]` — conference/division tables, scoring scatter, team profile with cap position and filterable game log
 - `/standings` — full conference tables (deep link, not a tab)
 - `/ask` — posts to `POST /api/v1/query`. One question, one answer, no transcript
-- `/about` — sources and coverage in plain language
+- `/social` — r/nba feed, player mentions, and discourse leaderboards. See [social.md](social.md)
+- `/about` — sources, coverage, and project background in plain language. Its copy is asserted em-dash-free by `tests/unit/about-page.test.tsx`
 - `/admin` — operator console, GitHub OAuth. Not in the nav. See [operations.md](operations.md)
 
 Season defaults to the latest loaded season everywhere; `?season=` is still honored but the picker is hidden.
@@ -53,6 +56,6 @@ make test-frontend-e2e                              # Playwright
 
 ## Not built
 
-A Social tab for r/nba content. Injuries, odds, and Reddit have gold marts and are reachable through Ask and MCP, but they are not pages.
+Injuries, odds, and transactions have gold marts and REST or Cube exposure, but no page of their own.
 
 Also not built: betting features, streaming Ask, live in-game win probability, a season-leaders API.

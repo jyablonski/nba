@@ -1,0 +1,50 @@
+cubes:
+  - name: transactions
+    sql_table: gold.fct_transactions
+    description: >
+      Basketball-Reference transactions log — trades, signings, waivers, and
+      two-way conversions. One row per dated entry. Grain is transaction_key,
+      sha256(transaction_date|description), so a reworded entry appears as a
+      new row rather than an edit. team_count tells a signing (one team) from
+      a trade (two or more) without re-reading the prose.
+
+    dimensions:
+      - name: transaction_key
+        sql: transaction_key
+        type: string
+        primary_key: true
+        public: true
+
+      - name: transaction_date
+        sql: transaction_date
+        type: time
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: description
+        sql: description
+        type: string
+
+      - name: source_url
+        sql: source_url
+        type: string
+
+    measures:
+      - name: count
+        type: count
+
+      - name: total_teams
+        sql: team_count
+        type: sum
+
+      - name: total_players
+        sql: player_count
+        type: sum
+
+      - name: unmatched_participants
+        # Participants whose Basketball-Reference slug did not resolve to a
+        # canonical id — a data-coverage signal, not a product metric.
+        sql: unmatched_count
+        type: sum

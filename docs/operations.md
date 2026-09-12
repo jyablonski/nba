@@ -23,19 +23,23 @@ make pipeline-enable     # enabled + season_active
 make pipeline-status
 make scrape              # scrape only; FORCE=1 bypasses the gate
 make dbt                 # deps + build
-make ml                  # Elo score, then the gold copy
+make ml                  # score Elo + logit, then the gold copy
 make refresh             # scrape → dbt → ml
 ```
 
 `enabled` is the master switch. `season_active` gates the NBA steps only:
 
-|                             | NBA steps                                                                    | Reddit                           |
-| --------------------------- | ---------------------------------------------------------------------------- | -------------------------------- |
-| `enabled` + `season_active` | slate, Finals logs, their PBP, standings, injuries, contracts, odds if keyed | yes                              |
-| `enabled` only              | skipped                                                                      | yes — Reddit is not season-gated |
-| not `enabled`               | skipped                                                                      | skipped                          |
+|                             | NBA steps                                                         | Contracts | Transactions | Reddit  |
+| --------------------------- | ----------------------------------------------------------------- | --------- | ------------ | ------- |
+| `enabled` + `season_active` | slate, Finals logs, their PBP, standings, injuries, odds if keyed | yes       | yes          | yes     |
+| `enabled` only              | skipped                                                           | yes       | yes          | yes     |
+| not `enabled`               | skipped                                                           | skipped   | skipped      | skipped |
+
+Contracts, transactions, and Reddit are not season-gated. Roster and payroll movement peaks in the offseason — free agency, trades, extensions — so gating those on `season_active` staled the data exactly when it changed fastest.
 
 `FORCE=1` bypasses both. A skipped run exits 0 and does **not** run dbt.
+
+Training is deliberately not on this path. `make ml-train` fits the logit artifact and `make ml-eval` prints its metrics against the Elo and always-home baselines; both are manual. See [ml.md](ml.md).
 
 `refresh-daily.sh` runs Alembic, the gated scrape, `dbt build`, Elo, then the gold predictions copy. It waits for an existing healthy Postgres rather than starting one, because recreating Tilt's container would not re-run `init.sql`. `dbt build` interleaves each model's tests with the model, so a failing test skips that model's descendants instead of publishing them and failing at the end.
 

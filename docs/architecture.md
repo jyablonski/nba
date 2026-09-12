@@ -40,7 +40,7 @@ FastAPI `/api/v1/*`, layered:
 - `routers/` — HTTP · `repositories/` — sessions and row mapping · `queries/` — SQL constants
 - `schemas/` — Pydantic responses · `cube/` — Cube client and named operations · `services/nlp/` — `/ask` backends
 
-Routes cover players, teams, games, schedule, standings, `GET /api/v1/status`, `POST /api/v1/query`, and `/api/v1/admin/*`. `GET /health` is liveness only — never surface it in the UI.
+Routes cover players, teams, games, schedule, standings, social, transactions, `GET /api/v1/status`, `POST /api/v1/query`, and `/api/v1/admin/*`. `GET /health` is liveness only — never surface it in the UI.
 
 CORS allows `http://localhost:3000`; production is same-origin through Caddy.
 
@@ -50,4 +50,4 @@ CORS allows `http://localhost:3000`; production is same-origin through Caddy.
 
 ## Not built
 
-Public predictions API, win-probability badge in the UI, Social tab, always-on scraper/dbt/ml on the VM.
+Public predictions API, win-probability badge in the UI, a transactions page, always-on scraper/dbt/ml on the VM.

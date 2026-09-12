@@ -96,12 +96,12 @@ MENTION_ROLLUP = """
 POST_ROW_JOINS = f"""
     LEFT JOIN LATERAL ({COMMENT_ROLLUP}) AS comments ON TRUE
     LEFT JOIN LATERAL ({MENTION_ROLLUP}) AS mentions ON TRUE
-    LEFT JOIN gold.fct_reddit_flair
-        ON fct_reddit_flair.author_flair = posts.author_flair
+    LEFT JOIN gold.fct_reddit_flair AS flair
+        ON flair.author_flair = posts.author_flair
 """
 
 POSTS_FROM = f"""
-    FROM gold.fct_reddit_posts
+    FROM gold.fct_reddit_posts AS posts
     {POST_ROW_JOINS}
 """
 
@@ -171,7 +171,7 @@ POST_SORTS = {
 LIST_POSTS_COUNT = text(
     f"""
     SELECT count(*) AS total
-    FROM gold.fct_reddit_posts
+    FROM gold.fct_reddit_posts AS posts
     {POSTS_FILTER}
     """
 )
@@ -201,8 +201,8 @@ def _list_posts(key: str, order: str) -> str:
     )
     return f"""
         WITH page AS (
-            SELECT fct_reddit_posts.reddit_id{PAGE_SORT_SELECT.get(key, "")}
-            FROM gold.fct_reddit_posts
+            SELECT posts.reddit_id{PAGE_SORT_SELECT.get(key, "")}
+            FROM gold.fct_reddit_posts AS posts
             {page_rollup}
             {POSTS_FILTER}
             ORDER BY {order}
@@ -211,8 +211,8 @@ def _list_posts(key: str, order: str) -> str:
         SELECT
             {POSTS_SELECT}
         FROM page
-        INNER JOIN gold.fct_reddit_posts
-            ON fct_reddit_posts.reddit_id = page.reddit_id
+        INNER JOIN gold.fct_reddit_posts AS posts
+            ON posts.reddit_id = page.reddit_id
         {POST_ROW_JOINS}
         ORDER BY {order}
     """
@@ -268,18 +268,18 @@ LIST_POST_COMMENTS = text(
 SOCIAL_SUMMARY = f"""
     WITH filtered AS (
         SELECT
-            fct_reddit_posts.reddit_id,
-            fct_reddit_posts.author,
-            fct_reddit_posts.score,
-            fct_reddit_posts.num_comments,
-            fct_reddit_posts.created_utc,
-            fct_reddit_posts.scraped_at,
+            posts.reddit_id,
+            posts.author,
+            posts.score,
+            posts.num_comments,
+            posts.created_utc,
+            posts.scraped_at,
             {IS_CONTESTED} AS is_contested
-        FROM gold.fct_reddit_posts
+        FROM gold.fct_reddit_posts AS posts
         WHERE
-            (:from_date IS NULL OR fct_reddit_posts.created_utc >= CAST(:from_date AS date))
-          AND (:to_date IS NULL OR fct_reddit_posts.created_utc < CAST(:to_date AS date) + 1)
-          AND (:subreddit IS NULL OR lower(fct_reddit_posts.subreddit) = lower(:subreddit))
+            (:from_date IS NULL OR posts.created_utc >= CAST(:from_date AS date))
+          AND (:to_date IS NULL OR posts.created_utc < CAST(:to_date AS date) + 1)
+          AND (:subreddit IS NULL OR lower(posts.subreddit) = lower(:subreddit))
     )
     SELECT
         (SELECT count(*) FROM filtered) AS post_count,
@@ -302,20 +302,24 @@ GET_SUMMARY = text(SOCIAL_SUMMARY)
 
 
 def _leaderboard(key_expression: str) -> str:
-    """GROUP BY rollup shared by the tag, source, author, and composition boards."""
+    """GROUP BY rollup shared by the tag, source, author, and composition boards.
+
+    The FROM alias must stay `posts`: every fragment spliced in here, including
+    the caller's key_expression, is written against that name.
+    """
     return f"""
         WITH filtered AS (
             SELECT
                 {key_expression} AS key,
-                fct_reddit_posts.score,
-                fct_reddit_posts.num_comments,
-                fct_reddit_posts.is_self,
+                posts.score,
+                posts.num_comments,
+                posts.is_self,
                 {DISCUSSION_RATIO} AS discussion_ratio
-            FROM gold.fct_reddit_posts
+            FROM gold.fct_reddit_posts AS posts
             WHERE
-                (:from_date IS NULL OR fct_reddit_posts.created_utc >= CAST(:from_date AS date))
-              AND (:to_date IS NULL OR fct_reddit_posts.created_utc < CAST(:to_date AS date) + 1)
-              AND (:subreddit IS NULL OR lower(fct_reddit_posts.subreddit) = lower(:subreddit))
+                (:from_date IS NULL OR posts.created_utc >= CAST(:from_date AS date))
+              AND (:to_date IS NULL OR posts.created_utc < CAST(:to_date AS date) + 1)
+              AND (:subreddit IS NULL OR lower(posts.subreddit) = lower(:subreddit))
         )
         SELECT
             key,
@@ -360,11 +364,11 @@ LIST_FACETS = text(
         SELECT
             {POST_CONTENT_TYPE} AS content_type,
             {IS_CONTESTED} AS is_contested
-        FROM gold.fct_reddit_posts
+        FROM gold.fct_reddit_posts AS posts
         WHERE
-            (:from_date IS NULL OR fct_reddit_posts.created_utc >= CAST(:from_date AS date))
-          AND (:to_date IS NULL OR fct_reddit_posts.created_utc < CAST(:to_date AS date) + 1)
-          AND (:subreddit IS NULL OR lower(fct_reddit_posts.subreddit) = lower(:subreddit))
+            (:from_date IS NULL OR posts.created_utc >= CAST(:from_date AS date))
+          AND (:to_date IS NULL OR posts.created_utc < CAST(:to_date AS date) + 1)
+          AND (:subreddit IS NULL OR lower(posts.subreddit) = lower(:subreddit))
     )
     SELECT
         content_type AS key,

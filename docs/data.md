@@ -41,12 +41,13 @@ Click CLI, `python -m main`. Upserts only — Alembic must have created the tabl
 | `scrape-game-logs --season`       | `source.player_game_logs`                                          |
 | `scrape-standings --season`       | `source.standings`                                                 |
 | `scrape-contracts`                | `source.player_contracts`, `source.team_payroll`                   |
+| `scrape-transactions [--season]`  | `source.transactions`, `source.transaction_participants`           |
 | `scrape-injuries`                 | `source.player_injuries` — current snapshot, deletes leavers       |
 | `scrape-odds`                     | `source.game_odds` — needs `ODDS_API_KEY`, else skipped            |
 | `scrape-reddit`                   | `source.reddit_posts`, `source.reddit_comments` — needs `REDDIT_*` |
 | `scrape-play-by-play`             | `source.play_by_play`                                              |
 | `scrape-daily`                    | the whole basketball daily, ungated                                |
-| `scrape-all [--seasons]`          | teams, players, contracts, then per-season data                    |
+| `scrape-all [--seasons]`          | teams, players, contracts, then per-season data and transactions   |
 
 All Basketball-Reference HTML goes through one shared conservative transport with retries. Identity is never guessed from a name alone.
 
@@ -58,9 +59,9 @@ Project `nba_analytics`, Python 3.13. `make dbt` runs `deps` + `build`. E2E: `ma
 
 Local `compose run` bind-mounts models and SQL, so YAML and SQL edits need no rebuild. Rebuild only after Dockerfile, lockfile, or package changes.
 
-**Staging** views mirror source tables one-to-one. **Intermediate** models do the real work — enriched game logs, contract and injury name matching, play-by-play parsing and scoring.
+**Staging** views mirror source tables one-to-one. **Intermediate** models do the real work — enriched game logs, contract and injury name matching, transaction participant resolution, play-by-play parsing and scoring.
 
-**Gold** holds the product tables: `dim_players`, `dim_teams`, `fct_player_game_logs`, `fct_player_season_stats`, `fct_team_game_results` (Final only), `fct_games_schedule`, `fct_standings`, `fct_player_contracts`, `fct_team_payroll`, `fct_game_predictions`, `fct_player_injuries`, `fct_game_odds`, `fct_play_by_play`, `fct_play_by_play_scoring`, `fct_game_flow`, `fct_reddit_posts`, `fct_reddit_comments`.
+**Gold** holds the product tables: `dim_players`, `dim_teams`, `fct_player_game_logs`, `fct_player_season_stats`, `fct_team_game_results` (Final only), `fct_games_schedule`, `fct_standings`, `fct_player_contracts`, `fct_team_payroll`, `fct_game_predictions`, `fct_player_injuries`, `fct_game_odds`, `fct_play_by_play`, `fct_play_by_play_scoring`, `fct_game_flow`, `fct_reddit_posts`, `fct_reddit_comments`, `fct_reddit_entity_mentions`, `fct_reddit_flair`, `fct_transactions`, `fct_transaction_participants`, and `fct_prediction_scorecard` (per-model evaluation metrics; see [ml.md](ml.md)).
 
 Materialization is a real decision here — see `services/dbt/AGENTS.md` for the policy. Two things to know:
 
@@ -75,7 +76,7 @@ Materialization is a real decision here — see `services/dbt/AGENTS.md` for the
 
 **Only `POST /api/v1/query` goes through Cube**, and only Ask and MCP depend on it. There is no gold-SQL fallback for those, by design.
 
-Contracts and payroll have no route of their own: they arrive as columns on `dim_players` and `dim_teams`. Injuries, odds, and Reddit have gold marts but no REST route — they are reachable through Ask and MCP only.
+Contracts and payroll have no route of their own: they arrive as columns on `dim_players` and `dim_teams`. Reddit is served by `/api/v1/social` and transactions by `/api/v1/transactions`. Injuries and odds have gold marts but no REST route — they are reachable through Ask and MCP only.
 
 ## Gotchas
 
@@ -84,3 +85,5 @@ Contracts and payroll have no route of their own: they arrive as columns on `dim
 Salary and payroll are Basketball-Reference **remaining-year snapshots**, not a paid ledger.
 
 `fct_standings` is a season-to-date upsert. Joining it onto a past game does not give you the standings as of that night.
+
+Transactions are keyed by `sha256(transaction_date|description)`, so a reworded Basketball-Reference entry arrives as a new row rather than an edit. Draft picks are prose with no link on the source page and never become participants; a player named inside a pick clause is linked and is kept. A transaction naming a player that `scrape-players` has not seen yet drops that participant and picks it up on a later run — transactions reference players, they never create or reactivate them.

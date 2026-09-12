@@ -18,7 +18,7 @@ export default function AboutPage() {
 
       <p className="type-prose">
         An NBA analytics app covering box scores, player and team stats, contract snapshots, betting
-        odds, and ML-powered win predictions, updated daily throughout the season.
+        odds, and Elo-based win predictions, updated daily throughout the season.
       </p>
 
       <Section title="Sources">
@@ -48,6 +48,16 @@ export default function AboutPage() {
 
       <Section title="Coverage">
         <p>Coverage defaults to the latest season only.</p>
+      </Section>
+
+      <Section title="Background">
+        <p>
+          The app has been running in some form since 2021, originally as a handful of separate
+          services in different repos. It was rebuilt in September 2026 as a single monorepo
+          platform, keeping largely the same data on a new foundation: a Cube semantic layer over
+          the warehouse, an MCP server so AI assistants can query it directly, and Elo-based pregame
+          win probabilities.
+        </p>
       </Section>
 
       <Section title="Developer">

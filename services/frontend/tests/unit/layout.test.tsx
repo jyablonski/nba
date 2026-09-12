@@ -34,10 +34,7 @@ describe("layout", () => {
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(within(nav).getByRole("link", { name: "Players" })).toHaveAttribute("href", "/players");
     expect(within(nav).getByRole("link", { name: "Ask" })).toHaveAttribute("href", "/ask");
-    expect(within(nav).getByRole("link", { name: "Compare" })).toHaveAttribute(
-      "href",
-      "/players/compare"
-    );
+    expect(within(nav).queryByRole("link", { name: "Compare" })).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Player or team")).not.toBeInTheDocument();
   });
 });

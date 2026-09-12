@@ -66,6 +66,17 @@ class FakeAnalytics:
     def get_play_by_play(self, game_id: str, limit: int | None = None) -> list[dict]:
         return [{"game_id": game_id, "action_number": 1, "limit": limit}]
 
+    def get_transactions(self, **kwargs) -> list[dict]:
+        return [{"season": kwargs.get("season"), "description": "signed a guy"}]
+
+    def get_transaction_participants(self, **kwargs) -> list[dict]:
+        return [
+            {
+                "team_abbreviation": kwargs.get("team_abbreviation"),
+                "direction": "to",
+            }
+        ]
+
     def get_reddit_posts(self, **kwargs) -> list[dict]:
         return [{"reddit_id": "abc", "title": kwargs.get("search") or "thread"}]
 
@@ -175,6 +186,8 @@ def test_server_tools(monkeypatch: pytest.MonkeyPatch) -> None:
     assert server.get_game_odds()[0]["market"] == "h2h"
     assert server.get_play_by_play("0022400001")[0]["game_id"] == "0022400001"
     assert server.get_reddit_posts(search="thread")[0]["title"] == "thread"
+    assert server.get_transactions(season="2025-26")[0]["season"] == "2025-26"
+    assert server.get_transaction_participants(team_abbreviation="ATL")[0]["direction"] == "to"
     assert server.get_player_contract(1, season="2024-25")["season"] == "2024-25"
     assert server.query_cube(measures=["players.count"]) == [
         {"x": 1, "query": {"measures": ["players.count"]}}

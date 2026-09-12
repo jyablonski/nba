@@ -82,7 +82,8 @@ function PlayersDirectory() {
       <div>
         <h1 className="type-page">Players</h1>
         <p className="mt-1 text-sm text-ink-2">
-          {formatNumber(total)} in directory. Career averages come from game logs.
+          {formatNumber(total)} in directory. Select two or more players to compare them side by
+          side.
         </p>
       </div>
 

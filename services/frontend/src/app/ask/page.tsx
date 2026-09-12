@@ -19,7 +19,6 @@ import { cn } from "@/lib/utils";
 
 const SUGGESTIONS = [
   "How many back-to-backs has Kawhi Leonard played?",
-  "How many more career games has LeBron played than Stephen Curry?",
   "What is the Warriors' win percentage in Chicago?",
   "What is Curry's salary?",
   "What is the Warriors payroll?",

@@ -7,10 +7,13 @@ enables the pipeline.
 
 BRef / odds daily follows ``enabled`` + ``season_active`` (and
 the season window when set): schedule, Finals logs, those games' PBP,
-standings, injuries, remaining-year contracts, odds-if-keyed.
+standings, injuries, odds-if-keyed.
 
-Reddit always runs when the pipeline is enabled (or ``--force``). It is
-not behind ``season_active``. Missing ``REDDIT_*`` skips HTTP like odds.
+Reddit, contracts, and transactions run whenever the pipeline is
+enabled (or ``--force``), not behind ``season_active``. Contracts and
+transactions sit here because roster and payroll movement peaks in the
+offseason — free agency, trades, extensions all land while the season
+gate is shut. Missing ``REDDIT_*`` skips HTTP like odds.
 
 Source DDL is owned by Alembic (``make db-migrate``); this module does
 not CREATE TABLES.
@@ -50,6 +53,7 @@ from scrapers.play_by_play import scrape_play_by_play
 from scrapers.player_game_logs import scrape_logs_for_games, scrape_player_game_logs
 from scrapers.reddit import DEFAULT_SUBREDDIT, scrape_reddit
 from scrapers.standings import scrape_standings
+from scrapers.transactions import scrape_transactions
 
 ScrapeAction = Literal[
     "daily",
@@ -182,6 +186,25 @@ def decide_action(
     )
 
 
+def should_run_contracts(config: PipelineConfig, *, force: bool = False) -> bool:
+    """Contracts and payroll follow ``enabled`` alone, like reddit.
+
+    Deliberately not behind ``season_active``: free agency, trades, and
+    extensions all move payroll while the season gate is shut, so gating
+    them on the season staled the data exactly when it changed fastest.
+    """
+    return bool(force or config.enabled)
+
+
+def should_run_transactions(config: PipelineConfig, *, force: bool = False) -> bool:
+    """Transactions follow ``enabled`` alone, like contracts and reddit.
+
+    The transactions log is busiest in the offseason, so gating it on
+    ``season_active`` would skip exactly the window it matters most in.
+    """
+    return bool(force or config.enabled)
+
+
 def should_run_reddit(config: PipelineConfig, *, force: bool = False) -> bool:
     """Everyday r/nba when the pipeline is allowed to run.
 
@@ -191,13 +214,22 @@ def should_run_reddit(config: PipelineConfig, *, force: bool = False) -> bool:
     return bool(force or config.enabled)
 
 
-def compose_run_action(nba_action: ScrapeAction, run_reddit: bool) -> str:
-    nba_runs = nba_action in _NBA_RUN_ACTIONS
-    if nba_runs and run_reddit:
-        return f"{nba_action}+reddit"
-    if run_reddit and not nba_runs:
-        return "reddit"
-    return nba_action
+def compose_run_action(
+    nba_action: ScrapeAction,
+    run_reddit: bool,
+    run_contracts: bool = False,
+    run_transactions: bool = False,
+) -> str:
+    parts: list[str] = []
+    if nba_action in _NBA_RUN_ACTIONS:
+        parts.append(nba_action)
+    if run_contracts:
+        parts.append("contracts")
+    if run_transactions:
+        parts.append("transactions")
+    if run_reddit:
+        parts.append("reddit")
+    return "+".join(parts) if parts else nba_action
 
 
 def _final_game_ids(games: list[dict]) -> list[str]:
@@ -228,21 +260,11 @@ def execute_scrape(
             n_odds = 0
         else:
             n_odds = collector.try_run("odds", scrape_odds)
-        contracts = collector.try_run(
-            "contracts", scrape_contracts, rows=lambda result: sum(result)
-        )
         standings_count = 0 if n_standings is None else n_standings
         injuries_count = 0 if n_injuries is None else n_injuries
         odds_count = 0 if n_odds is None else n_odds
-        if contracts is None:
-            n_contracts, n_payroll = 0, 0
-        else:
-            n_contracts, n_payroll = contracts
-        snapshot_count = standings_count + injuries_count + odds_count + n_contracts + n_payroll
-        extra = (
-            f"standings: {standings_count}; injuries: {injuries_count}; "
-            f"odds: {odds_count}; contracts: {n_contracts}; payroll: {n_payroll}."
-        )
+        snapshot_count = standings_count + injuries_count + odds_count
+        extra = f"standings: {standings_count}; injuries: {injuries_count}; odds: {odds_count}."
         if not games:
             # Record the game-dependent steps rather than omitting them: an
             # absent row is indistinguishable from a step that silently stopped
@@ -314,6 +336,28 @@ def execute_reddit(alert: SyncAlert | None = None) -> int | None:
             comments_per_post=DAILY_REDDIT_COMMENTS_PER_POST,
         ),
     )
+
+
+def _contract_rows(result: tuple[int, int]) -> int:
+    """Contract rows plus payroll rows, so the step reports one total."""
+    return sum(result)
+
+
+def execute_contracts(alert: SyncAlert | None = None) -> tuple[int, int] | None:
+    """Remaining-year player contracts and the team payroll rollup."""
+    collector = alert if alert is not None else SyncAlert("contracts")
+    return collector.try_run("contracts", scrape_contracts, rows=_contract_rows)
+
+
+def _transaction_rows(result: tuple[int, int]) -> int:
+    """Transactions only. Participants are a child grain, not a second count."""
+    return result[0]
+
+
+def execute_transactions(alert: SyncAlert | None = None) -> tuple[int, int] | None:
+    """Current-season transactions log and its participants."""
+    collector = alert if alert is not None else SyncAlert("transactions")
+    return collector.try_run("transactions", scrape_transactions, rows=_transaction_rows)
 
 
 def start_run(session: Session, *, triggered_by: str, scrape_action: str) -> int:
@@ -401,11 +445,13 @@ def run_pipeline_scrape(
         config = load_config(session)
         nba_action, detail = decide_action(config, force=force, today=day)
         run_reddit = should_run_reddit(config, force=force)
-        action = compose_run_action(nba_action, run_reddit)
+        run_contracts = should_run_contracts(config, force=force)
+        run_transactions = should_run_transactions(config, force=force)
+        action = compose_run_action(nba_action, run_reddit, run_contracts, run_transactions)
         run_id = start_run(session, triggered_by=by, scrape_action=action)
 
     nba_runs = nba_action in _NBA_RUN_ACTIONS
-    if not nba_runs and not run_reddit:
+    if not nba_runs and not run_reddit and not run_contracts and not run_transactions:
         with get_session() as session:
             finish_run(
                 session,
@@ -438,8 +484,18 @@ def run_pipeline_scrape(
                 parts.append(nba_detail)
             except SyncFailedError:
                 parts.append(detail)
-        elif run_reddit:
+        elif run_reddit or run_contracts or run_transactions:
             parts.append(detail)
+        if run_contracts:
+            contracts = execute_contracts(alert)
+            if contracts is not None:
+                n_contracts, n_payroll = contracts
+                parts.append(f"contracts: {n_contracts}; payroll: {n_payroll}.")
+        if run_transactions:
+            transactions = execute_transactions(alert)
+            if transactions is not None:
+                n_transactions, n_participants = transactions
+                parts.append(f"transactions: {n_transactions}; participants: {n_participants}.")
         if run_reddit:
             reddit_ran = True
             n_reddit = execute_reddit(alert)

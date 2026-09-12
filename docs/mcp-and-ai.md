@@ -33,6 +33,11 @@ Team and league:
 - `get_standings` — conference table; falls back to Regular Season W–L when official rows are missing
 - `get_team_payroll`, `get_player_contract` — remaining-year snapshots, not a paid ledger
 
+Transactions:
+
+- `get_transactions` — the Basketball-Reference log; optional season and description search
+- `get_transaction_participants` — who moved. `direction` is `from`/`to` for teams, `none` for players, so a team on both sides of a trade appears twice
+
 Games and feeds:
 
 - `get_games_schedule` — all-status slate, upcoming scores null
@@ -63,4 +68,6 @@ Do not add a gold-SQL helper to the API or MCP.
 
 Streaming, production LLM hardening, Cube SQL API and pre-aggregates, a historical paid-salary ledger, and a named `get_reddit_comments` tool.
 
-Injuries, odds, PBP, Reddit, and Elo WP are queryable here but have no dedicated page in the UI.
+Injuries, odds, PBP, Reddit, transactions, and Elo WP are queryable here but have no dedicated page in the UI.
+
+Draft picks are prose on the transactions page with no link, so they are never participants. A player named inside a pick clause ("... was later selected") _is_ linked and is kept.

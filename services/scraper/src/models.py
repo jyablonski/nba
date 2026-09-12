@@ -536,4 +536,70 @@ class TeamPayroll(Base):
     )
 
 
+class Transaction(Base):
+    """One Basketball-Reference transactions-log entry.
+
+    ``transaction_key`` is sha256(date|description) rather than a unique index
+    on the pair itself: ``description`` is free prose, and a btree entry over
+    ~2704 bytes errors at insert time. Fixed-width hash sidesteps that.
+    """
+
+    __tablename__ = "transactions"
+    __table_args__ = {"schema": "source"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    transaction_key: Mapped[str] = mapped_column(CHAR(64), nullable=False, unique=True)
+    transaction_date: Mapped[date] = mapped_column(Date, nullable=False)
+    season: Mapped[str] = mapped_column(String(10), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    source_url: Mapped[str] = mapped_column(String(300), nullable=False)
+    scraped_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+
+class TransactionParticipant(Base):
+    """A team or player named by a transaction, resolved from its href slug.
+
+    Only hyperlinked entities land here. Draft picks ("a 2031 2nd round draft
+    pick") are plain text with no slug and are deliberately not participants.
+
+    ``direction`` comes from the team link's data-attr-from / data-attr-to. It
+    is NOT NULL with a 'none' sentinel for players because Postgres treats
+    NULLs as distinct in a UNIQUE constraint, so a nullable column would defeat
+    the uniqueness it participates in. A team can legitimately appear twice in
+    one trade, once in each direction.
+    """
+
+    __tablename__ = "transaction_participants"
+    __table_args__ = (
+        UniqueConstraint(
+            "transaction_key",
+            "participant_type",
+            "bref_slug",
+            "direction",
+            name="transaction_participants_key_type_slug_key",
+        ),
+        {"schema": "source"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    transaction_key: Mapped[str] = mapped_column(
+        CHAR(64), ForeignKey("source.transactions.transaction_key"), nullable=False
+    )
+    participant_type: Mapped[str] = mapped_column(String(10), nullable=False)
+    direction: Mapped[str] = mapped_column(String(4), nullable=False, default="none")
+    bref_slug: Mapped[str] = mapped_column(String(50), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    player_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.players.player_id")
+    )
+    team_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("source.teams.team_id")
+    )
+    scraped_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+
+
 __all__ = [name for name in globals() if not name.startswith("_")]

@@ -28,6 +28,8 @@ Cube is not a second warehouse. Results reflect the current gold tables _and_ th
 
 A YAML change reaches production only through a new Cube image. Pull it with `make prod-release`.
 
+**Only Tilt syncs the model.** A plain `docker compose up -d cube` — no Tilt — serves the model baked into the last-built image, so a new cube YAML is silently absent from `/meta` and every query against it fails as an unknown member. Run `docker compose build cube` first. `services/migrate` behaves the same way with Alembic revisions: `make db-migrate` against a stale image reports success and applies nothing.
+
 **Dev mode hides model problems.** It relaxes auth and member-access checks, so a member can work locally and be absent from production meta. Never enable it on the public host.
 
 To inspect production meta, ask from the API container — it shares Cube's network and secret:

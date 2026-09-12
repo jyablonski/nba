@@ -1,0 +1,70 @@
+cubes:
+  - name: transaction_participants
+    sql_table: gold.fct_transaction_participants
+    description: >
+      Teams and players named by each transaction, resolved from
+      Basketball-Reference href slugs. Draft picks are prose on the source page
+      with no link, so they are absent here. direction is 'from' or 'to' for
+      teams and 'none' for players; a team that both sends and receives in one
+      trade appears twice, once per direction.
+
+    dimensions:
+      - name: participant_key
+        # Grain is transaction x participant x direction; no single column is unique.
+        sql: "concat({CUBE}.transaction_key, ':', {CUBE}.participant_type, ':',
+          {CUBE}.bref_slug, ':', {CUBE}.direction)"
+        type: string
+        primary_key: true
+        public: true
+
+      - name: transaction_key
+        sql: transaction_key
+        type: string
+
+      - name: transaction_date
+        sql: transaction_date
+        type: time
+
+      - name: season
+        sql: season
+        type: string
+
+      - name: participant_type
+        sql: participant_type
+        type: string
+
+      - name: direction
+        sql: direction
+        type: string
+
+      - name: display_name
+        sql: display_name
+        type: string
+
+      - name: bref_slug
+        sql: bref_slug
+        type: string
+
+      - name: player_id
+        sql: player_id
+        type: string
+
+      - name: team_id
+        sql: team_id
+        type: string
+
+      - name: team_abbreviation
+        sql: team_abbreviation
+        type: string
+
+      - name: player_name
+        sql: player_name
+        type: string
+
+      - name: match_method
+        sql: match_method
+        type: string
+
+    measures:
+      - name: count
+        type: count
