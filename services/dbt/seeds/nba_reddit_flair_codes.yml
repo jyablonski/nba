@@ -1,0 +1,44 @@
+version: 2
+
+seeds:
+  - name: nba_reddit_flair_codes
+    description: >
+      r/nba user-flair emoji codes, resolved to a franchise. The raw flair looks
+      like ":lal-1: Lakers"; this maps the base code, with the numeric variant
+      stripped.
+
+      Reddit's code is not always the NBA abbreviation: Milwaukee is `mke` and
+      New Orleans is `nol`. `tbr` is the 2020-21 Tampa Bay Raptors and resolves to
+      TOR. Historic labels ride current codes — ":was-5: Washington Bullets",
+      ":cha-1: Charlotte Bobcats", ":mem-2: Vancouver Grizzlies" — which is why
+      the code, not the label, is the key.
+
+      Only codes carrying a numeric variant belong here. Codes without one are
+      national-team and bandwagon flairs and are classified `other` without a
+      lookup; `:phi:` is Philippines while `:phi-1:` through `:phi-5:` are the
+      76ers, and that suffix is the only thing separating them.
+    config:
+      column_types:
+        flair_code: varchar(16)
+        abbreviation: varchar(3)
+        scope: varchar(8)
+        note: varchar(120)
+    columns:
+      - name: abbreviation
+        description: >
+          NBA abbreviation, resolved to a team_id against dim_teams at build time.
+          The id is not stored here — dim_teams stays the only place it lives, and
+          a code for a team the dimension does not carry yields a null id rather
+          than a dangling one.
+      - name: flair_code
+        description: Base code, numeric variant stripped, lowercase.
+        data_tests:
+          - unique
+          - not_null
+      - name: scope
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ["team", "league", "other"]
+                quote_values: true

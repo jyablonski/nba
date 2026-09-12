@@ -133,6 +133,19 @@ class FakeCubeAnalytics:
             },
         }
 
+    def get_team_flow(self, team_abbreviation: str, season: str | None = None) -> dict:
+        team = self.find_team(team_abbreviation)
+        return {
+            "abbreviation": team_abbreviation,
+            "team_name": team["team_name"] if team else None,
+            "games": 82,
+            "blown_leads": 3,
+            "biggest_lead_blown": 21,
+            "comeback_wins": 2,
+            "biggest_comeback": 17,
+            "filters_applied": {"team_abbreviation": team_abbreviation, "season": season},
+        }
+
     def list_standings(
         self, season: str | None = None, conference: str | None = None
     ) -> list[dict]:
@@ -656,3 +669,112 @@ def test_b2b_shorthand_must_be_a_whole_token() -> None:
     service = NaturalLanguageQueryService(FakeCubeAnalytics())
     assert service.classify("Who leads the West?") == "standings"
     assert service.classify("What is player ab2bc worth?") != "b2b"
+
+
+@pytest.mark.unit
+def test_blown_leads_family() -> None:
+    engine = NaturalLanguageQueryService(FakeCubeAnalytics())
+    assert engine.classify("How many leads have the Lakers blown?") == "blown_leads"
+    assert engine.classify("Lakers blown leads") == "blown_leads"
+    assert engine.classify("How many comeback wins do the Warriors have?") == "blown_leads"
+    # Standings is checked first, so this stays a standings question.
+    assert engine.classify("Who leads the West?") == "standings"
+
+    response = engine.answer("How many leads have the Lakers blown?")
+    assert "blew 3 double-digit leads" in response.answer
+    assert "the largest 21 points" in response.answer
+    assert "trailing by 10 or more" in response.answer
+    assert response.data[0]["blown_leads"] == 3
+    assert response.data[0]["biggest_lead_blown"] == 21
+    assert response.sql is not None and "team_game_flow" in response.sql
+
+
+@pytest.mark.unit
+def test_blown_leads_without_a_team_asks_for_one() -> None:
+    engine = NaturalLanguageQueryService(FakeCubeAnalytics())
+    response = engine.answer("which team choked the most?")
+    assert "Name a team" in response.answer
+    assert response.data == []
+
+
+@pytest.mark.unit
+def test_arena_city_answer_names_the_building() -> None:
+    """A city is not a venue: Los Angeles hosts only Crypto.com Arena, because
+    the Clippers play in Inglewood. Naming it is what makes the answer checkable."""
+
+    class ArenaCube(FakeCubeAnalytics):
+        def get_team_record(self, team_abbreviation: str, **kwargs) -> dict:
+            record = super().get_team_record(team_abbreviation, **kwargs)
+            record["game_list"] = [
+                {"arena": "Crypto.com Arena", "arena_city": "Los Angeles"},
+                {"arena": "Crypto.com Arena", "arena_city": "Los Angeles"},
+            ]
+            return record
+
+    engine = NaturalLanguageQueryService(ArenaCube())
+    response = engine.answer("What is the Warriors' win percentage in Los Angeles?")
+    assert "(Crypto.com Arena)" in response.answer
+    assert response.data[0]["arena"] == "Crypto.com Arena"
+
+
+class _AllTeamsCube(FakeCubeAnalytics):
+    """Every abbreviation resolves, so routing is tested without the fake's
+    three-team roster standing in for a real miss."""
+
+    def find_team(self, abbreviation: str) -> dict | None:
+        found = super().find_team(abbreviation)
+        if found is not None:
+            return found
+        return {
+            "team_id": None,
+            "abbreviation": abbreviation.upper(),
+            "team_name": f"{abbreviation.upper()} Team",
+        }
+
+
+@pytest.mark.unit
+def test_team_vs_team_is_not_a_player_compare() -> None:
+    """ "Blazers vs Lakers" used to reach the player handler and fail with
+    "No player found matching 'Portland Trailblazer'"."""
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    question = "What is Portland Trailblazer's win percentage vs Los Angeles Lakers"
+    assert engine.classify(question) == "team_h2h"
+    response = engine.answer(question)
+    assert "No player found" not in response.answer
+    assert "POR Team are" in response.answer
+    assert "against the Los Angeles Lakers" in response.answer
+    assert response.data[0]["opponent"] == "Los Angeles Lakers"
+    assert response.sql is not None and "opponent=LAL" in response.sql
+
+
+@pytest.mark.unit
+def test_subject_team_is_the_one_named_first() -> None:
+    """Longest-alias-wins made "Portland ... vs Los Angeles Lakers" a question
+    about the Lakers, because their name is the longer string."""
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    assert engine._extract_team_abbrs(
+        "Portland Trailblazer's win percentage vs Los Angeles Lakers"
+    ) == ["POR", "LAL"]
+    assert engine._extract_team_abbrs("Lakers vs Blazers") == ["LAL", "POR"]
+    # The longer alias still wins over its own substring at the same position.
+    assert engine._extract_team_abbrs("Los Angeles Lakers record") == ["LAL"]
+
+
+@pytest.mark.unit
+def test_one_word_team_nicknames_resolve() -> None:
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    for text, abbr in (
+        ("Trailblazers record", "POR"),
+        ("Trailblazer's record", "POR"),
+        ("Twolves record", "MIN"),
+        ("Pels record", "NOP"),
+        ("Grizz record", "MEM"),
+    ):
+        assert engine._extract_team_abbr(text) == abbr, text
+
+
+@pytest.mark.unit
+def test_player_compare_still_routes_to_players() -> None:
+    engine = NaturalLanguageQueryService(_AllTeamsCube())
+    assert engine.classify("How many more career games has LeBron played than Curry?") == "compare"
+    assert engine.classify("Compare LeBron vs Curry") == "compare"

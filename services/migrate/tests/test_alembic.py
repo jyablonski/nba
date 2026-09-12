@@ -343,6 +343,29 @@ def test_upgrade_head_creates_source_tables(migrated_engine: Engine) -> None:
             )
         }
         assert "scrape_reddit" not in columns
+        # Hand-maintained: the host crontab is not readable from the API, so this
+        # is where an operator records it. Unset until somebody writes it.
+        assert "daily_refresh_utc" in columns
+        refresh = conn.execute(
+            text("SELECT daily_refresh_utc FROM source.scrape_pipeline WHERE id = 1")
+        ).scalar_one()
+        assert refresh is None
+        # The team badge is the author's flair, a different field from the
+        # post's own link_flair_text that `flair` already holds.
+        for table in ("reddit_posts", "reddit_comments"):
+            has_flair = conn.execute(
+                text(
+                    """
+                    SELECT count(*)
+                    FROM information_schema.columns
+                    WHERE table_schema = 'source'
+                      AND table_name = :table
+                      AND column_name = 'author_flair'
+                    """
+                ),
+                {"table": table},
+            ).scalar_one()
+            assert has_flair == 1, table
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
         # Computed, not hardcoded: a literal here silently rots every time a
         # revision is added, and CI runs only the unit subset so nothing catches it.

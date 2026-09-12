@@ -702,3 +702,36 @@ def reddit_posts_query(search: str | None = None, limit: int | None = None) -> d
         "order": {"reddit_posts.created_utc": "desc"},
         "limit": clamp_limit(limit, REDDIT_DEFAULT_LIMIT, REDDIT_MAX_LIMIT),
     }
+
+
+TEAM_FLOW_MEASURES = [
+    "team_game_flow.games",
+    "team_game_flow.blown_leads",
+    "team_game_flow.biggest_lead_blown",
+    "team_game_flow.comeback_wins",
+    "team_game_flow.biggest_comeback",
+]
+
+
+def team_flow_query(
+    team_abbreviation: str,
+    *,
+    season: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Blown leads and comeback wins for one team, from the flow cube.
+
+    Game-grain flow cannot say who blew a lead, so the cube unpivots to one row
+    per team per game and splits largest_lead_blown into lead_blown for the
+    loser and comeback_from for the winner.
+    """
+    filters: list[dict[str, Any]] = [
+        equals("team_game_flow.team_abbreviation", team_abbreviation.upper()),
+    ]
+    if season:
+        filters.append(equals("team_game_flow.season", season))
+    query = {
+        "measures": list(TEAM_FLOW_MEASURES),
+        "filters": filters,
+    }
+    applied = {"team_abbreviation": team_abbreviation.upper(), "season": season}
+    return query, applied

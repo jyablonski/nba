@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import { GameFlowChart } from "@/components/charts/game-flow-chart";
+import { BoxScore } from "@/components/games/box-score";
 import { EmptyState, ErrorState, LoadingState } from "@/components/query-state";
 import { api, queryErrorMessage } from "@/lib/api";
 import { formatComebackBadge, formatLeadShare, formatMatchupTitle } from "@/lib/game-flow";
@@ -34,9 +35,17 @@ function GameFlowBody() {
     queryFn: () => api.getGamePlayByPlay(gameId),
     enabled: Boolean(gameId),
   });
+  // Its own query: a game can have player lines without a scoring timeline, so
+  // the box score should not disappear with the chart.
+  const boxScoreQuery = useQuery({
+    queryKey: ["game-box-score", gameId],
+    queryFn: () => api.getGameBoxScore(gameId),
+    enabled: Boolean(gameId),
+  });
 
   const flow = flowQuery.data;
   const events = pbpQuery.data?.data ?? [];
+  const boxScore = boxScoreQuery.data?.data ?? [];
 
   return (
     <div className="space-y-6">
@@ -68,6 +77,19 @@ function GameFlowBody() {
           <FlowFacts flow={flow} />
           <GameFlowChart events={events} flow={flow} />
         </>
+      )}
+
+      {boxScoreQuery.isLoading ? (
+        <LoadingState label="Loading box score…" />
+      ) : boxScoreQuery.isError ? (
+        <ErrorState message={queryErrorMessage(boxScoreQuery.error)} />
+      ) : boxScore.length === 0 ? (
+        <EmptyState
+          title="No box score for this game."
+          message="No player game logs have been loaded for it."
+        />
+      ) : (
+        <BoxScore rows={boxScore} />
       )}
 
       <p className="text-sm">

@@ -1,0 +1,60 @@
+cubes:
+  - name: reddit_entity_mentions
+    sql_table: gold.fct_reddit_entity_mentions
+    description: >
+      Players and teams named in r/nba posts and their captured comments. One row
+      per entity per document. Players match on full name only, so a surname- or
+      nickname-only reference is not counted. Queryable via Cube / MCP.
+
+    dimensions:
+      - name: entity_type
+        sql: entity_type
+        type: string
+
+      - name: entity_id
+        sql: entity_id
+        type: string
+
+      - name: entity_name
+        sql: entity_name
+        type: string
+
+      - name: entity_abbreviation
+        sql: entity_abbreviation
+        type: string
+
+      - name: match_method
+        sql: match_method
+        type: string
+
+      - name: document_type
+        sql: document_type
+        type: string
+
+      - name: mention_key
+        # Grain is entity x document; no single column is unique.
+        sql: "concat({CUBE}.entity_type, ':', {CUBE}.entity_id, ':', {CUBE}.document_reddit_id)"
+        type: string
+        primary_key: true
+        public: true
+
+      - name: document_reddit_id
+        sql: document_reddit_id
+        type: string
+
+      - name: post_reddit_id
+        sql: post_reddit_id
+        type: string
+
+      - name: created_utc
+        sql: created_utc
+        type: time
+
+    measures:
+      - name: count
+        type: count
+
+      - name: post_count
+        type: count_distinct
+        sql: post_reddit_id
+        description: Distinct posts an entity is named in, counting the post and its comments once.

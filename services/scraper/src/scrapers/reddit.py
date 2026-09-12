@@ -1,6 +1,9 @@
 """Ingest Reddit submissions and comments via PRAW into source tables.
 
 Posts: hot + top for ``--time-filter`` (default day) → ``source.reddit_posts``.
+Author flair (the r/nba team badge) is captured on both posts and comments as
+``author_flair``; it is the author's flair as of the scrape and is not
+backfillable.
 Comments: top-N by score per ingested post (already-loaded forest;
 ``replace_more(limit=0)`` so we do not walk "load more") →
 ``source.reddit_comments``, associated by ``post_reddit_id``. Default
@@ -28,6 +31,7 @@ DEFAULT_SUBREDDIT = "nba"
 DEFAULT_LIMIT = 100
 DEFAULT_COMMENTS_PER_POST = 10
 SELFTEXT_MAX_CHARS = 4000
+FLAIR_MAX_CHARS = 200
 TIME_FILTERS = ("day", "week", "month")
 
 
@@ -67,6 +71,21 @@ def _author_name(submission: Any) -> str | None:
     if not name or name == "[deleted]":
         return None
     return name[:50]
+
+
+def _author_flair(item: Any) -> str | None:
+    """User flair on the author, e.g. ``":lal-1: Lakers"``.
+
+    This is the team badge; ``link_flair_text`` is the post's own flair and is a
+    content tag ("Highlight"), unset on roughly nine posts in ten. Reddit reports
+    the author's *current* flair, so this is as-of scrape and cannot be backfilled
+    for posts already stored.
+    """
+    raw = getattr(item, "author_flair_text", None)
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    return text[:FLAIR_MAX_CHARS] or None
 
 
 def _created_utc(submission: Any, *, fallback: datetime) -> datetime:
@@ -126,6 +145,7 @@ def submission_to_row(
         "url": url,
         "selftext": _truncate_selftext(getattr(submission, "selftext", None)),
         "flair": flair_text or None,
+        "author_flair": _author_flair(submission),
         "is_self": bool(getattr(submission, "is_self", False)),
         "scraped_at": scraped,
     }
@@ -172,6 +192,7 @@ def comment_to_row(
         "parent_id": _parent_id(comment),
         "author": _author_name(comment),
         "body": _truncate_selftext(getattr(comment, "body", None)),
+        "author_flair": _author_flair(comment),
         "score": int(getattr(comment, "score", 0) or 0),
         "created_utc": _created_utc(comment, fallback=scraped),
         "permalink": _permalink(comment),

@@ -21,10 +21,10 @@ COMPARE_STAT_COLUMNS = {
 }
 
 COMPARE_ORDER_EXPR = {
-    "career_games_played": "p.career_games_played",
-    "career_ppg": "p.career_ppg",
-    "career_rpg": "p.career_rpg",
-    "career_apg": "p.career_apg",
+    "career_games_played": "dim_players.career_games_played",
+    "career_ppg": "dim_players.career_ppg",
+    "career_rpg": "dim_players.career_rpg",
+    "career_apg": "dim_players.career_apg",
     "career_avg_plus_minus": "career_pm.career_avg_plus_minus",
 }
 
@@ -51,32 +51,34 @@ PLAYER_EXISTS = text("SELECT 1 FROM gold.dim_players WHERE player_id = :player_i
 LIST_PLAYERS_COUNT = text(
     """
     SELECT count(*) AS total
-    FROM gold.dim_players p
-    LEFT JOIN gold.dim_teams t ON t.team_id = p.team_id
-    WHERE (:search IS NULL OR p.full_name ILIKE :search)
-      AND (:active IS NULL OR p.is_active = :active)
-      AND (:team_id IS NULL OR p.team_id = :team_id)
+    FROM gold.dim_players
+    LEFT JOIN gold.dim_teams t ON t.team_id = dim_players.team_id
+    WHERE
+        (:search IS NULL OR dim_players.full_name ILIKE :search)
+      AND (:active IS NULL OR dim_players.is_active = :active)
+      AND (:team_id IS NULL OR dim_players.team_id = :team_id)
     """
 )
 
 LIST_PLAYERS = text(
     """
     SELECT
-        p.player_id,
-        p.full_name,
-        p.position,
+        dim_players.player_id,
+        dim_players.full_name,
+        dim_players.position,
         t.abbreviation AS team_abbreviation,
-        p.is_active,
-        coalesce(p.career_games_played, 0) AS career_games_played,
-        p.career_ppg,
-        p.career_rpg,
-        p.career_apg
-    FROM gold.dim_players p
-    LEFT JOIN gold.dim_teams t ON t.team_id = p.team_id
-    WHERE (:search IS NULL OR p.full_name ILIKE :search)
-      AND (:active IS NULL OR p.is_active = :active)
-      AND (:team_id IS NULL OR p.team_id = :team_id)
-    ORDER BY p.full_name
+        dim_players.is_active,
+        coalesce(dim_players.career_games_played, 0) AS career_games_played,
+        dim_players.career_ppg,
+        dim_players.career_rpg,
+        dim_players.career_apg
+    FROM gold.dim_players
+    LEFT JOIN gold.dim_teams t ON t.team_id = dim_players.team_id
+    WHERE
+        (:search IS NULL OR dim_players.full_name ILIKE :search)
+      AND (:active IS NULL OR dim_players.is_active = :active)
+      AND (:team_id IS NULL OR dim_players.team_id = :team_id)
+    ORDER BY dim_players.full_name
     LIMIT :limit OFFSET :offset
     """
 )
@@ -84,36 +86,38 @@ LIST_PLAYERS = text(
 PLAYER_BY_ID = text(
     """
     SELECT
-        p.player_id,
-        p.full_name,
-        p.position,
+        dim_players.player_id,
+        dim_players.full_name,
+        dim_players.position,
         t.abbreviation AS team_abbreviation,
-        p.is_active,
-        p.first_name,
-        p.last_name,
-        p.jersey_number,
-        p.height,
-        p.weight,
-        p.birth_date,
-        coalesce(p.career_games_played, 0) AS career_games_played,
-        coalesce(p.seasons_played, 0) AS seasons_played,
-        p.first_season,
-        p.last_season,
-        p.career_ppg,
-        p.career_rpg,
-        p.career_apg,
-        p.current_season_salary,
-        p.current_remaining_guaranteed,
-        p.current_contract_season
-    FROM gold.dim_players p
-    LEFT JOIN gold.dim_teams t ON t.team_id = p.team_id
-    WHERE p.player_id = :player_id
+        dim_players.is_active,
+        dim_players.first_name,
+        dim_players.last_name,
+        dim_players.jersey_number,
+        dim_players.height,
+        dim_players.weight,
+        dim_players.birth_date,
+        coalesce(dim_players.career_games_played, 0) AS career_games_played,
+        coalesce(dim_players.seasons_played, 0) AS seasons_played,
+        dim_players.first_season,
+        dim_players.last_season,
+        dim_players.career_ppg,
+        dim_players.career_rpg,
+        dim_players.career_apg,
+        dim_players.current_season_salary,
+        dim_players.current_remaining_guaranteed,
+        dim_players.current_contract_season
+    FROM gold.dim_players
+    LEFT JOIN gold.dim_teams t ON t.team_id = dim_players.team_id
+    WHERE dim_players.player_id = :player_id
     """
 )
 
 PLAYER_NAME = text(
     """
-    SELECT player_id, full_name
+    SELECT
+        player_id,
+        full_name
     FROM gold.dim_players
     WHERE player_id = :player_id
     """
@@ -162,10 +166,14 @@ BACK_TO_BACK_STATS = text(
     SELECT
         count(*) FILTER (WHERE is_back_to_back) AS total_back_to_backs,
         count(*) FILTER (
-            WHERE is_back_to_back AND coalesce(minutes, 0) > 0
+            WHERE
+        is_back_to_back
+        AND coalesce(minutes, 0) > 0
         ) AS games_played_in_b2b,
         count(*) FILTER (
-            WHERE is_back_to_back AND coalesce(minutes, 0) = 0
+            WHERE
+        is_back_to_back
+        AND coalesce(minutes, 0) = 0
         ) AS games_sat_in_b2b,
         round(
             avg(points) FILTER (WHERE is_back_to_back)::numeric, 1
@@ -205,7 +213,9 @@ def list_game_logs_stmt(order_column: str, descending: bool):
             coalesce(is_back_to_back, false) AS is_back_to_back
         FROM gold.fct_player_game_logs
         WHERE {GAME_LOG_FILTERS}
-        ORDER BY {order_column} {direction} NULLS LAST, career_game_number DESC
+        ORDER BY
+        {order_column} {direction} NULLS LAST,
+        career_game_number DESC
         LIMIT :limit OFFSET :offset
         """
     )
@@ -214,10 +224,10 @@ def list_game_logs_stmt(order_column: str, descending: bool):
 PLAYERS_BY_IDS = text(
     """
     SELECT
-        p.player_id,
-        p.full_name
-    FROM gold.dim_players p
-    WHERE p.player_id IN :player_ids
+        dim_players.player_id,
+        dim_players.full_name
+    FROM gold.dim_players
+    WHERE dim_players.player_id IN :player_ids
     """
 ).bindparams(bindparam("player_ids", expanding=True))
 
@@ -225,12 +235,18 @@ PLAYERS_BY_IDS = text(
 HEAD_TO_HEAD_LOGS = text(
     """
     WITH left_logs AS (
-        SELECT player_id, game_id, team_id
+        SELECT
+            player_id,
+            game_id,
+            team_id
         FROM gold.fct_player_game_logs
         WHERE player_id = :player_a
     ),
     right_logs AS (
-        SELECT player_id, game_id, team_id
+        SELECT
+            player_id,
+            game_id,
+            team_id
         FROM gold.fct_player_game_logs
         WHERE player_id = :player_b
     ),
@@ -241,28 +257,31 @@ HEAD_TO_HEAD_LOGS = text(
         WHERE left_logs.team_id IS DISTINCT FROM right_logs.team_id
     )
     SELECT
-        logs.player_id,
-        coalesce(logs.player_name, '') AS full_name,
-        logs.game_id,
-        logs.game_date,
-        logs.season,
-        coalesce(logs.matchup, '') AS matchup,
-        coalesce(logs.team_abbreviation, '') AS team_abbreviation,
-        coalesce(logs.opponent_abbreviation, '') AS opponent_abbreviation,
-        coalesce(logs.location, '') AS location,
-        coalesce(logs.result, '') AS result,
-        logs.minutes,
-        logs.points,
-        logs.rebounds,
-        logs.assists,
-        logs.steals,
-        logs.blocks,
-        logs.turnovers,
-        logs.plus_minus
-    FROM gold.fct_player_game_logs AS logs
-    INNER JOIN opposed ON logs.game_id = opposed.game_id
-    WHERE logs.player_id IN (:player_a, :player_b)
-    ORDER BY logs.game_date DESC, logs.game_id, logs.player_id
+        fct_player_game_logs.player_id,
+        coalesce(fct_player_game_logs.player_name, '') AS full_name,
+        fct_player_game_logs.game_id,
+        fct_player_game_logs.game_date,
+        fct_player_game_logs.season,
+        coalesce(fct_player_game_logs.matchup, '') AS matchup,
+        coalesce(fct_player_game_logs.team_abbreviation, '') AS team_abbreviation,
+        coalesce(fct_player_game_logs.opponent_abbreviation, '') AS opponent_abbreviation,
+        coalesce(fct_player_game_logs.location, '') AS location,
+        coalesce(fct_player_game_logs.result, '') AS result,
+        fct_player_game_logs.minutes,
+        fct_player_game_logs.points,
+        fct_player_game_logs.rebounds,
+        fct_player_game_logs.assists,
+        fct_player_game_logs.steals,
+        fct_player_game_logs.blocks,
+        fct_player_game_logs.turnovers,
+        fct_player_game_logs.plus_minus
+    FROM gold.fct_player_game_logs
+    INNER JOIN opposed ON fct_player_game_logs.game_id = opposed.game_id
+    WHERE fct_player_game_logs.player_id IN (:player_a, :player_b)
+    ORDER BY
+        fct_player_game_logs.game_date DESC,
+        fct_player_game_logs.game_id,
+        fct_player_game_logs.player_id
     """
 )
 
@@ -352,28 +371,30 @@ def compare_players_stmt(order_column: str):
     return text(
         f"""
         SELECT
-            p.player_id,
-            p.full_name,
+            dim_players.player_id,
+            dim_players.full_name,
             t.abbreviation AS team_abbreviation,
-            p.position,
-            coalesce(p.career_games_played, 0) AS career_games_played,
-            coalesce(p.seasons_played, 0) AS seasons_played,
-            p.first_season,
-            p.last_season,
-            p.career_ppg,
-            p.career_rpg,
-            p.career_apg,
+            dim_players.position,
+            coalesce(dim_players.career_games_played, 0) AS career_games_played,
+            coalesce(dim_players.seasons_played, 0) AS seasons_played,
+            dim_players.first_season,
+            dim_players.last_season,
+            dim_players.career_ppg,
+            dim_players.career_rpg,
+            dim_players.career_apg,
             career_pm.career_avg_plus_minus
-        FROM gold.dim_players p
-        LEFT JOIN gold.dim_teams t ON t.team_id = p.team_id
+        FROM gold.dim_players
+        LEFT JOIN gold.dim_teams t ON t.team_id = dim_players.team_id
         LEFT JOIN (
             SELECT
                 player_id,
                 round(avg(plus_minus)::numeric, 1) AS career_avg_plus_minus
             FROM gold.fct_player_game_logs
             GROUP BY player_id
-        ) career_pm ON career_pm.player_id = p.player_id
-        WHERE p.player_id IN :player_ids
-        ORDER BY {order_expr} DESC NULLS LAST, p.full_name
+        ) career_pm ON career_pm.player_id = dim_players.player_id
+        WHERE dim_players.player_id IN :player_ids
+        ORDER BY
+        {order_expr} DESC NULLS LAST,
+        dim_players.full_name
         """
     ).bindparams(bindparam("player_ids", expanding=True))

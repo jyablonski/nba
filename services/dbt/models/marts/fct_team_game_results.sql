@@ -24,9 +24,24 @@ select
     games.season,
     games.season_type,
     games.game_date,
-    coalesce(games.arena, home_arenas.arena_name) as arena,
-    coalesce(games.arena_city, home_arenas.arena_city) as arena_city,
-    coalesce(games.arena_state, home_arenas.arena_state) as arena_state,
+    -- The venue seed fills gaps for a home team playing at home, and must not
+    -- be mixed into a row that already names a different building. Coalescing
+    -- each column on its own put a Mexico City / London / Las Vegas neutral-site
+    -- game in the home team's city, because the source names the arena but
+    -- leaves city blank. A neutral site keeps a null city rather than a wrong one.
+    coalesce(nullif(btrim(games.arena), ''), home_arenas.arena_name) as arena,
+    case
+        when nullif(btrim(games.arena), '') is null
+            or btrim(games.arena) = home_arenas.arena_name
+            then coalesce(nullif(btrim(games.arena_city), ''), home_arenas.arena_city)
+        else nullif(btrim(games.arena_city), '')
+    end as arena_city,
+    case
+        when nullif(btrim(games.arena), '') is null
+            or btrim(games.arena) = home_arenas.arena_name
+            then coalesce(nullif(btrim(games.arena_state), ''), home_arenas.arena_state)
+        else nullif(btrim(games.arena_state), '')
+    end as arena_state,
     games.score_margin,
     games.home_team_id,
     home_teams.abbreviation as home_team_abbreviation,

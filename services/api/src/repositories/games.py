@@ -9,6 +9,7 @@ from queries.games import (
     GAME_EXISTS,
     GET_GAME_FLOW,
     LIST_BIGGEST_COLLAPSES,
+    LIST_BOX_SCORE,
     LIST_GAMES,
     LIST_GAMES_COUNT,
     LIST_PLAY_BY_PLAY,
@@ -79,6 +80,10 @@ class GamesRepository:
 
     def list_play_by_play(self, game_id: UUID) -> list[dict]:
         rows = self.db.execute(LIST_PLAY_BY_PLAY, {"game_id": game_id})
+        return [dict(row._mapping) for row in rows]
+
+    def list_box_score(self, game_id: UUID) -> list[dict]:
+        rows = self.db.execute(LIST_BOX_SCORE, {"game_id": game_id})
         return [dict(row._mapping) for row in rows]
 
     def get_game_flow(self, game_id: UUID) -> dict | None:

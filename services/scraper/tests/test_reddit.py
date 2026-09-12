@@ -71,6 +71,7 @@ def _submission(**overrides: object) -> SimpleNamespace:
         "url": "https://www.reddit.com/r/nba/comments/abc123/warriors_win/",
         "selftext": "short body",
         "link_flair_text": "Highlight",
+        "author_flair_text": ":gsw-1: Warriors",
         "is_self": True,
     }
     values.update(overrides)
@@ -86,6 +87,7 @@ def _comment(**overrides: object) -> SimpleNamespace:
         "created_utc": 1_700_000_100.0,
         "permalink": "/r/nba/comments/abc123/warriors_win/cmt1/",
         "parent_id": "t3_abc123",
+        "author_flair_text": ":lal-3: Lakers",
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -168,6 +170,7 @@ def test_submission_to_row_mapping() -> None:
     assert row["permalink"] == "https://www.reddit.com/r/nba/comments/abc123/warriors_win/"
     assert row["selftext"] == "short body"
     assert row["flair"] == "Highlight"
+    assert row["author_flair"] == ":gsw-1: Warriors"
     assert row["is_self"] is True
     assert row["scraped_at"] == scraped
 
@@ -337,6 +340,7 @@ def test_comment_to_row_mapping() -> None:
     assert row["parent_id"] == "t3_abc123"
     assert row["author"] == "fan"
     assert row["body"] == "nice shot"
+    assert row["author_flair"] == ":lal-3: Lakers"
     assert row["score"] == 11
     assert row["created_utc"] == datetime(2023, 11, 14, 22, 15, 0)
     assert row["permalink"] == "https://www.reddit.com/r/nba/comments/abc123/warriors_win/cmt1/"
@@ -566,3 +570,28 @@ def test_cli_scrape_all_reddit_failure_uses_existing_slack(
     assert len(posted) == 1
     assert "reddit" in posted[0]
     assert "REDDIT_CLIENT_ID" in posted[0]
+
+
+@pytest.mark.unit
+def test_author_flair_is_separate_from_post_flair() -> None:
+    """link_flair_text tags the post; author_flair_text is the user's team badge."""
+    row = submission_to_row(_submission(link_flair_text=None, author_flair_text=":nyk-4: Knicks"))
+    assert row is not None
+    assert row["flair"] is None
+    assert row["author_flair"] == ":nyk-4: Knicks"
+
+
+@pytest.mark.unit
+def test_author_flair_missing_blank_and_overlong() -> None:
+    from scrapers.reddit import FLAIR_MAX_CHARS
+
+    assert submission_to_row(_submission(author_flair_text=None))["author_flair"] is None
+    assert submission_to_row(_submission(author_flair_text="   "))["author_flair"] is None
+    long_flair = ":lal-1: " + "x" * (FLAIR_MAX_CHARS + 40)
+    row = submission_to_row(_submission(author_flair_text=long_flair))
+    assert row is not None
+    assert len(row["author_flair"]) == FLAIR_MAX_CHARS
+
+    comment = comment_to_row(_comment(author_flair_text=None), post_reddit_id="abc123")
+    assert comment is not None
+    assert comment["author_flair"] is None

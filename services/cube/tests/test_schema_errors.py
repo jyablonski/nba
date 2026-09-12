@@ -18,6 +18,8 @@ EXTRA_CUBES = """
   - name: play_by_play
   - name: reddit_posts
   - name: reddit_comments
+  - name: reddit_entity_mentions
+  - name: reddit_flair
 """
 
 PLAYER_DIMS = """

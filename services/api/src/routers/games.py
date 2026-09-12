@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from dependencies import get_games_repository
 from repositories.games import GamesRepository
 from schemas import (
+    BoxScoreRow,
     GameCollapse,
     GameFlow,
     GameResult,
@@ -91,6 +92,22 @@ def get_game_play_by_play(
         raise HTTPException(status_code=404, detail="Game not found")
     rows = repo.list_play_by_play(game_id)
     data = [PlayByPlayEvent.model_validate(row) for row in rows]
+    return PaginatedResponse(
+        data=data,
+        meta=PaginationMeta(total=len(data), limit=len(data), offset=0),
+    )
+
+
+@router.get("/{game_id}/box-score", response_model=PaginatedResponse[BoxScoreRow])
+def get_game_box_score(
+    game_id: UUID,
+    repo: GamesRepository = Depends(get_games_repository),
+) -> PaginatedResponse[BoxScoreRow]:
+    """Player lines for one game, home team first, then by minutes played."""
+    if not repo.game_exists(game_id):
+        raise HTTPException(status_code=404, detail="Game not found")
+    rows = repo.list_box_score(game_id)
+    data = [BoxScoreRow.model_validate(row) for row in rows]
     return PaginatedResponse(
         data=data,
         meta=PaginationMeta(total=len(data), limit=len(data), offset=0),

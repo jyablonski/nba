@@ -76,7 +76,7 @@ def test_list_games_sql_fills_arena_from_home_team() -> None:
     assert "gold.dim_teams" in sql
     assert "coalesce" in sql.lower()
     assert "home_teams.city" in sql
-    assert "games.season_type = :season_type" in sql
+    assert "fct_team_game_results.season_type = :season_type" in sql
 
 
 @pytest.mark.unit
@@ -292,7 +292,7 @@ def test_list_schedule_sql_filters_upcoming() -> None:
 
     sql = str(LIST_SCHEDULE)
     assert "gold.fct_games_schedule" in sql
-    assert "games.game_date >= :from_date" in sql
+    assert "fct_games_schedule.game_date >= :from_date" in sql
     assert "gold.fct_team_game_results" not in sql
     assert "gold.fct_games_schedule" in str(LIST_SCHEDULE_COUNT)
     assert "gold.fct_games_schedule" in str(LIST_SEASONS)
@@ -375,4 +375,73 @@ def test_biggest_collapses_query_excludes_wire_to_wire() -> None:
     sql = str(LIST_BIGGEST_COLLAPSES)
     assert "gold.fct_game_flow" in sql
     assert "largest_lead_blown > 0" in sql
-    assert ":blown_lead_team IS NULL OR flow.blown_lead_team_abbreviation = :blown_lead_team" in sql
+    assert (
+        ":blown_lead_team IS NULL OR fct_game_flow.blown_lead_team_abbreviation = :blown_lead_team"
+        in sql
+    )
+
+
+BOX_SCORE_ROW = {
+    "player_id": PLAYER_KAWHI,
+    "player_name": "Kawhi Leonard",
+    "team_id": TEAM_LAL,
+    "team_abbreviation": "LAL",
+    "team_name": "Los Angeles Lakers",
+    "location": "home",
+    "minutes": 36.0,
+    "points": 28,
+    "rebounds": 8,
+    "assists": 5,
+    "field_goals_made": 10,
+    "field_goals_attempted": 21,
+    "field_goal_pct": 0.476,
+    "three_pointers_made": 2,
+    "three_pointers_attempted": 6,
+    "three_point_pct": 0.333,
+    "free_throws_made": 6,
+    "free_throws_attempted": 8,
+    "free_throw_pct": 0.75,
+    "true_shooting_pct": 0.571,
+    "plus_minus": -7,
+}
+
+
+@pytest.mark.unit
+def test_game_box_score(client, session, mapping_row, query_result) -> None:
+    session.queue = [query_result(scalar=1), query_result([mapping_row(BOX_SCORE_ROW)])]
+    response = client.get(f"/api/v1/games/{GAME_ONE}/box-score")
+    assert response.status_code == 200
+    row = response.json()["data"][0]
+    assert row["player_name"] == "Kawhi Leonard"
+    assert row["field_goals_attempted"] == 21
+    assert row["true_shooting_pct"] == 0.571
+    assert row["plus_minus"] == -7
+
+
+@pytest.mark.unit
+def test_game_box_score_missing_game(client, session, query_result) -> None:
+    session.queue = [query_result(scalar=None)]
+    assert client.get(f"/api/v1/games/{MISSING_ID}/box-score").status_code == 404
+
+
+@pytest.mark.unit
+def test_box_score_sql_derives_true_shooting_and_orders_home_first() -> None:
+    from queries.games import LIST_BOX_SCORE
+
+    sql = str(LIST_BOX_SCORE)
+    # 0.44 is the free-throw-to-possession constant; a plain fga denominator
+    # would overstate anyone who gets to the line.
+    assert "0.44 * fct_player_game_logs.free_throws_attempted" in sql
+    assert "CASE WHEN fct_player_game_logs.location = 'home' THEN 0 ELSE 1 END" in sql
+    assert "fct_player_game_logs.minutes DESC NULLS LAST" in sql
+
+
+@pytest.mark.unit
+def test_box_score_sql_drops_players_who_never_checked_in() -> None:
+    """A DNP is recorded as a null minute count on some rows and a literal 0 on
+    others, so excluding only nulls would still leave blank lines in the table."""
+    from queries.games import LIST_BOX_SCORE
+
+    sql = str(LIST_BOX_SCORE)
+    assert "fct_player_game_logs.minutes IS NOT NULL" in sql
+    assert "fct_player_game_logs.minutes > 0" in sql

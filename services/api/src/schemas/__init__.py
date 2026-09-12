@@ -14,6 +14,7 @@ from schemas.admin import (
     TableFreshness,
 )
 from schemas.game import (
+    BoxScoreRow,
     GameCollapse,
     GameFlow,
     GameResult,
@@ -31,6 +32,17 @@ from schemas.player import (
     PlayerDetail,
     PlayerSeasonStats,
     PlayerSummary,
+)
+from schemas.social import (
+    SocialComment,
+    SocialEntity,
+    SocialFacet,
+    SocialFanbase,
+    SocialHour,
+    SocialLeader,
+    SocialPost,
+    SocialPostDetail,
+    SocialSummary,
 )
 from schemas.standing import StandingRow, StandingSummary
 from schemas.status import WarehouseStatus
@@ -61,6 +73,16 @@ __all__ = [
     "AdminHealth",
     "AdminJob",
     "BackToBackStats",
+    "BoxScoreRow",
+    "SocialComment",
+    "SocialEntity",
+    "SocialFacet",
+    "SocialFanbase",
+    "SocialHour",
+    "SocialLeader",
+    "SocialPost",
+    "SocialPostDetail",
+    "SocialSummary",
     "DbtStatus",
     "GameCollapse",
     "GameFlow",

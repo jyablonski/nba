@@ -68,6 +68,30 @@ Prefer [docs/](docs/) and root [README.md](README.md) over inventing behavior.
 - `GET /api/v1/status` is **current**: `last_scraped_at` from `source.scrape_pipeline.last_success_at` plus warehouse coverage counts. Do not surface `GET /health` in the UI.
 - `POST /api/v1/query` and `/ask` are **current**. Default backend is **rules** (`NLP_BACKEND=rules`): B2B, season averages, compare, arena-city record, salary/payroll, standings — each family is a Cube query. Unrecognized questions return a capability message, not HTTP 501. `NLP_BACKEND=llm` is an opt-in adapter (Cube meta + `query_cube` / named Cube tools, needs `NLP_LLM_API_KEY`); it is not the public default and does not run SQL. MCP `query_cube` is Cube query JSON only. Cube down → clear Ask/MCP error; no gold SQL fallback. The prod overlay starts Cube internally for Ask/MCP and does not publish port 4000.
 
+## SQL style (API)
+
+`services/api/src/queries/*.py` holds raw SQL against `gold` / `source`. The dbt rules in `services/dbt/AGENTS.md` apply here too, plus:
+
+- **Indent in 4 spaces.** No tabs, no 2-space SQL.
+- **A clause with more than one field starts on its own line, one field per line.** That covers `SELECT`, `WHERE`, and `ORDER BY`. A single-field clause may stay inline (`WHERE id = 1`, `SELECT season`). A comma inside a function call does not make a clause multi-field.
+
+```sql
+SELECT
+    dim_teams.team_id,
+    dim_teams.team_name
+FROM gold.dim_teams
+WHERE
+    dim_teams.conference = :conference
+    AND dim_teams.division = :division
+ORDER BY
+    dim_teams.conference,
+    dim_teams.team_name
+```
+
+- **No table aliases.** Write `FROM gold.dim_teams` and qualify columns as `dim_teams.team_id`, never `FROM gold.dim_teams t` / `t.team_id`. Needing the same table twice is not a reason to alias: give each copy a named CTE (`home_teams`, `away_teams`), the way the dbt models already do.
+- The only names that survive are ones SQL requires: CTE names, derived-table names on a subquery, and the name a correlated `LATERAL` needs to distinguish itself from the outer row. Name those for their role (`post_comments`, `window_comments`), not with an initial.
+- Aliases in this codebase are load-bearing in tests: several assert on SQL substrings, so renaming one means updating those assertions. Run `uv run pytest -m integration` after any change here — the unit tests use a scripted session and will not catch a broken query, but the Testcontainers integration tests execute the real SQL.
+
 ## Conventions
 
 - Do not commit unless the user asks

@@ -1,7 +1,7 @@
 """Rule-based natural-language query routing over Cube named operations.
 
-Covers B2B, career compare, arena-city W/L, remaining salary/payroll, and
-standings. Each handler runs a Cube query via CubeAnalytics. Adding a family
+Covers B2B, career compare, arena-city W/L, blown leads, remaining
+salary/payroll, and standings. Each handler runs a Cube query via CubeAnalytics. Adding a family
 is a Cube member plus one intent — not a new gold SQL string.
 """
 
@@ -32,12 +32,15 @@ TEAM_ALIASES: dict[str, str] = {
     "chicago": "CHI",
     "chicago bulls": "CHI",
     "cavaliers": "CLE",
+    "cleveland cavaliers": "CLE",
     "cavs": "CLE",
     "cleveland": "CLE",
     "mavericks": "DAL",
+    "dallas mavericks": "DAL",
     "mavs": "DAL",
     "dallas": "DAL",
     "nuggets": "DEN",
+    "denver nuggets": "DEN",
     "denver": "DEN",
     "pistons": "DET",
     "detroit": "DET",
@@ -55,15 +58,21 @@ TEAM_ALIASES: dict[str, str] = {
     "la lakers": "LAL",
     "los angeles lakers": "LAL",
     "grizzlies": "MEM",
+    "grizz": "MEM",
+    "memphis grizzlies": "MEM",
     "memphis": "MEM",
     "heat": "MIA",
     "miami": "MIA",
     "bucks": "MIL",
     "milwaukee": "MIL",
     "timberwolves": "MIN",
+    "twolves": "MIN",
+    "minnesota timberwolves": "MIN",
     "wolves": "MIN",
     "minnesota": "MIN",
     "pelicans": "NOP",
+    "pels": "NOP",
+    "new orleans pelicans": "NOP",
     "new orleans": "NOP",
     "knicks": "NYK",
     "new york": "NYK",
@@ -80,13 +89,16 @@ TEAM_ALIASES: dict[str, str] = {
     "suns": "PHX",
     "phoenix": "PHX",
     "blazers": "POR",
-    "trail blazers": "POR",
+    "trail blazer": "POR",
+    "trailblazer": "POR",
     "portland": "POR",
     "kings": "SAC",
     "sacramento": "SAC",
     "spurs": "SAS",
+    "san antonio spurs": "SAS",
     "san antonio": "SAS",
     "raptors": "TOR",
+    "toronto raptors": "TOR",
     "toronto": "TOR",
     "jazz": "UTA",
     "utah": "UTA",
@@ -130,6 +142,15 @@ _SALARY = re.compile(
     re.IGNORECASE,
 )
 _PAYROLL = re.compile(r"\bpayroll\b", re.IGNORECASE)
+# The last two alternatives catch the split phrasing "how many leads have the
+# Lakers blown", where the noun and the participle are not adjacent.
+_BLOWN_LEADS = re.compile(
+    r"\b(blown\s+leads?|blew\s+(?:a\s+|the\s+)?lead|collapses?|"
+    r"comeback\s+wins?|came\s+back|choked)\b"
+    r"|\bleads?\b[^?.]*\bblown\b"
+    r"|\bblown\b[^?.]*\bleads?\b",
+    re.IGNORECASE,
+)
 _SEASON_STATS = re.compile(
     r"("
     r"(?:ppg|rpg|apg|points?\s+per\s+game|rebounds?\s+per\s+game|assists?\s+per\s+game)"
@@ -157,9 +178,11 @@ _PLAYER_NAME = re.compile(
 
 _CAPABILITY = (
     "I can answer back-to-back questions, player career compares, "
-    "team win percentage filtered by arena city, salary/payroll snapshots, "
+    "team win percentage filtered by arena city, team head-to-head records, "
+    "blown leads, salary/payroll snapshots, "
     "standings, and per-season averages "
-    "(e.g. Kawhi B2Bs, LeBron vs Curry, Warriors in Chicago, "
+    "(e.g. Kawhi B2Bs, LeBron vs Curry, Warriors in Chicago, Blazers vs Lakers, "
+    "Lakers blown leads, "
     "Curry salary, Warriors payroll, who leads the West, Curry PPG by season). "
 )
 
@@ -210,6 +233,25 @@ _RECORD_ASK_KEYS = (
     "losses",
     "win_pct",
     "games",
+    "arena",
+)
+_H2H_ASK_KEYS = (
+    "abbreviation",
+    "team_name",
+    "opponent",
+    "wins",
+    "losses",
+    "win_pct",
+    "games",
+)
+_FLOW_ASK_KEYS = (
+    "abbreviation",
+    "team_name",
+    "games",
+    "blown_leads",
+    "biggest_lead_blown",
+    "comeback_wins",
+    "biggest_comeback",
 )
 _SEASON_STATS_ASK_KEYS = (
     "full_name",
@@ -263,7 +305,14 @@ class NaturalLanguageQueryService:
         if _SALARY.search(text):
             return "salary"
         if _COMPARE.search(text):
+            # "Lakers vs Celtics" is a team head-to-head; only send it to the
+            # player compare handler when no two teams are named, or it tries to
+            # resolve "Portland Trailblazer" as a player and fails.
+            if len(self._extract_team_abbrs(text)) >= 2:
+                return "team_h2h"
             return "compare"
+        if _BLOWN_LEADS.search(text):
+            return "blown_leads"
         if _WIN_PCT.search(text) or (self._extract_team_abbr(text) and _IN_CITY.search(text)):
             return "arena_city"
         return "refuse"
@@ -296,8 +345,12 @@ class NaturalLanguageQueryService:
             if _PAYROLL.search(text):
                 return self._answer_payroll(text)
             return self._answer_salary(text)
+        if family == "team_h2h":
+            return self._answer_team_h2h(text, header_season)
         if family == "compare":
             return self._answer_compare(text)
+        if family == "blown_leads":
+            return self._answer_blown_leads(text, header_season)
         if family == "arena_city":
             return self._answer_team_record(text, header_season)
         return QueryResponse(
@@ -386,15 +439,42 @@ class NaturalLanguageQueryService:
             return found
         return [m.group(1) for m in _PLAYER_NAME.finditer(question)]
 
-    def _extract_team_abbr(self, question: str) -> str | None:
+    def _extract_team_abbrs(self, question: str) -> list[str]:
+        """Every team named, in the order it appears.
+
+        Longest alias first so "los angeles lakers" is not also counted as
+        "lakers", then re-sorted by position: in "A vs B" the subject is the
+        team mentioned first, and picking the longest name instead made
+        "Portland ... vs Los Angeles Lakers" a question about the Lakers.
+        """
         lowered = question.lower()
-        for alias in sorted(TEAM_ALIASES.keys(), key=len, reverse=True):
-            if alias in lowered:
-                return TEAM_ALIASES[alias]
+        claimed: list[tuple[int, int]] = []
+        found: list[tuple[int, str]] = []
+        for alias in sorted(TEAM_ALIASES, key=len, reverse=True):
+            start = lowered.find(alias)
+            while start != -1:
+                end = start + len(alias)
+                if not any(begin < end and start < finish for begin, finish in claimed):
+                    claimed.append((start, end))
+                    found.append((start, TEAM_ALIASES[alias]))
+                    break
+                start = lowered.find(alias, end)
         for abbr in sorted(set(TEAM_ALIASES.values())):
-            if re.search(rf"\b{abbr}\b", question, re.IGNORECASE):
-                return abbr.upper()
-        return None
+            match = re.search(rf"\b{abbr}\b", question, re.IGNORECASE)
+            if match and not any(
+                begin < match.end() and match.start() < finish for begin, finish in claimed
+            ):
+                claimed.append((match.start(), match.end()))
+                found.append((match.start(), abbr.upper()))
+        ordered: list[str] = []
+        for _, abbr in sorted(found):
+            if abbr not in ordered:
+                ordered.append(abbr)
+        return ordered
+
+    def _extract_team_abbr(self, question: str) -> str | None:
+        abbrs = self._extract_team_abbrs(question)
+        return abbrs[0] if abbrs else None
 
     def _extract_conference(self, question: str) -> str | None:
         match = _CONFERENCE.search(question)
@@ -612,14 +692,25 @@ class NaturalLanguageQueryService:
             season=season,
             arena_city=city,
         )
+        # A city is not a venue: Los Angeles is Crypto.com Arena only, because
+        # the Clippers play in Inglewood. Naming the buildings is what makes the
+        # answer checkable instead of merely plausible.
+        arenas = sorted(
+            {
+                str(game.get("arena")).strip()
+                for game in (record.get("game_list") or [])
+                if game.get("arena")
+            }
+        )
         city_label = city or "all arenas"
+        arena_label = f" ({', '.join(arenas)})" if city and arenas else ""
         since_label = f" since {since}" if since else ""
         season_label = f" in {season}" if season and not since else ""
         win_pct = record.get("win_pct")
         win_label = f"{win_pct:.3f}" if isinstance(win_pct, (int, float)) else "n/a"
         answer = (
             f"{team['team_name']} are {record['wins']}-{record['losses']} "
-            f"({win_label}) in {city_label}{since_label}{season_label} "
+            f"({win_label}) in {city_label}{arena_label}{since_label}{season_label} "
             f"across {record['games']} games."
         )
         if (record.get("games") or 0) == 0 and since:
@@ -632,6 +723,7 @@ class NaturalLanguageQueryService:
                 "losses": record.get("losses"),
                 "win_pct": record.get("win_pct"),
                 "games": record.get("games"),
+                "arena": ", ".join(arenas) if arenas else None,
             },
             _RECORD_ASK_KEYS,
         )
@@ -642,6 +734,98 @@ class NaturalLanguageQueryService:
                 f"cube:team_games record team={abbr} arena_city={city!r} "
                 f"since_season={since!r} season={season!r}"
             ),
+        )
+
+    def _answer_team_h2h(self, question: str, header_season: str | None = None) -> QueryResponse:
+        abbrs = self._extract_team_abbrs(question)
+        subject, opponent = abbrs[0], abbrs[1]
+        team = self.cube.find_team(subject)
+        other = self.cube.find_team(opponent)
+        if team is None or other is None:
+            missing = subject if team is None else opponent
+            return QueryResponse(
+                answer=f"No team found for abbreviation '{missing}'.",
+                data=[],
+                sql=None,
+            )
+        season = self._resolve_season(question, header_season)
+        record = self.cube.get_team_record(
+            subject,
+            opponent_abbreviation=opponent,
+            season=season,
+        )
+        season_label = f" in {season}" if season else ""
+        win_pct = record.get("win_pct")
+        win_label = f"{win_pct:.3f}" if isinstance(win_pct, (int, float)) else "n/a"
+        answer = (
+            f"{team['team_name']} are {record['wins']}-{record['losses']} "
+            f"({win_label}) against the {other['team_name']}{season_label} "
+            f"across {record['games']} games."
+        )
+        if (record.get("games") or 0) == 0:
+            answer += " No matching games in the loaded warehouse."
+        payload = self._ask_row(
+            {
+                "abbreviation": record.get("abbreviation") or subject,
+                "team_name": record.get("team_name") or team.get("team_name"),
+                "opponent": other.get("team_name"),
+                "wins": record.get("wins"),
+                "losses": record.get("losses"),
+                "win_pct": record.get("win_pct"),
+                "games": record.get("games"),
+            },
+            _H2H_ASK_KEYS,
+        )
+        return QueryResponse(
+            answer=answer,
+            data=[payload],
+            sql=f"cube:team_games record team={subject} opponent={opponent} season={season!r}",
+        )
+
+    def _answer_blown_leads(self, question: str, header_season: str | None = None) -> QueryResponse:
+        abbr = self._extract_team_abbr(question)
+        if not abbr:
+            return QueryResponse(
+                answer="Name a team to see its blown leads, e.g. 'Lakers blown leads'.",
+                data=[],
+                sql=None,
+            )
+        team = self.cube.find_team(abbr)
+        if team is None:
+            return QueryResponse(
+                answer=f"No team found for abbreviation '{abbr}'.",
+                data=[],
+                sql=None,
+            )
+        season = self._resolve_season(question, header_season)
+        flow = self.cube.get_team_flow(abbr, season=season)
+        season_label = f" in {season}" if season else ""
+        name = flow.get("team_name") or team.get("team_name") or abbr
+        if not flow.get("games"):
+            return QueryResponse(
+                answer=f"No games with play-by-play flow for {name}{season_label}.",
+                data=[],
+                sql=f"cube:team_game_flow team={abbr} season={season!r}",
+            )
+        blown = flow["blown_leads"]
+        biggest = flow.get("biggest_lead_blown")
+        # A "blown lead" is a loss after leading by 10+, so the biggest one is
+        # only worth quoting when there was at least one.
+        biggest_label = f", the largest {biggest} points" if blown and biggest else ""
+        answer = (
+            f"{name} blew {blown} double-digit lead{'' if blown == 1 else 's'}"
+            f"{season_label}{biggest_label}. "
+            f"They won {flow['comeback_wins']} game"
+            f"{'' if flow['comeback_wins'] == 1 else 's'} after trailing by 10 or more"
+        )
+        if flow.get("comeback_wins") and flow.get("biggest_comeback"):
+            answer += f", the largest from {flow['biggest_comeback']} down"
+        answer += f", across {flow['games']} games."
+        payload = self._ask_row(flow, _FLOW_ASK_KEYS)
+        return QueryResponse(
+            answer=answer,
+            data=[payload],
+            sql=f"cube:team_game_flow team={abbr} season={season!r}",
         )
 
     def _answer_standings(self, question: str, header_season: str | None = None) -> QueryResponse:

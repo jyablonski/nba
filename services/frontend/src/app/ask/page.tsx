@@ -24,6 +24,7 @@ const SUGGESTIONS = [
   "What is Curry's salary?",
   "What is the Warriors payroll?",
   "Who leads the West?",
+  "How many leads have the Lakers blown?",
 ];
 
 type AskTurn = {

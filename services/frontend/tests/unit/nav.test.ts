@@ -11,6 +11,7 @@ describe("nav", () => {
       "Teams",
       "Compare",
       "Ask",
+      "Social",
       "About",
     ]);
   });

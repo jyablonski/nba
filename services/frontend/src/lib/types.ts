@@ -284,6 +284,7 @@ export type SeasonInfo = {
 
 export type WarehouseStatus = {
   last_scraped_at: string | null;
+  next_scrape_at: string | null;
   player_count: number;
   game_count: number;
   season_count: number;
@@ -464,4 +465,155 @@ export type GameFlow = {
   is_wire_to_wire?: boolean | null;
   winner_halftime_margin?: number | null;
   winner_margin_entering_fourth?: number | null;
+};
+
+export type SocialFlair = {
+  author_flair?: string | null;
+  flair_scope?: string | null;
+  flair_team_abbreviation?: string | null;
+  flair_team_name?: string | null;
+};
+
+export type SocialPost = SocialFlair & {
+  reddit_id: string;
+  subreddit: string;
+  title: string;
+  author: string | null;
+  score: number;
+  num_comments: number;
+  created_utc: string;
+  permalink: string;
+  url: string | null;
+  flair: string | null;
+  is_self: boolean;
+  scraped_at: string;
+  tag: string | null;
+  source: string | null;
+  content_type: string;
+  is_contested: boolean;
+  discussion_ratio: number;
+  captured_comment_count: number;
+  top_comment_score: number | null;
+  captured_comment_score: number | null;
+  // Null when score is 0: a ratio against a zero score is undefined, not infinite.
+  top_comment_leverage: number | null;
+  comment_concentration: number | null;
+  player_mentions: string[];
+  team_mentions: string[];
+};
+
+export type SocialPostDetail = SocialPost & { selftext: string | null };
+
+export type SocialComment = SocialFlair & {
+  reddit_id: string;
+  post_reddit_id: string;
+  parent_id: string | null;
+  author: string | null;
+  body: string | null;
+  score: number;
+  created_utc: string;
+  permalink: string;
+  is_top_level: boolean;
+  is_removed: boolean;
+};
+
+export type SocialSummary = {
+  post_count: number;
+  author_count: number;
+  reported_comment_count: number;
+  captured_comment_count: number;
+  contested_post_count: number;
+  total_score: number;
+  top_score: number | null;
+  first_post_at: string | null;
+  last_post_at: string | null;
+  last_scraped_at: string | null;
+};
+
+export type SocialLeader = {
+  key: string;
+  post_count: number;
+  self_post_count: number;
+  link_post_count: number;
+  total_score: number;
+  top_score: number;
+  avg_score: number;
+  median_score: number;
+  total_comments: number;
+  median_comments: number;
+  median_discussion_ratio: number;
+};
+
+export type SocialFacet = {
+  key: string;
+  post_count: number;
+  contested_post_count: number;
+};
+
+export type SocialEntity = {
+  entity_id: string;
+  entity_name: string;
+  entity_abbreviation: string | null;
+  post_count: number;
+  comment_count: number;
+  total_post_score: number;
+  top_post_score: number | null;
+  primary_color: string | null;
+  alternate_color: string | null;
+};
+
+export type SocialFanbase = {
+  flair_scope: string;
+  flair_team_id: string | null;
+  flair_team_abbreviation: string | null;
+  flair_team_nickname: string | null;
+  label: string;
+  document_count: number;
+  post_count: number;
+  comment_count: number;
+  author_count: number;
+  primary_color: string | null;
+  alternate_color: string | null;
+};
+
+export type SocialWindowParams = {
+  from_date?: string;
+  to_date?: string;
+  subreddit?: string;
+};
+
+export type ListSocialPostsParams = SocialWindowParams & {
+  tag?: string;
+  source?: string;
+  content_type?: string;
+  contested?: boolean;
+  search?: string;
+  sort?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type BoxScoreRow = {
+  player_id: string;
+  player_name: string | null;
+  team_id: string;
+  team_abbreviation: string | null;
+  team_name: string | null;
+  location: string | null;
+  minutes: number | null;
+  points: number | null;
+  rebounds: number | null;
+  assists: number | null;
+  field_goals_made: number | null;
+  field_goals_attempted: number | null;
+  field_goal_pct: number | null;
+  three_pointers_made: number | null;
+  three_pointers_attempted: number | null;
+  three_point_pct: number | null;
+  free_throws_made: number | null;
+  free_throws_attempted: number | null;
+  free_throw_pct: number | null;
+  /** Null when the player attempted no shots, rather than a misleading zero. */
+  true_shooting_pct: number | null;
+  plus_minus: number | null;
 };
