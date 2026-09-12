@@ -1,3 +1,7 @@
+{{
+    config(indexes=[{'columns': ['post_reddit_id']}])
+}}
+
 with comments as (
     select * from {{ ref('stg_reddit_comments') }}
 )
@@ -8,6 +12,7 @@ select
     comments.parent_id,
     comments.author,
     comments.body,
+    comments.author_flair,
     comments.score,
     comments.created_utc,
     comments.permalink,

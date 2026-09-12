@@ -14,23 +14,23 @@ from queries.records import (
 )
 
 TEAM_GAME_FILTERS = """
-    (g.home_team_id = :team_id OR g.away_team_id = :team_id)
-    AND (:season IS NULL OR g.season = :season)
-    AND (:since_season IS NULL OR g.season >= :since_season)
+    (fct_team_game_results.home_team_id = :team_id OR fct_team_game_results.away_team_id = :team_id)
+    AND (:season IS NULL OR fct_team_game_results.season = :season)
+    AND (:since_season IS NULL OR fct_team_game_results.season >= :since_season)
     AND (
         :opponent_team_id IS NULL
         OR (
-            (g.home_team_id = :team_id AND g.away_team_id = :opponent_team_id)
-            OR (g.away_team_id = :team_id AND g.home_team_id = :opponent_team_id)
+            (fct_team_game_results.home_team_id = :team_id AND fct_team_game_results.away_team_id = :opponent_team_id)
+            OR (fct_team_game_results.away_team_id = :team_id AND fct_team_game_results.home_team_id = :opponent_team_id)
         )
     )
     AND (
         :location IS NULL
-        OR (:location = 'home' AND g.home_team_id = :team_id)
-        OR (:location = 'away' AND g.away_team_id = :team_id)
+        OR (:location = 'home' AND fct_team_game_results.home_team_id = :team_id)
+        OR (:location = 'away' AND fct_team_game_results.away_team_id = :team_id)
     )
-    AND (:arena_city IS NULL OR g.arena_city ILIKE :arena_city)
-    AND (:season_type IS NULL OR g.season_type = :season_type)
+    AND (:arena_city IS NULL OR fct_team_game_results.arena_city ILIKE :arena_city)
+    AND (:season_type IS NULL OR fct_team_game_results.season_type = :season_type)
 """
 
 TEAM_BY_ID = text(
@@ -74,24 +74,26 @@ REGULAR_SEASON_SCORING = f"""
         round(avg(appearances.pts_allowed)::numeric, 1) AS pts_allowed_avg
     FROM (
         SELECT
-            games.home_team_id AS team_id,
-            games.home_score AS pts_scored,
-            games.away_score AS pts_allowed
-        FROM gold.fct_team_game_results AS games
-        WHERE games.season_type = 'Regular Season'
-          AND games.season = ({RESOLVED_SEASON})
-          AND games.home_score IS NOT NULL
-          AND games.away_score IS NOT NULL
+            fct_team_game_results.home_team_id AS team_id,
+            fct_team_game_results.home_score AS pts_scored,
+            fct_team_game_results.away_score AS pts_allowed
+        FROM gold.fct_team_game_results
+        WHERE
+            fct_team_game_results.season_type = 'Regular Season'
+            AND fct_team_game_results.season = ({RESOLVED_SEASON})
+            AND fct_team_game_results.home_score IS NOT NULL
+            AND fct_team_game_results.away_score IS NOT NULL
         UNION ALL
         SELECT
-            games.away_team_id AS team_id,
-            games.away_score AS pts_scored,
-            games.home_score AS pts_allowed
-        FROM gold.fct_team_game_results AS games
-        WHERE games.season_type = 'Regular Season'
-          AND games.season = ({RESOLVED_SEASON})
-          AND games.home_score IS NOT NULL
-          AND games.away_score IS NOT NULL
+            fct_team_game_results.away_team_id AS team_id,
+            fct_team_game_results.away_score AS pts_scored,
+            fct_team_game_results.home_score AS pts_allowed
+        FROM gold.fct_team_game_results
+        WHERE
+            fct_team_game_results.season_type = 'Regular Season'
+            AND fct_team_game_results.season = ({RESOLVED_SEASON})
+            AND fct_team_game_results.home_score IS NOT NULL
+            AND fct_team_game_results.away_score IS NOT NULL
     ) AS appearances
     GROUP BY appearances.team_id
 """
@@ -99,29 +101,32 @@ REGULAR_SEASON_SCORING = f"""
 LIST_TEAMS = text(
     f"""
     SELECT
-        t.team_id,
-        t.abbreviation,
-        t.team_name,
-        t.conference,
-        t.division,
-        t.city,
-        t.nickname,
+        dim_teams.team_id,
+        dim_teams.abbreviation,
+        dim_teams.team_name,
+        dim_teams.conference,
+        dim_teams.division,
+        dim_teams.city,
+        dim_teams.nickname,
         {RECORD_WINS} AS wins,
         {RECORD_LOSSES} AS losses,
         {RECORD_WIN_PCT} AS win_pct,
         {RECORD_SOURCE} AS record_source,
         scoring.pts_scored_avg,
         scoring.pts_allowed_avg
-    FROM gold.dim_teams t
-    LEFT JOIN gold.fct_standings s
-        ON s.team_id = t.team_id
-       AND s.season = ({RESOLVED_SEASON})
-       AND s.season_type = 'Regular Season'
+    FROM gold.dim_teams
+    LEFT JOIN gold.fct_standings
+        ON fct_standings.team_id = dim_teams.team_id
+        AND fct_standings.season = ({RESOLVED_SEASON})
+        AND fct_standings.season_type = 'Regular Season'
     LEFT JOIN ({REGULAR_SEASON_RECORDS}) AS records
-        ON records.team_id = t.team_id
+        ON records.team_id = dim_teams.team_id
     LEFT JOIN ({REGULAR_SEASON_SCORING}) AS scoring
-        ON scoring.team_id = t.team_id
-    ORDER BY t.conference, t.division, t.team_name
+        ON scoring.team_id = dim_teams.team_id
+    ORDER BY
+        dim_teams.conference,
+        dim_teams.division,
+        dim_teams.team_name
     LIMIT :limit OFFSET :offset
     """
 )
@@ -130,7 +135,9 @@ LATEST_SEASON_FOR_TEAM = text(
     """
     SELECT max(season) AS season
     FROM gold.fct_team_game_results
-    WHERE home_team_id = :team_id OR away_team_id = :team_id
+    WHERE
+        home_team_id = :team_id
+        OR away_team_id = :team_id
     """
 )
 
@@ -138,88 +145,104 @@ COMPUTE_RECORD = text(
     f"""
     SELECT
         count(*) AS games,
-        count(*) FILTER (WHERE g.winning_team_id = :team_id) AS wins
-    FROM gold.fct_team_game_results g
-    WHERE {TEAM_GAME_FILTERS}
+        count(*) FILTER (WHERE fct_team_game_results.winning_team_id = :team_id) AS wins
+    FROM gold.fct_team_game_results
+    WHERE
+        {TEAM_GAME_FILTERS}
     """
 )
 
 COMPUTE_RECORDS_BY_SEASON_TYPE = text(
     """
     SELECT
-        g.season_type,
+        fct_team_game_results.season_type,
         count(*) AS games,
-        count(*) FILTER (WHERE g.winning_team_id = :team_id) AS wins
-    FROM gold.fct_team_game_results g
-    WHERE (g.home_team_id = :team_id OR g.away_team_id = :team_id)
-      AND g.season = :season
-    GROUP BY g.season_type
+        count(*) FILTER (WHERE fct_team_game_results.winning_team_id = :team_id) AS wins
+    FROM gold.fct_team_game_results
+    WHERE
+        (
+            fct_team_game_results.home_team_id = :team_id
+            OR fct_team_game_results.away_team_id = :team_id
+        )
+      AND fct_team_game_results.season = :season
+    GROUP BY fct_team_game_results.season_type
     """
 )
 
 LIST_TEAM_GAMES_COUNT = text(
     f"""
     SELECT count(*) AS total
-    FROM gold.fct_team_game_results g
-    WHERE {TEAM_GAME_FILTERS}
+    FROM gold.fct_team_game_results
+    WHERE
+        {TEAM_GAME_FILTERS}
     """
 )
 
 LIST_TEAM_GAMES = text(
     f"""
+    WITH home_teams AS (
+        SELECT
+            team_id,
+            arena_name,
+            city
+        FROM gold.dim_teams
+    )
     SELECT
-        g.game_id,
-        g.season,
-        g.season_type,
-        g.game_date,
-        coalesce(nullif(btrim(g.arena), ''), home_teams.arena_name) AS arena,
-        coalesce(nullif(btrim(g.arena_city), ''), home_teams.city) AS arena_city,
-        g.arena_state,
-        g.home_team_id,
-        g.home_team_abbreviation,
-        g.home_team_name,
-        g.home_score,
-        g.away_team_id,
-        g.away_team_abbreviation,
-        g.away_team_name,
-        g.away_score,
-        g.winning_team_id,
-        g.winner_location,
+        fct_team_game_results.game_id,
+        fct_team_game_results.season,
+        fct_team_game_results.season_type,
+        fct_team_game_results.game_date,
+        coalesce(nullif(btrim(fct_team_game_results.arena), ''), home_teams.arena_name) AS arena,
+        coalesce(nullif(btrim(fct_team_game_results.arena_city), ''), home_teams.city) AS arena_city,
+        fct_team_game_results.arena_state,
+        fct_team_game_results.home_team_id,
+        fct_team_game_results.home_team_abbreviation,
+        fct_team_game_results.home_team_name,
+        fct_team_game_results.home_score,
+        fct_team_game_results.away_team_id,
+        fct_team_game_results.away_team_abbreviation,
+        fct_team_game_results.away_team_name,
+        fct_team_game_results.away_score,
+        fct_team_game_results.winning_team_id,
+        fct_team_game_results.winner_location,
         CASE
-            WHEN g.home_score IS NULL OR g.away_score IS NULL THEN NULL
-            WHEN g.home_team_id = :team_id THEN g.home_score - g.away_score
-            ELSE g.away_score - g.home_score
+            WHEN fct_team_game_results.home_score IS NULL OR fct_team_game_results.away_score IS NULL THEN NULL
+            WHEN fct_team_game_results.home_team_id = :team_id THEN fct_team_game_results.home_score - fct_team_game_results.away_score
+            ELSE fct_team_game_results.away_score - fct_team_game_results.home_score
         END AS score_margin,
         CASE
-            WHEN g.home_team_id = :team_id THEN 'home'
+            WHEN fct_team_game_results.home_team_id = :team_id THEN 'home'
             ELSE 'away'
         END AS location,
         CASE
-            WHEN g.home_team_id = :team_id THEN g.away_team_id
-            ELSE g.home_team_id
+            WHEN fct_team_game_results.home_team_id = :team_id THEN fct_team_game_results.away_team_id
+            ELSE fct_team_game_results.home_team_id
         END AS opponent_team_id,
         CASE
-            WHEN g.home_team_id = :team_id THEN g.away_team_abbreviation
-            ELSE g.home_team_abbreviation
+            WHEN fct_team_game_results.home_team_id = :team_id THEN fct_team_game_results.away_team_abbreviation
+            ELSE fct_team_game_results.home_team_abbreviation
         END AS opponent_abbreviation,
         CASE
-            WHEN g.home_team_id = :team_id THEN g.away_team_name
-            ELSE g.home_team_name
+            WHEN fct_team_game_results.home_team_id = :team_id THEN fct_team_game_results.away_team_name
+            ELSE fct_team_game_results.home_team_name
         END AS opponent_name,
         CASE
-            WHEN g.home_team_id = :team_id THEN g.home_score
-            ELSE g.away_score
+            WHEN fct_team_game_results.home_team_id = :team_id THEN fct_team_game_results.home_score
+            ELSE fct_team_game_results.away_score
         END AS team_score,
         CASE
-            WHEN g.home_team_id = :team_id THEN g.away_score
-            ELSE g.home_score
+            WHEN fct_team_game_results.home_team_id = :team_id THEN fct_team_game_results.away_score
+            ELSE fct_team_game_results.home_score
         END AS opponent_score,
-        (g.winning_team_id = :team_id) AS is_win
-    FROM gold.fct_team_game_results g
-    LEFT JOIN gold.dim_teams AS home_teams
-        ON home_teams.team_id = g.home_team_id
-    WHERE {TEAM_GAME_FILTERS}
-    ORDER BY g.game_date DESC, g.game_id DESC
+        (fct_team_game_results.winning_team_id = :team_id) AS is_win
+    FROM gold.fct_team_game_results
+    LEFT JOIN home_teams
+        ON home_teams.team_id = fct_team_game_results.home_team_id
+    WHERE
+        {TEAM_GAME_FILTERS}
+    ORDER BY
+        fct_team_game_results.game_date DESC,
+        fct_team_game_results.game_id DESC
     LIMIT :limit OFFSET :offset
     """
 )

@@ -136,3 +136,14 @@ test("changing the blown-leads filter holds the scroll position", async ({ page 
   await expect(page.getByRole("table").nth(1)).toBeVisible();
   expect(await page.evaluate(() => window.scrollY)).toBe(before);
 });
+
+test("game page carries a box score with shooting splits under the chart", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/games/0022400002");
+  await expect(page.getByRole("heading", { name: "Box score" })).toBeVisible();
+  const row = page.getByRole("row", { name: /Kawhi Leonard/ });
+  await expect(row.getByText("10-21")).toBeVisible();
+  await expect(row.getByText("47.6%")).toBeVisible();
+  await expect(row.getByText("57.1%")).toBeVisible();
+  await expect(row.getByText("-7")).toBeVisible();
+});

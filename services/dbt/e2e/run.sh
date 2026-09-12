@@ -65,6 +65,13 @@ DECLARE
   reddit_post_count integer;
   reddit_comment_count integer;
   reddit_comment_fk integer;
+  reddit_documents integer;
+  mention_team_names text;
+  mention_curry integer;
+  mention_surname_only integer;
+  mention_alias text;
+  flair_rows integer;
+  flair_check text;
 BEGIN
   SELECT count(*) INTO team_count FROM gold.dim_teams;
   SELECT count(*) INTO player_count FROM gold.dim_players;
@@ -224,10 +231,82 @@ BEGIN
       reddit_comment_fk, reddit_comment_count;
   END IF;
 
-  RAISE NOTICE 'dbt e2e assertions passed (teams=%, players=%, games=%, logs=%, b2b=%, standings=%, schedule=%, predictions=%, scoring=%, flow=%, reddit_posts=%, reddit_comments=%)',
+  -- Removed bodies carry no entities and are dropped before matching, so the
+  -- document count is posts + comments - 1.
+  SELECT count(*) INTO reddit_documents FROM silver.int_reddit_documents;
+  IF reddit_documents IS DISTINCT FROM reddit_post_count + reddit_comment_count - 1 THEN
+    RAISE EXCEPTION 'expected removed comment bodies to be dropped, got % documents for % posts and % comments',
+      reddit_documents, reddit_post_count, reddit_comment_count;
+  END IF;
+
+  -- 'Game Thread: Clippers at Warriors' names both teams by nickname.
+  SELECT string_agg(DISTINCT entity_abbreviation, ',' ORDER BY entity_abbreviation)
+  INTO mention_team_names
+  FROM gold.fct_reddit_entity_mentions
+  WHERE entity_type = 'team' AND document_reddit_id = 'abc123';
+  IF mention_team_names IS DISTINCT FROM 'GSW,LAC' THEN
+    RAISE EXCEPTION 'expected GSW,LAC team mentions on abc123, got %', mention_team_names;
+  END IF;
+
+  SELECT count(*) INTO mention_curry
+  FROM gold.fct_reddit_entity_mentions
+  WHERE entity_type = 'player'
+    AND document_reddit_id = 'cmt003'
+    AND match_method = 'full_name'
+    AND entity_id = '11111111-1111-4111-8111-111111111111';
+  IF mention_curry <> 1 THEN
+    RAISE EXCEPTION 'expected one full_name Curry mention on cmt003, got %', mention_curry;
+  END IF;
+
+  -- 'Kawhi looks locked in' and 'Curry answered immediately' are first- and
+  -- surname-only. Matching them would mean matching "Jordan" and "Bryant" too.
+  SELECT count(*) INTO mention_surname_only
+  FROM gold.fct_reddit_entity_mentions
+  WHERE entity_type = 'player' AND document_reddit_id IN ('cmt001', 'cmt002');
+  IF mention_surname_only <> 0 THEN
+    RAISE EXCEPTION 'expected no player mention from a partial name, got %', mention_surname_only;
+  END IF;
+
+  -- 'gsw' resolves through the nba_team_aliases seed, not a nickname.
+  SELECT match_method INTO mention_alias
+  FROM gold.fct_reddit_entity_mentions
+  WHERE entity_type = 'team'
+    AND document_reddit_id = 'cmt005'
+    AND entity_abbreviation = 'GSW';
+  IF mention_alias IS DISTINCT FROM 'alias' THEN
+    RAISE EXCEPTION 'expected GSW matched by alias on cmt005, got %', mention_alias;
+  END IF;
+
+  -- One row per distinct flair string, not per post or comment.
+  SELECT count(*) INTO flair_rows FROM gold.fct_reddit_flair;
+  IF flair_rows <> 7 THEN
+    RAISE EXCEPTION 'expected 7 distinct flairs, got %', flair_rows;
+  END IF;
+
+  -- Every resolution path, including the one collision: a numeric variant makes
+  -- a code a team badge, so :phi-N: is the 76ers while bare :phi: is Philippines.
+  SELECT string_agg(
+           author_flair || ' => ' || flair_scope || '/' ||
+           coalesce(flair_team_abbreviation, '-') || '/' || flair_match_method,
+           ' | ' ORDER BY author_flair COLLATE "C")
+  INTO flair_check
+  FROM gold.fct_reddit_flair;
+  IF flair_check IS DISTINCT FROM
+       ':chi-2: Bulls => team/CHI/emoji_code'
+       ' | :gsw-1: Warriors => team/GSW/emoji_code'
+       ' | :phi: Philippines => other/-/uncoded_emoji'
+       ' | :sea-2: Supersonics => other/-/emoji_code'
+       ' | Clippers => team/LAC/label'
+       ' | [LAC] Chris Paul => team/LAC/bracket_abbreviation'
+       ' | r/NBA => league/-/label'
+  THEN
+    RAISE EXCEPTION 'unexpected flair resolution: %', flair_check;
+  END IF;
+
+  RAISE NOTICE 'dbt e2e assertions passed (teams=%, players=%, games=%, logs=%, b2b=%, standings=%, schedule=%, predictions=%, scoring=%, flow=%, reddit_posts=%, reddit_comments=%, reddit_documents=%)',
     team_count, player_count, game_count, log_count, b2b_count, standings_count,
     schedule_count, prediction_count, scoring_count, flow_count,
-    reddit_post_count, reddit_comment_count;
+    reddit_post_count, reddit_comment_count, reddit_documents;
 END $$;
 SQL
 

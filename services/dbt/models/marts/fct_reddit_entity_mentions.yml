@@ -1,0 +1,55 @@
+version: 2
+
+models:
+  - name: fct_reddit_entity_mentions
+    description: >
+      Players and teams named in r/nba posts and their captured comments. Grain is
+      one row per entity per document (a post's title + self text, or one comment),
+      so a name repeated inside one document counts once. Players match on full name
+      only; teams match on full name, nickname, or a curated alias from
+      nba_team_aliases. Recall is deliberately traded for precision: a player called
+      only "Jokic", "Kawhi" or "Wemby" is not counted, because dim_teams and
+      dim_players cannot disambiguate a surname shared with a retired player they do
+      not contain.
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["entity_type", "entity_id", "document_reddit_id"]
+    columns:
+      - name: entity_type
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ["player", "team"]
+                quote_values: true
+      - name: entity_id
+        data_tests:
+          - not_null
+      - name: entity_name
+        data_tests:
+          - not_null
+      - name: match_method
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ["full_name", "team_name", "nickname", "alias"]
+                quote_values: true
+      - name: document_type
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ["post", "comment"]
+                quote_values: true
+      - name: post_reddit_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_reddit_posts')
+                field: reddit_id
+      - name: created_utc
+        data_tests:
+          - not_null

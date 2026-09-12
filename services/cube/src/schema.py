@@ -23,6 +23,8 @@ REQUIRED_CUBES = (
     "play_by_play",
     "reddit_posts",
     "reddit_comments",
+    "reddit_entity_mentions",
+    "reddit_flair",
 )
 REQUIRED_VIEWS = ("player_performance",)
 

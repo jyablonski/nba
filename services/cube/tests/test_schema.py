@@ -49,6 +49,8 @@ def test_cube_and_view_names() -> None:
             "play_by_play",
             "reddit_posts",
             "reddit_comments",
+            "reddit_entity_mentions",
+            "reddit_flair",
         }
     ).issubset(set(cube_names()))
     assert "player_performance" in view_names()

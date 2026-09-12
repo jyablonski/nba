@@ -1,0 +1,37 @@
+version: 2
+
+seeds:
+  - name: nba_team_aliases
+    description: >
+      Shorthand r/nba uses for a team beyond its nickname, for entity matching in
+      fct_reddit_entity_mentions. Nicknames are not listed — the model already
+      matches dim_teams.nickname and dim_teams.team_name.
+
+      Inclusion is measured, not guessed. Every candidate was counted against a
+      3,699-document / ~100k-token live r/nba sample, and an alias is listed only
+      when it is not an ordinary English word, or is one but was observed being
+      used for the team. That rule dropped "was" (595 hits, all the verb), "min"
+      (both hits were minutes, and it also collides with a player-name token),
+      and chi / den / sac / tor / phi / dubs, which are dictionary words with no
+      observed basketball use in the sample. It kept "clips" (25 hits, all the
+      Clippers) and "raps", both of which an earlier guess had excluded.
+
+      Consequence: CHI, DEN and SAC carry no alias and match on nickname alone.
+      Re-run the count before adding anything here.
+    config:
+      column_types:
+        team_id: varchar(36)
+        abbreviation: varchar(3)
+        alias: varchar(32)
+    columns:
+      - name: team_id
+        data_tests:
+          - not_null
+      - name: abbreviation
+        data_tests:
+          - not_null
+      - name: alias
+        description: Lowercase, single token, matched whole-word against normalized text.
+        data_tests:
+          - unique
+          - not_null

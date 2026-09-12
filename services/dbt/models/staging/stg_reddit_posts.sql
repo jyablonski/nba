@@ -14,6 +14,7 @@ select
     source.url,
     source.selftext,
     source.flair,
+    source.author_flair,
     source.is_self,
     source.scraped_at
 from source

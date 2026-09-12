@@ -5,7 +5,10 @@ from __future__ import annotations
 RESOLVED_SEASON = """
     coalesce(
         :season,
-        (SELECT max(season) FROM gold.fct_standings),
+        (
+            SELECT max(season)
+            FROM gold.fct_standings
+        ),
         (
             SELECT max(season)
             FROM gold.fct_team_game_results
@@ -23,26 +26,28 @@ REGULAR_SEASON_RECORDS = f"""
         ) AS wins
     FROM (
         SELECT
-            games.home_team_id AS team_id,
-            games.winning_team_id
-        FROM gold.fct_team_game_results AS games
-        WHERE games.season_type = 'Regular Season'
-          AND games.season = ({RESOLVED_SEASON})
+            fct_team_game_results.home_team_id AS team_id,
+            fct_team_game_results.winning_team_id
+        FROM gold.fct_team_game_results
+        WHERE
+            fct_team_game_results.season_type = 'Regular Season'
+            AND fct_team_game_results.season = ({RESOLVED_SEASON})
         UNION ALL
         SELECT
-            games.away_team_id AS team_id,
-            games.winning_team_id
-        FROM gold.fct_team_game_results AS games
-        WHERE games.season_type = 'Regular Season'
-          AND games.season = ({RESOLVED_SEASON})
+            fct_team_game_results.away_team_id AS team_id,
+            fct_team_game_results.winning_team_id
+        FROM gold.fct_team_game_results
+        WHERE
+            fct_team_game_results.season_type = 'Regular Season'
+            AND fct_team_game_results.season = ({RESOLVED_SEASON})
     ) AS appearances
     GROUP BY appearances.team_id
 """
 
-RECORD_WINS = "coalesce(s.wins, records.wins)"
+RECORD_WINS = "coalesce(fct_standings.wins, records.wins)"
 RECORD_LOSSES = """
     coalesce(
-        s.losses,
+        fct_standings.losses,
         CASE
             WHEN records.games IS NULL THEN NULL
             ELSE records.games - records.wins
@@ -51,7 +56,7 @@ RECORD_LOSSES = """
 """
 RECORD_WIN_PCT = """
     coalesce(
-        s.win_pct,
+        fct_standings.win_pct,
         CASE
             WHEN records.games > 0
             THEN round(records.wins::numeric / records.games, 3)
@@ -61,7 +66,7 @@ RECORD_WIN_PCT = """
 """
 RECORD_SOURCE = """
     CASE
-        WHEN s.team_id IS NOT NULL THEN 'official'
+        WHEN fct_standings.team_id IS NOT NULL THEN 'official'
         WHEN records.team_id IS NOT NULL THEN 'games'
         ELSE NULL
     END

@@ -160,29 +160,53 @@ INSERT INTO source.game_predictions (
 
 INSERT INTO source.reddit_posts (
     reddit_id, subreddit, title, author, score, num_comments, created_utc,
-    permalink, url, selftext, flair, is_self, scraped_at
+    permalink, url, selftext, flair, author_flair, is_self, scraped_at
 ) VALUES
     (
         'abc123', 'nba', 'Game Thread: Clippers at Warriors', 'nba_mod',
         120, 2, '2024-10-22 02:00:00',
         'https://www.reddit.com/r/nba/comments/abc123/game_thread/',
         'https://www.reddit.com/r/nba/comments/abc123/game_thread/',
-        'Tip-off discussion', 'Game Thread', TRUE, NOW()
+        'Tip-off discussion', 'Game Thread', ':gsw-1: Warriors', TRUE, NOW()
     );
 
 INSERT INTO source.reddit_comments (
-    reddit_id, post_reddit_id, parent_id, author, body, score, created_utc,
+    reddit_id, post_reddit_id, parent_id, author, body, author_flair, score, created_utc,
     permalink, scraped_at
 ) VALUES
     (
         'cmt001', 'abc123', 't3_abc123', 'hoopsfan',
-        'Kawhi looks locked in tonight.', 42, '2024-10-22 02:15:00',
+        'Kawhi looks locked in tonight.', ':chi-2: Bulls', 42, '2024-10-22 02:15:00',
         'https://www.reddit.com/r/nba/comments/abc123/game_thread/cmt001/',
         NOW()
     ),
     (
         'cmt002', 'abc123', 't1_cmt001', 'splash',
-        'Curry answered immediately.', 18, '2024-10-22 02:16:00',
+        'Curry answered immediately.', ':phi: Philippines', 18, '2024-10-22 02:16:00',
         'https://www.reddit.com/r/nba/comments/abc123/game_thread/cmt002/',
+        NOW()
+    ),
+    (
+        'cmt003', 'abc123', 't3_abc123', 'boxscorewatcher',
+        'Stephen Curry and the Warriors closed it out.', '[LAC] Chris Paul', 9, '2024-10-22 02:17:00',
+        'https://www.reddit.com/r/nba/comments/abc123/game_thread/cmt003/',
+        NOW()
+    ),
+    (
+        'cmt004', 'abc123', 't3_abc123', 'ghost',
+        '[removed]', 'Clippers', 5, '2024-10-22 02:18:00',
+        'https://www.reddit.com/r/nba/comments/abc123/game_thread/cmt004/',
+        NOW()
+    ),
+    (
+        'cmt005', 'abc123', 't3_abc123', 'aliasfan',
+        'Rough night for the gsw bench.', ':sea-2: Supersonics', 12, '2024-10-22 02:19:00',
+        'https://www.reddit.com/r/nba/comments/abc123/game_thread/cmt005/',
+        NOW()
+    ),
+    (
+        'cmt006', 'abc123', 't3_abc123', 'leaguewide',
+        'Good game all round.', 'r/NBA', 3, '2024-10-22 02:20:00',
+        'https://www.reddit.com/r/nba/comments/abc123/game_thread/cmt006/',
         NOW()
     );

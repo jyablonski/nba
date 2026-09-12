@@ -1,0 +1,42 @@
+cubes:
+  - name: reddit_flair
+    sql_table: gold.fct_reddit_flair
+    description: >
+      r/nba user flair resolved to a franchise. Grain is the distinct raw flair
+      string; join reddit_posts or reddit_comments on author_flair. flair_team_id
+      is null unless flair_scope is 'team'. Queryable via Cube / MCP.
+
+    dimensions:
+      - name: author_flair
+        sql: author_flair
+        type: string
+        primary_key: true
+        public: true
+
+      - name: flair_label
+        sql: flair_label
+        type: string
+
+      - name: flair_scope
+        sql: flair_scope
+        type: string
+
+      - name: flair_match_method
+        sql: flair_match_method
+        type: string
+
+      - name: flair_team_id
+        sql: flair_team_id
+        type: string
+
+      - name: flair_team_abbreviation
+        sql: flair_team_abbreviation
+        type: string
+
+      - name: flair_team_name
+        sql: flair_team_name
+        type: string
+
+    measures:
+      - name: count
+        type: count

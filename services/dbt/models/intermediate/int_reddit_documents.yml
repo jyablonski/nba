@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: int_reddit_documents
+    description: >
+      Post titles + self text and comment bodies as one normalized, space-padded
+      text grain for entity matching. Removed and deleted comment bodies are
+      dropped — "[removed]" carries no entities. Grain is document_reddit_id.
+    columns:
+      - name: document_reddit_id
+        data_tests:
+          - unique
+          - not_null
+      - name: document_type
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ["post", "comment"]
+                quote_values: true
+      - name: post_reddit_id
+        data_tests:
+          - not_null
+      - name: created_utc
+        data_tests:
+          - not_null
+      - name: search_text
+        data_tests:
+          - not_null

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -11,12 +11,14 @@ vi.mock("next/navigation", () => ({
 const getGameFlow = vi.fn();
 const getGamePlayByPlay = vi.fn();
 const listGames = vi.fn();
+const getGameBoxScore = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   api: {
     listGames: (...args: unknown[]) => listGames(...args),
     getGameFlow: (...args: unknown[]) => getGameFlow(...args),
     getGamePlayByPlay: (...args: unknown[]) => getGamePlayByPlay(...args),
+    getGameBoxScore: (...args: unknown[]) => getGameBoxScore(...args),
   },
   queryErrorMessage: (error: unknown) => (error instanceof Error ? error.message : "error"),
 }));
@@ -25,6 +27,30 @@ import GameFlowPage from "@/app/games/[id]/page";
 import { GameFlowTooltip } from "@/components/charts/game-flow-chart";
 import { FALLBACK_AWAY, FALLBACK_HOME } from "@/lib/team-colors";
 import { Providers } from "@/components/providers";
+
+const BOX_SCORE_ROW = {
+  player_id: "p1",
+  player_name: "Victor Wembanyama",
+  team_id: "t-sas",
+  team_abbreviation: "SAS",
+  team_name: "San Antonio Spurs",
+  location: "home",
+  minutes: 36,
+  points: 28,
+  rebounds: 14,
+  assists: 3,
+  field_goals_made: 10,
+  field_goals_attempted: 21,
+  field_goal_pct: 0.476,
+  three_pointers_made: 2,
+  three_pointers_attempted: 6,
+  three_point_pct: 0.333,
+  free_throws_made: 6,
+  free_throws_attempted: 8,
+  free_throw_pct: 0.75,
+  true_shooting_pct: 0.571,
+  plus_minus: -7,
+};
 
 describe("game flow page", () => {
   it("shows empty play-by-play copy and no Recent final games filter", async () => {
@@ -40,6 +66,7 @@ describe("game flow page", () => {
       away_team_name: "New York Knicks",
       has_play_by_play: false,
     });
+    getGameBoxScore.mockResolvedValue({ data: [], meta: { total: 0, limit: 0, offset: 0 } });
     getGamePlayByPlay.mockResolvedValue({
       data: [],
       meta: { total: 0, limit: 0, offset: 0 },
@@ -82,6 +109,7 @@ describe("game flow page", () => {
       biggest_run_start_seconds: 900,
       biggest_run_end_seconds: 2800,
     });
+    getGameBoxScore.mockResolvedValue({ data: [], meta: { total: 0, limit: 0, offset: 0 } });
     getGamePlayByPlay.mockResolvedValue({
       data: [
         {
@@ -187,5 +215,196 @@ describe("game flow page", () => {
     expect(within(score).getByText("NYK")).toHaveStyle({ color: FALLBACK_AWAY });
     expect(within(score).getByText("SAS")).toHaveStyle({ color: FALLBACK_HOME });
     expect(screen.getByText("J. Brunson 2pt Driving Layup")).toBeInTheDocument();
+  });
+});
+
+describe("box score", () => {
+  it("renders shooting splits, true shooting, and plus-minus under the chart", async () => {
+    getGameFlow.mockResolvedValue({
+      game_id: "0042500405",
+      season: "2025-26",
+      game_date: "2026-06-13",
+      home_team_abbreviation: "SAS",
+      away_team_abbreviation: "NYK",
+      home_team_name: "San Antonio Spurs",
+      away_team_name: "New York Knicks",
+      has_play_by_play: false,
+    });
+    getGamePlayByPlay.mockResolvedValue({ data: [], meta: { total: 0, limit: 0, offset: 0 } });
+    getGameBoxScore.mockResolvedValue({
+      data: [
+        BOX_SCORE_ROW,
+        {
+          ...BOX_SCORE_ROW,
+          player_id: "p2",
+          player_name: "Bench Guy",
+          minutes: 2,
+          points: 0,
+          field_goals_made: 0,
+          field_goals_attempted: 0,
+          field_goal_pct: null,
+          three_pointers_made: 0,
+          three_pointers_attempted: 0,
+          three_point_pct: null,
+          free_throws_made: 0,
+          free_throws_attempted: 0,
+          free_throw_pct: null,
+          true_shooting_pct: null,
+          plus_minus: -3,
+        },
+      ],
+      meta: { total: 2, limit: 2, offset: 0 },
+    });
+
+    render(
+      <Providers>
+        <GameFlowPage />
+      </Providers>
+    );
+
+    await waitFor(() => expect(screen.getByText("Box score")).toBeInTheDocument());
+    const row = screen.getByText("Victor Wembanyama").closest("tr") as HTMLElement;
+    expect(within(row).getByText("10-21")).toBeInTheDocument();
+    expect(within(row).getByText("47.6%")).toBeInTheDocument();
+    expect(within(row).getByText("2-6")).toBeInTheDocument();
+    expect(within(row).getByText("6-8")).toBeInTheDocument();
+    expect(within(row).getByText("57.1%")).toBeInTheDocument();
+    expect(within(row).getByText("-7")).toBeInTheDocument();
+
+    // A player who never shot gets a blank rather than a 0.0% that reads as bad.
+    const bench = screen.getByText("Bench Guy").closest("tr") as HTMLElement;
+    expect(within(bench).getAllByText("—").length).toBeGreaterThanOrEqual(4);
+
+    // Points descending by default, so the leading scorer is the first row.
+    const names = screen
+      .getAllByRole("row")
+      .slice(1)
+      .map((row) => row.textContent ?? "");
+    expect(names[0]).toContain("Victor Wembanyama");
+    expect(names[1]).toContain("Bench Guy");
+  });
+
+  it("sorts on a clicked column and flips direction on a second click", async () => {
+    getGameFlow.mockResolvedValue({
+      game_id: "0042500405",
+      home_team_abbreviation: "SAS",
+      away_team_abbreviation: "NYK",
+      has_play_by_play: false,
+    });
+    getGamePlayByPlay.mockResolvedValue({ data: [], meta: { total: 0, limit: 0, offset: 0 } });
+    getGameBoxScore.mockResolvedValue({
+      data: [
+        BOX_SCORE_ROW,
+        { ...BOX_SCORE_ROW, player_id: "p2", player_name: "Bench Guy", minutes: 2, points: 0 },
+      ],
+      meta: { total: 2, limit: 2, offset: 0 },
+    });
+
+    render(
+      <Providers>
+        <GameFlowPage />
+      </Providers>
+    );
+
+    await waitFor(() => expect(screen.getByText("Box score")).toBeInTheDocument());
+    const firstName = () => screen.getAllByRole("row")[1].textContent ?? "";
+
+    fireEvent.click(screen.getByRole("button", { name: "Player" }));
+    await waitFor(() => expect(firstName()).toContain("Bench Guy"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Player" }));
+    await waitFor(() => expect(firstName()).toContain("Victor Wembanyama"));
+
+    fireEvent.click(screen.getByRole("button", { name: "MIN" }));
+    await waitFor(() => expect(firstName()).toContain("Victor Wembanyama"));
+  });
+
+  it("sorts on every column without throwing", async () => {
+    getGameFlow.mockResolvedValue({
+      game_id: "0042500405",
+      home_team_abbreviation: "SAS",
+      away_team_abbreviation: "NYK",
+      has_play_by_play: false,
+    });
+    getGamePlayByPlay.mockResolvedValue({ data: [], meta: { total: 0, limit: 0, offset: 0 } });
+    getGameBoxScore.mockResolvedValue({
+      data: [
+        BOX_SCORE_ROW,
+        {
+          ...BOX_SCORE_ROW,
+          player_id: "p2",
+          player_name: "Blank Line",
+          minutes: 1,
+          points: 0,
+          rebounds: null,
+          assists: null,
+          field_goals_made: null,
+          field_goals_attempted: null,
+          field_goal_pct: null,
+          three_pointers_made: null,
+          three_pointers_attempted: null,
+          three_point_pct: null,
+          free_throws_made: null,
+          free_throws_attempted: null,
+          free_throw_pct: null,
+          true_shooting_pct: null,
+          plus_minus: null,
+        },
+      ],
+      meta: { total: 2, limit: 2, offset: 0 },
+    });
+
+    render(
+      <Providers>
+        <GameFlowPage />
+      </Providers>
+    );
+    await waitFor(() => expect(screen.getByText("Box score")).toBeInTheDocument());
+
+    const headers = [
+      "Player",
+      "MIN",
+      "PTS",
+      "REB",
+      "AST",
+      "FG",
+      "FG%",
+      "3P",
+      "3P%",
+      "FT",
+      "FT%",
+      "TS%",
+      "+/−",
+    ];
+    for (const header of headers) {
+      fireEvent.click(screen.getByRole("button", { name: header }));
+      // A null stat sorts last whichever way the column is pointing, so the
+      // player with a blank line never leads a descending stat column.
+      const rows = screen.getAllByRole("row").slice(1);
+      expect(rows).toHaveLength(2);
+      if (header !== "Player" && header !== "MIN") {
+        expect(rows[0].textContent).toContain("Victor Wembanyama");
+      }
+    }
+  });
+
+  it("says so when no player lines were loaded", async () => {
+    getGameFlow.mockResolvedValue({
+      game_id: "0042500405",
+      home_team_abbreviation: "SAS",
+      away_team_abbreviation: "NYK",
+      has_play_by_play: false,
+    });
+    getGamePlayByPlay.mockResolvedValue({ data: [], meta: { total: 0, limit: 0, offset: 0 } });
+    getGameBoxScore.mockResolvedValue({ data: [], meta: { total: 0, limit: 0, offset: 0 } });
+
+    render(
+      <Providers>
+        <GameFlowPage />
+      </Providers>
+    );
+    await waitFor(() =>
+      expect(screen.getByText("No box score for this game.")).toBeInTheDocument()
+    );
   });
 });

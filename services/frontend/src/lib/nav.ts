@@ -5,6 +5,7 @@ export const PRIMARY_NAV = [
   { href: "/teams", label: "Teams" },
   { href: "/players/compare", label: "Compare" },
   { href: "/ask", label: "Ask" },
+  { href: "/social", label: "Social" },
   { href: "/about", label: "About" },
 ] as const;
 

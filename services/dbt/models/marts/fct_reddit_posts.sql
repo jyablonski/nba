@@ -14,6 +14,7 @@ select
     posts.url,
     posts.selftext,
     posts.flair,
+    posts.author_flair,
     posts.is_self,
     posts.scraped_at
 from posts

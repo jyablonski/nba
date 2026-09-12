@@ -407,8 +407,8 @@ def test_team_games_sql_fills_arena_from_home_team() -> None:
     assert "gold.dim_teams" in sql
     assert "coalesce" in sql.lower()
     assert "home_teams.city" in sql
-    assert "g.home_score - g.away_score" in sql
-    assert "g.away_score - g.home_score" in sql
+    assert "fct_team_game_results.home_score - fct_team_game_results.away_score" in sql
+    assert "fct_team_game_results.away_score - fct_team_game_results.home_score" in sql
 
 
 @pytest.mark.unit
@@ -484,8 +484,8 @@ def test_team_record_invalid_season_type(client, session, query_result) -> None:
 def test_record_sql_filters_season_type() -> None:
     from queries.teams import COMPUTE_RECORD, COMPUTE_RECORDS_BY_SEASON_TYPE
 
-    assert "g.season_type = :season_type" in str(COMPUTE_RECORD)
-    assert "GROUP BY g.season_type" in str(COMPUTE_RECORDS_BY_SEASON_TYPE)
+    assert "fct_team_game_results.season_type = :season_type" in str(COMPUTE_RECORD)
+    assert "GROUP BY fct_team_game_results.season_type" in str(COMPUTE_RECORDS_BY_SEASON_TYPE)
 
 
 @pytest.mark.unit
@@ -496,7 +496,7 @@ def test_list_teams_sql_overlays_regular_season_records() -> None:
     assert "gold.fct_team_game_results" in sql
     assert "season_type = 'Regular Season'" in sql
     assert "record_source" in sql
-    assert "coalesce(s.wins, records.wins)" in sql
+    assert "coalesce(fct_standings.wins, records.wins)" in sql
     assert "pts_scored_avg" in sql
     assert "pts_allowed_avg" in sql
 

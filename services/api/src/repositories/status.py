@@ -23,6 +23,7 @@ class StatusRepository:
         row = dict(self.db.execute(WAREHOUSE_STATUS).mappings().one())
         return {
             "last_scraped_at": as_utc(row.get("last_scraped_at")),
+            "next_scrape_at": as_utc(row.get("next_scrape_at")),
             "player_count": int(row.get("player_count") or 0),
             "game_count": int(row.get("game_count") or 0),
             "season_count": int(row.get("season_count") or 0),

@@ -8,6 +8,7 @@ select
     source.parent_id,
     source.author,
     source.body,
+    source.author_flair,
     source.score,
     source.created_utc,
     source.permalink,

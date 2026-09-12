@@ -12,52 +12,52 @@ from sqlalchemy import text
 ADMIN_PIPELINE_STATUS = text(
     """
     SELECT
-        pipeline.enabled,
-        pipeline.season_active,
-        pipeline.season_start,
-        pipeline.season_end,
-        pipeline.scrape_mode,
-        pipeline.target_season,
-        pipeline.last_success_at,
-        pipeline.last_scrape_date,
-        pipeline.reason,
-        pipeline.updated_at,
+        scrape_pipeline.enabled,
+        scrape_pipeline.season_active,
+        scrape_pipeline.season_start,
+        scrape_pipeline.season_end,
+        scrape_pipeline.scrape_mode,
+        scrape_pipeline.target_season,
+        scrape_pipeline.last_success_at,
+        scrape_pipeline.last_scrape_date,
+        scrape_pipeline.reason,
+        scrape_pipeline.updated_at,
         CASE
-            WHEN NOT pipeline.enabled THEN 'skipped_disabled'
-            WHEN NOT pipeline.season_active THEN 'skipped_offseason'
-            WHEN pipeline.season_start IS NOT NULL
-                 AND CURRENT_DATE < pipeline.season_start THEN 'skipped_offseason'
-            WHEN pipeline.season_end IS NOT NULL
-                 AND CURRENT_DATE > pipeline.season_end THEN 'skipped_offseason'
-            WHEN lower(coalesce(pipeline.scrape_mode, 'daily')) = 'none' THEN 'skipped_mode_none'
-            WHEN lower(coalesce(pipeline.scrape_mode, 'daily')) = 'season'
-                 AND pipeline.target_season IS NULL THEN 'noop'
-            ELSE lower(coalesce(pipeline.scrape_mode, 'daily'))
+            WHEN NOT scrape_pipeline.enabled THEN 'skipped_disabled'
+            WHEN NOT scrape_pipeline.season_active THEN 'skipped_offseason'
+            WHEN scrape_pipeline.season_start IS NOT NULL
+                 AND CURRENT_DATE < scrape_pipeline.season_start THEN 'skipped_offseason'
+            WHEN scrape_pipeline.season_end IS NOT NULL
+                 AND CURRENT_DATE > scrape_pipeline.season_end THEN 'skipped_offseason'
+            WHEN lower(coalesce(scrape_pipeline.scrape_mode, 'daily')) = 'none' THEN 'skipped_mode_none'
+            WHEN lower(coalesce(scrape_pipeline.scrape_mode, 'daily')) = 'season'
+                 AND scrape_pipeline.target_season IS NULL THEN 'noop'
+            ELSE lower(coalesce(scrape_pipeline.scrape_mode, 'daily'))
         END AS action_today,
-        pipeline.enabled AS reddit_would_run,
-        EXTRACT(EPOCH FROM (now() - pipeline.last_success_at)) / 3600.0 AS hours_since_success
-    FROM source.scrape_pipeline AS pipeline
-    WHERE pipeline.id = 1
+        scrape_pipeline.enabled AS reddit_would_run,
+        EXTRACT(EPOCH FROM (now() - scrape_pipeline.last_success_at)) / 3600.0 AS hours_since_success
+    FROM source.scrape_pipeline
+    WHERE scrape_pipeline.id = 1
     """
 )
 
 ADMIN_RECENT_RUNS = text(
     """
     SELECT
-        runs.run_id,
-        runs.triggered_by,
-        runs.status,
-        runs.scrape_action,
-        runs.scrape_exit,
-        runs.reddit_ran,
-        runs.reddit_exit,
-        runs.dbt_exit,
-        runs.detail,
-        runs.started_at,
-        runs.finished_at,
-        EXTRACT(EPOCH FROM (runs.finished_at - runs.started_at)) AS duration_seconds
-    FROM source.pipeline_runs AS runs
-    ORDER BY runs.started_at DESC
+        pipeline_runs.run_id,
+        pipeline_runs.triggered_by,
+        pipeline_runs.status,
+        pipeline_runs.scrape_action,
+        pipeline_runs.scrape_exit,
+        pipeline_runs.reddit_ran,
+        pipeline_runs.reddit_exit,
+        pipeline_runs.dbt_exit,
+        pipeline_runs.detail,
+        pipeline_runs.started_at,
+        pipeline_runs.finished_at,
+        EXTRACT(EPOCH FROM (pipeline_runs.finished_at - pipeline_runs.started_at)) AS duration_seconds
+    FROM source.pipeline_runs
+    ORDER BY pipeline_runs.started_at DESC
     LIMIT :limit
     """
 )
@@ -67,43 +67,46 @@ ADMIN_RECENT_RUNS = text(
 ADMIN_SOURCE_HEALTH = text(
     """
     WITH latest AS (
-        SELECT DISTINCT ON (source_runs.source_name)
-            source_runs.source_name,
-            source_runs.run_id,
-            source_runs.status,
-            source_runs.expectation,
-            source_runs.rows_written,
-            source_runs.attempt,
-            source_runs.error_type,
-            source_runs.error_detail,
-            source_runs.started_at,
-            source_runs.finished_at
-        FROM source.scrape_source_runs AS source_runs
-        ORDER BY source_runs.source_name, source_runs.started_at DESC, source_runs.id DESC
+        SELECT DISTINCT ON (scrape_source_runs.source_name)
+            scrape_source_runs.source_name,
+            scrape_source_runs.run_id,
+            scrape_source_runs.status,
+            scrape_source_runs.expectation,
+            scrape_source_runs.rows_written,
+            scrape_source_runs.attempt,
+            scrape_source_runs.error_type,
+            scrape_source_runs.error_detail,
+            scrape_source_runs.started_at,
+            scrape_source_runs.finished_at
+        FROM source.scrape_source_runs
+        ORDER BY
+        scrape_source_runs.source_name,
+        scrape_source_runs.started_at DESC,
+        scrape_source_runs.id DESC
     ),
     last_success AS (
         SELECT
-            successes.source_name,
-            max(successes.started_at) AS succeeded_at
-        FROM source.scrape_source_runs AS successes
-        WHERE successes.status = 'success'
-        GROUP BY successes.source_name
+            scrape_source_runs.source_name,
+            max(scrape_source_runs.started_at) AS succeeded_at
+        FROM source.scrape_source_runs
+        WHERE scrape_source_runs.status = 'success'
+        GROUP BY scrape_source_runs.source_name
     ),
     since_success AS (
         SELECT
-            attempts.source_name,
+            scrape_source_runs.source_name,
             count(*) AS runs_since_success
-        FROM source.scrape_source_runs AS attempts
-        LEFT JOIN last_success ON last_success.source_name = attempts.source_name
+        FROM source.scrape_source_runs
+        LEFT JOIN last_success ON last_success.source_name = scrape_source_runs.source_name
         -- Only 'failed' counts. A 'skipped' run is deliberate (off-day, no API
         -- key), so counting it would make every NBA source look like a growing
         -- failure streak through the off-season.
-        WHERE attempts.status = 'failed'
+        WHERE scrape_source_runs.status = 'failed'
           AND (
               last_success.succeeded_at IS NULL
-              OR attempts.started_at > last_success.succeeded_at
+              OR scrape_source_runs.started_at > last_success.succeeded_at
           )
-        GROUP BY attempts.source_name
+        GROUP BY scrape_source_runs.source_name
     )
     SELECT
         latest.source_name,
@@ -129,7 +132,10 @@ ADMIN_SOURCE_HEALTH = text(
 # information_schema: the set of tables that matter is a product decision.
 ADMIN_FRESHNESS = text(
     """
-    SELECT 'games' AS table_name, max(scraped_at) AS scraped_at, count(*) AS row_count
+    SELECT
+        'games' AS table_name,
+        max(scraped_at) AS scraped_at,
+        count(*) AS row_count
     FROM source.games
     UNION ALL SELECT 'player_game_logs', max(scraped_at), count(*) FROM source.player_game_logs
     UNION ALL SELECT 'play_by_play', max(scraped_at), count(*) FROM source.play_by_play
@@ -153,24 +159,24 @@ ADMIN_DBT_STATUS = text(
     """
     SELECT
         (
-            SELECT runs.dbt_exit
-            FROM source.pipeline_runs AS runs
-            WHERE runs.dbt_exit IS NOT NULL
-            ORDER BY runs.started_at DESC
+            SELECT pipeline_runs.dbt_exit
+            FROM source.pipeline_runs
+            WHERE pipeline_runs.dbt_exit IS NOT NULL
+            ORDER BY pipeline_runs.started_at DESC
             LIMIT 1
         ) AS last_dbt_exit,
         (
-            SELECT runs.started_at
-            FROM source.pipeline_runs AS runs
-            WHERE runs.dbt_exit IS NOT NULL
-            ORDER BY runs.started_at DESC
+            SELECT pipeline_runs.started_at
+            FROM source.pipeline_runs
+            WHERE pipeline_runs.dbt_exit IS NOT NULL
+            ORDER BY pipeline_runs.started_at DESC
             LIMIT 1
         ) AS last_dbt_run_at,
         (
-            SELECT runs.run_id
-            FROM source.pipeline_runs AS runs
-            WHERE runs.dbt_exit IS NOT NULL
-            ORDER BY runs.started_at DESC
+            SELECT pipeline_runs.run_id
+            FROM source.pipeline_runs
+            WHERE pipeline_runs.dbt_exit IS NOT NULL
+            ORDER BY pipeline_runs.started_at DESC
             LIMIT 1
         ) AS last_dbt_run_id
     """
@@ -192,15 +198,15 @@ ADMIN_GOLD_TABLES = text(
 ADMIN_ML_STATUS = text(
     """
     SELECT
-        predictions.model_name,
-        predictions.model_version,
+        game_predictions.model_name,
+        game_predictions.model_version,
         count(*) AS prediction_count,
-        max(predictions.as_of) AS latest_as_of,
-        max(predictions.scraped_at) AS latest_scraped_at,
-        count(*) FILTER (WHERE predictions.market_wp IS NOT NULL) AS with_market_wp
-    FROM source.game_predictions AS predictions
-    GROUP BY predictions.model_name, predictions.model_version
-    ORDER BY max(predictions.scraped_at) DESC
+        max(game_predictions.as_of) AS latest_as_of,
+        max(game_predictions.scraped_at) AS latest_scraped_at,
+        count(*) FILTER (WHERE game_predictions.market_wp IS NOT NULL) AS with_market_wp
+    FROM source.game_predictions
+    GROUP BY game_predictions.model_name, game_predictions.model_version
+    ORDER BY max(game_predictions.scraped_at) DESC
     """
 )
 
@@ -229,18 +235,18 @@ INSERT_ADMIN_JOB = text(
 SELECT_ADMIN_JOBS = text(
     """
     SELECT
-        jobs.job_id,
-        jobs.job_type,
-        jobs.status,
-        jobs.requested_by,
-        jobs.exit_code,
-        jobs.detail,
-        jobs.log_tail,
-        jobs.requested_at,
-        jobs.started_at,
-        jobs.finished_at
-    FROM source.admin_jobs AS jobs
-    ORDER BY jobs.requested_at DESC
+        admin_jobs.job_id,
+        admin_jobs.job_type,
+        admin_jobs.status,
+        admin_jobs.requested_by,
+        admin_jobs.exit_code,
+        admin_jobs.detail,
+        admin_jobs.log_tail,
+        admin_jobs.requested_at,
+        admin_jobs.started_at,
+        admin_jobs.finished_at
+    FROM source.admin_jobs
+    ORDER BY admin_jobs.requested_at DESC
     LIMIT :limit
     """
 )

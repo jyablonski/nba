@@ -1,5 +1,16 @@
 import type {
   BackToBackStats,
+  BoxScoreRow,
+  SocialComment,
+  SocialEntity,
+  SocialFacet,
+  SocialFanbase,
+  SocialLeader,
+  SocialPost,
+  SocialPostDetail,
+  SocialSummary,
+  SocialWindowParams,
+  ListSocialPostsParams,
   GameLogEntry,
   GameLogParams,
   GameCollapse,
@@ -166,6 +177,44 @@ export function queryErrorMessage(error: unknown): string {
 }
 
 export const api = {
+  getGameBoxScore: async (gameId: string) =>
+    asPaginated<BoxScoreRow>(await fetchApi(`/api/v1/games/${gameId}/box-score`)),
+
+  getSocialSummary: async (params: SocialWindowParams = {}) =>
+    asData<SocialSummary>(await fetchApi(`/api/v1/social/summary${buildQuery({ ...params })}`)),
+
+  listSocialPosts: async (params: ListSocialPostsParams = {}) =>
+    asPaginated<SocialPost>(await fetchApi(`/api/v1/social/posts${buildQuery({ ...params })}`)),
+
+  getSocialPost: async (id: string) =>
+    asData<SocialPostDetail>(await fetchApi(`/api/v1/social/posts/${id}`)),
+
+  listSocialPostComments: async (id: string) =>
+    asPaginated<SocialComment>(await fetchApi(`/api/v1/social/posts/${id}/comments`)),
+
+  listSocialEntities: async (entityType: "player" | "team", params: SocialWindowParams = {}) =>
+    asPaginated<SocialEntity>(
+      await fetchApi(`/api/v1/social/entities${buildQuery({ entity_type: entityType, ...params })}`)
+    ),
+
+  listSocialFanbases: async (
+    params: SocialWindowParams & { scope?: string; limit?: number } = {}
+  ) =>
+    asPaginated<SocialFanbase>(
+      await fetchApi(`/api/v1/social/fanbases${buildQuery({ ...params })}`)
+    ),
+
+  listSocialFacets: async (params: SocialWindowParams = {}) =>
+    asPaginated<SocialFacet>(await fetchApi(`/api/v1/social/facets${buildQuery({ ...params })}`)),
+
+  listSocialBoard: async (
+    board: "tags" | "sources" | "authors" | "composition",
+    params: SocialWindowParams & { limit?: number } = {}
+  ) =>
+    asPaginated<SocialLeader>(
+      await fetchApi(`/api/v1/social/${board}${buildQuery({ ...params })}`)
+    ),
+
   searchPlayers: async (search = "", params: Omit<SearchPlayersParams, "search"> = {}) =>
     asPaginated<PlayerSummary>(
       await fetchApi(

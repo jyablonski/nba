@@ -27,6 +27,7 @@ from cube.queries import (
     standings_query,
     standings_seasons_query,
     team_by_abbreviation_query,
+    team_flow_query,
     team_games_seasons_query,
     team_payroll_season_query,
     team_record_games_query,
@@ -254,6 +255,27 @@ class CubeAnalytics:
             "win_pct": win_pct,
             "games": total,
             "game_list": games,
+            "filters_applied": applied,
+        }
+
+    def get_team_flow(
+        self,
+        team_abbreviation: str,
+        season: str | None = None,
+    ) -> dict[str, Any]:
+        query, applied = team_flow_query(team_abbreviation, season=season)
+        rows = self.client.load(query)
+        row = rows[0] if rows else {}
+        abbreviation = team_abbreviation.upper()
+        team = self.find_team(abbreviation)
+        return {
+            "abbreviation": abbreviation,
+            "team_name": (team or {}).get("team_name"),
+            "games": _as_int(row.get("games")) or 0,
+            "blown_leads": _as_int(row.get("blown_leads")) or 0,
+            "biggest_lead_blown": _as_int(row.get("biggest_lead_blown")),
+            "comeback_wins": _as_int(row.get("comeback_wins")) or 0,
+            "biggest_comeback": _as_int(row.get("biggest_comeback")),
             "filters_applied": applied,
         }
 

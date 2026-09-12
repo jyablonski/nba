@@ -489,6 +489,7 @@ class RedditPost(Base):
     url: Mapped[str | None] = mapped_column(Text)
     selftext: Mapped[str | None] = mapped_column(Text)
     flair: Mapped[str | None] = mapped_column(String(200))
+    author_flair: Mapped[str | None] = mapped_column(String(200))
     is_self: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     scraped_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
@@ -506,6 +507,7 @@ class RedditComment(Base):
     parent_id: Mapped[str | None] = mapped_column(String(20))
     author: Mapped[str | None] = mapped_column(String(50))
     body: Mapped[str | None] = mapped_column(Text)
+    author_flair: Mapped[str | None] = mapped_column(String(200))
     score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_utc: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     permalink: Mapped[str] = mapped_column(String(500), nullable=False)

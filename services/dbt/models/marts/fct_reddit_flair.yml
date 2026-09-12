@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: fct_reddit_flair
+    description: >
+      r/nba user flair resolved to a franchise. Grain is the distinct raw flair
+      string, so `fct_reddit_posts` and `fct_reddit_comments` join it on
+      `author_flair` rather than re-parsing per row.
+
+      Four resolution paths, in order: an emoji code with a numeric variant
+      (":lal-1: Lakers"), an emoji code without one (national-team and bandwagon
+      flairs, always `other`), a bracketed abbreviation ("[SAS] Tim Duncan"), and
+      a plain nickname ("Lakers"). Roughly four flairs in five carry an emoji
+      code; the rest are legacy plain text.
+
+      `flair_team_id` is null unless `flair_scope` is `team`. Historic labels
+      resolve through their current code, so a ":was-5: Washington Bullets" flair
+      is a Wizards fan, while `sea` (Supersonics) has no current franchise and
+      stays `other`.
+    columns:
+      - name: author_flair
+        data_tests:
+          - unique
+          - not_null
+      - name: flair_scope
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set: ["team", "league", "other"]
+                quote_values: true
+      - name: flair_match_method
+        data_tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              arguments:
+                value_set:
+                  ["emoji_code", "uncoded_emoji", "bracket_abbreviation", "label", "unmatched"]
+                quote_values: true
+      - name: flair_team_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_teams')
+                field: team_id

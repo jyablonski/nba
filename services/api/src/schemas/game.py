@@ -152,6 +152,38 @@ class TeamGameResult(GameResult):
     is_win: bool | None = None
 
 
+class BoxScoreRow(BaseModel):
+    """One player's line in a single game.
+
+    Percentages are fractions, not 0-100. true_shooting_pct is derived here
+    rather than stored, and is null when the player attempted no shots.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    player_id: UUID
+    player_name: str | None = None
+    team_id: UUID
+    team_abbreviation: str | None = None
+    team_name: str | None = None
+    location: str | None = None
+    minutes: float | None = None
+    points: int | None = None
+    rebounds: int | None = None
+    assists: int | None = None
+    field_goals_made: int | None = None
+    field_goals_attempted: int | None = None
+    field_goal_pct: float | None = None
+    three_pointers_made: int | None = None
+    three_pointers_attempted: int | None = None
+    three_point_pct: float | None = None
+    free_throws_made: int | None = None
+    free_throws_attempted: int | None = None
+    free_throw_pct: float | None = None
+    true_shooting_pct: float | None = None
+    plus_minus: int | None = None
+
+
 class QueryRequest(BaseModel):
     question: str = Field(min_length=1)
     season: str | None = None

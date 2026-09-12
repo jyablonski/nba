@@ -112,7 +112,7 @@ def test_list_standings_sql_overlays_regular_season_records() -> None:
     assert "lag(" in sql
     assert "form.last_10" in sql
     # Ordering follows the settled play-in bracket, falling back to record rank.
-    assert "coalesce(s.playoff_seed," in sql
+    assert "coalesce(fct_standings.playoff_seed," in sql
     assert "playoff_seed" in sql
     assert "gold.dim_teams" in str(LIST_STANDINGS_COUNT)
 

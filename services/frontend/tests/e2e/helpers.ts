@@ -7,6 +7,7 @@ export const PRIMARY_NAV = [
   "Teams",
   "Compare",
   "Ask",
+  "Social",
   "About",
 ] as const;
 
@@ -85,6 +86,162 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
                 last_season: "2025-26",
               },
         });
+      }
+
+      // Social is matched ahead of /players and /teams: its paths are distinct,
+      // but the generic branches below would swallow a future /social/players.
+      if (url.includes("/social/")) {
+        const page = (rows: unknown[]) =>
+          json({ data: rows, meta: { total: rows.length, limit: 25, offset: 0 } });
+        if (url.includes("/social/summary")) {
+          return json({
+            data: {
+              post_count: empty ? 0 : 41,
+              author_count: empty ? 0 : 33,
+              reported_comment_count: empty ? 0 : 18204,
+              captured_comment_count: empty ? 0 : 402,
+              contested_post_count: empty ? 0 : 5,
+              total_score: empty ? 0 : 120544,
+              top_score: empty ? null : 12817,
+              first_post_at: empty ? null : "2026-09-04T00:00:00Z",
+              last_post_at: empty ? null : "2026-09-11T05:29:41Z",
+              last_scraped_at: empty ? null : "2026-09-11T06:00:00Z",
+            },
+          });
+        }
+        if (url.includes("/comments")) {
+          return page(
+            empty
+              ? []
+              : [
+                  {
+                    reddit_id: "cmt1",
+                    post_reddit_id: "zero1",
+                    parent_id: "t3_zero1",
+                    author: "DeadEyeDuncan21",
+                    body: "Anyone whose case is built on a single conference finals run.",
+                    score: 284,
+                    created_utc: "2026-09-09T06:00:00Z",
+                    permalink: "https://www.reddit.com/r/nba/comments/zero1/cmt1/",
+                    is_top_level: true,
+                    is_removed: false,
+                    author_flair: ":bos-1: Celtics",
+                    flair_scope: "team",
+                    flair_team_abbreviation: "BOS",
+                    flair_team_name: "Boston Celtics",
+                  },
+                ]
+          );
+        }
+        if (url.includes("/social/posts")) {
+          return page(
+            empty
+              ? []
+              : [
+                  {
+                    reddit_id: "zero1",
+                    subreddit: "nba",
+                    title: "Most overrated players?",
+                    author: "throwaway_hoopshead",
+                    score: 0,
+                    num_comments: 132,
+                    created_utc: "2026-09-09T05:29:22Z",
+                    permalink: "https://www.reddit.com/r/nba/comments/zero1/",
+                    url: null,
+                    flair: null,
+                    is_self: true,
+                    scraped_at: "2026-09-11T06:00:00Z",
+                    tag: null,
+                    source: "self",
+                    content_type: "discussion",
+                    is_contested: true,
+                    discussion_ratio: 132,
+                    captured_comment_count: 1,
+                    top_comment_score: 284,
+                    captured_comment_score: 284,
+                    top_comment_leverage: null,
+                    comment_concentration: null,
+                    player_mentions: ["Jaylen Brown"],
+                    team_mentions: ["Boston Celtics"],
+                    author_flair: null,
+                    flair_scope: null,
+                    flair_team_abbreviation: null,
+                    flair_team_name: null,
+                  },
+                ]
+          );
+        }
+        if (url.includes("/social/entities")) {
+          const isTeam = url.includes("entity_type=team");
+          return page(
+            empty
+              ? []
+              : [
+                  {
+                    entity_id: isTeam ? "team-1" : "player-1",
+                    entity_name: isTeam ? "LA Clippers" : "Kawhi Leonard",
+                    entity_abbreviation: isTeam ? "LAC" : null,
+                    post_count: 9,
+                    comment_count: 63,
+                    total_post_score: 41022,
+                    top_post_score: 12817,
+                    primary_color: isTeam ? "#C8102E" : null,
+                    alternate_color: null,
+                  },
+                ]
+          );
+        }
+        if (url.includes("/social/fanbases")) {
+          return page(
+            empty
+              ? []
+              : [
+                  {
+                    flair_scope: "team",
+                    flair_team_id: "team-1",
+                    flair_team_abbreviation: "LAL",
+                    flair_team_nickname: "Lakers",
+                    label: "Los Angeles Lakers",
+                    document_count: 84,
+                    post_count: 9,
+                    comment_count: 75,
+                    author_count: 61,
+                    primary_color: "#552583",
+                    alternate_color: null,
+                  },
+                ]
+          );
+        }
+        if (url.includes("/social/facets")) {
+          return page(
+            empty
+              ? []
+              : [
+                  { key: "discussion", post_count: 15, contested_post_count: 5 },
+                  { key: "highlight", post_count: 12, contested_post_count: 0 },
+                ]
+          );
+        }
+        const composition = url.includes("/social/composition");
+        return page(
+          empty
+            ? []
+            : [
+                {
+                  key: composition ? "self" : "Charania",
+                  post_count: 14,
+                  self_post_count: 9,
+                  link_post_count: 5,
+                  total_score: 24108,
+                  top_score: 5000,
+                  avg_score: 1842,
+                  median_score: 1842,
+                  total_comments: 4000,
+                  median_comments: 318,
+                  median_discussion_ratio: 0.2,
+                },
+              ]
+        );
       }
 
       if (url.includes("/season-stats")) {
@@ -463,6 +620,39 @@ export async function mockApi(page: Page, options: MockApiOptions = {}) {
       }
 
       // The comeback game the collapse table links to.
+      if (url.includes("/box-score")) {
+        return json({
+          data: empty
+            ? []
+            : [
+                {
+                  player_id: "00000000-0000-4000-8000-000000202695",
+                  player_name: "Kawhi Leonard",
+                  team_id: "00000000-0000-4000-8000-000001610612746",
+                  team_abbreviation: "LAC",
+                  team_name: "LA Clippers",
+                  location: "home",
+                  minutes: 36,
+                  points: 28,
+                  rebounds: 8,
+                  assists: 5,
+                  field_goals_made: 10,
+                  field_goals_attempted: 21,
+                  field_goal_pct: 0.476,
+                  three_pointers_made: 2,
+                  three_pointers_attempted: 6,
+                  three_point_pct: 0.333,
+                  free_throws_made: 6,
+                  free_throws_attempted: 8,
+                  free_throw_pct: 0.75,
+                  true_shooting_pct: 0.571,
+                  plus_minus: -7,
+                },
+              ],
+          meta: { total: empty ? 0 : 1, limit: 1, offset: 0 },
+        });
+      }
+
       if (url.includes("/games/0022400002/flow")) {
         return json({
           data: {
