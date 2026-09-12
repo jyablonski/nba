@@ -320,6 +320,39 @@ def get_game_odds(game_id: UUID | None = None) -> list[dict]:
 
 
 @mcp.tool()
+def get_transactions(
+    season: str | None = None,
+    search: str | None = None,
+    limit: int | None = None,
+) -> list[dict]:
+    """Basketball-Reference transactions log: trades, signings, waivers, conversions.
+
+    Optional season ("2025-26") and free-text description search. Use
+    get_transaction_participants to filter by which player or team moved."""
+    return get_analytics().get_transactions(season=season, search=search, limit=limit)
+
+
+@mcp.tool()
+def get_transaction_participants(
+    player_id: UUID | None = None,
+    team_abbreviation: str | None = None,
+    season: str | None = None,
+    limit: int | None = None,
+) -> list[dict]:
+    """Teams and players named by each transaction, one row per participant.
+
+    direction is 'from' or 'to' for teams and 'none' for players; a team that
+    both sends and receives in one trade appears twice. Draft picks are prose
+    on the source page with no link, so they are not participants."""
+    return get_analytics().get_transaction_participants(
+        player_id=player_id,
+        team_abbreviation=team_abbreviation,
+        season=season,
+        limit=limit,
+    )
+
+
+@mcp.tool()
 def get_play_by_play(game_id: UUID, limit: int | None = None) -> list[dict]:
     """Play-by-play actions for one game. Season-scoped ingest; default limit 200."""
     return get_analytics().get_play_by_play(game_id, limit)

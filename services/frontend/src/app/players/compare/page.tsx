@@ -122,7 +122,12 @@ function ComparePlayers() {
 
   return (
     <div className="space-y-6">
-      <h1 className="type-page">Compare players</h1>
+      <div>
+        <Link href="/players" className="type-timestamp hover:underline">
+          ← Players
+        </Link>
+        <h1 className="type-page mt-1">Compare players</h1>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         {ids.map((id, index) => {
@@ -242,7 +247,6 @@ function ComparePlayers() {
                 <tr>
                   <th>Player</th>
                   <SortHead active={stat === "games_played"}>Games</SortHead>
-                  <th>Seasons</th>
                   <SortHead active={stat === "ppg"}>PPG</SortHead>
                   <SortHead active={stat === "rpg"}>RPG</SortHead>
                   <SortHead active={stat === "apg"}>APG</SortHead>
@@ -269,7 +273,6 @@ function ComparePlayers() {
                       value={formatNumber(row.career_games_played)}
                       emphasize={stat === "games_played"}
                     />
-                    <CompareStat value={formatNumber(row.seasons_played)} emphasize={false} />
                     <CompareStat value={formatStat(row.career_ppg)} emphasize={stat === "ppg"} />
                     <CompareStat value={formatStat(row.career_rpg)} emphasize={stat === "rpg"} />
                     <CompareStat value={formatStat(row.career_apg)} emphasize={stat === "apg"} />
@@ -334,7 +337,6 @@ function CompareStat({ value, emphasize }: { value: string; emphasize: boolean }
 
 function DifferenceRow({ a, b }: { a: PlayerComparison; b: PlayerComparison }) {
   const games = a.career_games_played - b.career_games_played;
-  const seasons = (a.seasons_played ?? 0) - (b.seasons_played ?? 0);
   const ppg = (a.career_ppg ?? 0) - (b.career_ppg ?? 0);
   const rpg = (a.career_rpg ?? 0) - (b.career_rpg ?? 0);
   const apg = (a.career_apg ?? 0) - (b.career_apg ?? 0);
@@ -342,7 +344,6 @@ function DifferenceRow({ a, b }: { a: PlayerComparison; b: PlayerComparison }) {
     <tr>
       <td className="py-3 text-muted-foreground">Difference</td>
       <td className="tabular py-3 text-right text-primary">{signed(games, 0)}</td>
-      <td className="tabular py-3 text-right text-primary">{signed(seasons, 0)}</td>
       <td className="tabular py-3 text-right text-primary">{signed(ppg, 1)}</td>
       <td className="tabular py-3 text-right text-primary">{signed(rpg, 1)}</td>
       <td className="tabular py-3 text-right text-primary">{signed(apg, 1)}</td>

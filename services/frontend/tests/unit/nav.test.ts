@@ -9,17 +9,15 @@ describe("nav", () => {
       "Schedule",
       "Players",
       "Teams",
-      "Compare",
       "Ask",
       "Social",
       "About",
     ]);
   });
 
-  it("marks player profiles under Players, not Compare", () => {
+  it("keeps profiles and compare under the Players tab", () => {
     expect(isNavActive("/players/202695", "/players")).toBe(true);
-    expect(isNavActive("/players/compare", "/players")).toBe(false);
-    expect(isNavActive("/players/compare", "/players/compare")).toBe(true);
+    expect(isNavActive("/players/compare", "/players")).toBe(true);
     expect(isNavActive("/", "/")).toBe(true);
     expect(isNavActive("/ask", "/ask")).toBe(true);
     expect(isNavActive("/teams/1", "/teams")).toBe(true);

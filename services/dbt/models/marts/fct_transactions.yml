@@ -1,0 +1,64 @@
+version: 2
+
+models:
+  - name: fct_transactions
+    description: >
+      Basketball-Reference transactions log, one row per dated entry. Grain is
+      transaction_key = sha256(transaction_date|description); a reworded entry
+      lands as a new row rather than an update.
+    columns:
+      - name: transaction_key
+        data_tests:
+          - not_null
+          - unique
+      - name: transaction_date
+        data_tests:
+          - not_null
+      - name: season
+        data_tests:
+          - not_null
+      - name: description
+        data_tests:
+          - not_null
+
+  - name: fct_transaction_participants
+    description: >
+      Teams and players named by each transaction, linked to dim_teams and
+      dim_players. A team appears twice in a trade it both sends to and
+      receives from, once per direction.
+    columns:
+      - name: transaction_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_transactions')
+                field: transaction_key
+      - name: participant_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["player", "team"]
+      - name: direction
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["from", "to", "none"]
+      - name: team_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_teams')
+                field: team_id
+      - name: player_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_players')
+                field: player_id
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["transaction_key", "participant_type", "bref_slug", "direction"]

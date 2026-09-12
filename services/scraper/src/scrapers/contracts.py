@@ -3,8 +3,9 @@
 Current source is team payroll HTML at ``https://www.basketball-reference.com/contracts/{TEAM}.html``
 (remaining multi-year salaries, not a historical paid-salary ledger).
 
-Be polite: BRef rate-limits aggressively. Included on season-active daily
-(``pipeline`` / ``scrape-daily``) and ``scrape-all``.
+Be polite: BRef rate-limits aggressively. Runs whenever the pipeline is
+``enabled`` — not behind ``season_active``, because free agency, trades, and
+extensions move payroll while the season gate is shut.
 """
 
 from __future__ import annotations

@@ -257,6 +257,25 @@ def resolve_team_id(session: Session, value: str) -> uuid.UUID | None:
     return external.team_id if external is not None else None
 
 
+def resolve_player_id(
+    session: Session,
+    *,
+    provider: str,
+    external_id: str,
+) -> uuid.UUID | None:
+    """Look up a player by provider key without creating or mutating one.
+
+    ``ensure_player`` is the write path and always stamps ``is_active``, which
+    is wrong for callers that merely *reference* a player. A transactions log
+    naming a waived player must not flip that player back to active.
+    """
+    external_id = external_id.strip().lower()
+    row = _pending_external_id(session, PlayerExternalId, provider, external_id) or session.get(
+        PlayerExternalId, (provider, external_id)
+    )
+    return row.player_id if row is not None else None
+
+
 def _split_player_name(name: str) -> tuple[str, str]:
     parts = " ".join(name.split()).strip().split(" ")
     if len(parts) < 2:
@@ -448,6 +467,7 @@ __all__ = [
     "ensure_player",
     "is_abbreviated_player_name",
     "resolve_game",
+    "resolve_player_id",
     "resolve_team_id",
     "seed_team_catalog",
 ]

@@ -522,6 +522,7 @@ def test_cli_scrape_all_skips_reddit_unless_flag(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr("main.scrape_games", lambda season: 82)
     monkeypatch.setattr("main.scrape_player_game_logs", lambda season, active_only=False: 5)
     monkeypatch.setattr("main.scrape_standings", lambda season: 30)
+    monkeypatch.setattr("main.scrape_transactions", lambda season: (9, 20))
 
     def reddit(**kwargs):
         called["reddit"] += 1
@@ -560,6 +561,7 @@ def test_cli_scrape_all_reddit_failure_uses_existing_slack(
     monkeypatch.setattr("main.scrape_games", lambda season: 82)
     monkeypatch.setattr("main.scrape_player_game_logs", lambda season, active_only=False: 5)
     monkeypatch.setattr("main.scrape_standings", lambda season: 30)
+    monkeypatch.setattr("main.scrape_transactions", lambda season: (9, 20))
 
     def boom():
         raise RedditConfigError("Reddit credentials are missing. Set REDDIT_CLIENT_ID.")

@@ -3,7 +3,6 @@ export const PRIMARY_NAV = [
   { href: "/schedule", label: "Schedule" },
   { href: "/players", label: "Players" },
   { href: "/teams", label: "Teams" },
-  { href: "/players/compare", label: "Compare" },
   { href: "/ask", label: "Ask" },
   { href: "/social", label: "Social" },
   { href: "/about", label: "About" },
@@ -11,13 +10,7 @@ export const PRIMARY_NAV = [
 
 export function isNavActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
-  if (href === "/players") {
-    return (
-      pathname === "/players" ||
-      (pathname.startsWith("/players/") && !pathname.startsWith("/players/compare"))
-    );
-  }
-  if (href === "/players/compare") return pathname.startsWith("/players/compare");
+  if (href === "/players") return pathname === "/players" || pathname.startsWith("/players/");
   if (href === "/teams") return pathname === "/teams" || pathname.startsWith("/teams/");
   if (href === "/games") return pathname === "/games" || pathname.startsWith("/games/");
   return pathname === href || pathname.startsWith(`${href}/`);

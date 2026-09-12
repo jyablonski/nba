@@ -569,6 +569,29 @@ REDDIT_POSTS_DIMENSIONS = [
 
 PBP_DEFAULT_LIMIT = 200
 PBP_MAX_LIMIT = 500
+TRANSACTIONS_DIMENSIONS = [
+    "transactions.transaction_key",
+    "transactions.transaction_date",
+    "transactions.season",
+    "transactions.description",
+]
+
+TRANSACTION_PARTICIPANTS_DIMENSIONS = [
+    "transaction_participants.transaction_key",
+    "transaction_participants.transaction_date",
+    "transaction_participants.season",
+    "transaction_participants.participant_type",
+    "transaction_participants.direction",
+    "transaction_participants.display_name",
+    "transaction_participants.team_abbreviation",
+    "transaction_participants.player_name",
+    "transaction_participants.player_id",
+    "transaction_participants.team_id",
+]
+
+TRANSACTIONS_DEFAULT_LIMIT = 50
+TRANSACTIONS_MAX_LIMIT = 200
+
 REDDIT_DEFAULT_LIMIT = 25
 REDDIT_MAX_LIMIT = 50
 
@@ -700,4 +723,50 @@ def reddit_posts_query(search: str | None = None, limit: int | None = None) -> d
         "filters": filters,
         "order": {"reddit_posts.created_utc": "desc"},
         "limit": clamp_limit(limit, REDDIT_DEFAULT_LIMIT, REDDIT_MAX_LIMIT),
+    }
+
+
+def transactions_query(
+    season: str | None = None,
+    search: str | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """The log itself. Use transaction_participants_query to filter by who."""
+    filters: list[dict[str, Any]] = []
+    if season and season.strip():
+        filters.append(equals("transactions.season", season.strip()))
+    if search and search.strip():
+        filters.append(contains("transactions.description", search.strip()))
+    return {
+        "dimensions": list(TRANSACTIONS_DIMENSIONS),
+        "filters": filters,
+        "order": {"transactions.transaction_date": "desc"},
+        "limit": clamp_limit(limit, TRANSACTIONS_DEFAULT_LIMIT, TRANSACTIONS_MAX_LIMIT),
+    }
+
+
+def transaction_participants_query(
+    player_id: UUID | None = None,
+    team_abbreviation: str | None = None,
+    season: str | None = None,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """Who moved. A team both sending and receiving in one trade is two rows."""
+    filters: list[dict[str, Any]] = []
+    if player_id is not None:
+        filters.append(equals("transaction_participants.player_id", player_id))
+    if team_abbreviation:
+        filters.append(
+            equals(
+                "transaction_participants.team_abbreviation",
+                team_abbreviation.upper(),
+            )
+        )
+    if season and season.strip():
+        filters.append(equals("transaction_participants.season", season.strip()))
+    return {
+        "dimensions": list(TRANSACTION_PARTICIPANTS_DIMENSIONS),
+        "filters": filters,
+        "order": {"transaction_participants.transaction_date": "desc"},
+        "limit": clamp_limit(limit, TRANSACTIONS_DEFAULT_LIMIT, TRANSACTIONS_MAX_LIMIT),
     }

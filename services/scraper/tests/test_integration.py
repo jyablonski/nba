@@ -22,6 +22,8 @@ from models import (
     Team,
     TeamExternalId,
     TeamPayroll,
+    Transaction,
+    TransactionParticipant,
 )
 from queries import SELECT_SOURCE_RUNS_FOR_RUN
 
@@ -439,3 +441,102 @@ def test_record_source_runs_keeps_latest_attempt_and_cascades(db_session_factory
             {"run_id": run_id},
         ).scalar_one()
         assert remaining == 0
+
+
+@pytest.mark.integration
+def test_transactions_upsert_is_idempotent(db_session_factory) -> None:
+    """Re-running the same scrape must not duplicate rows.
+
+    The whole point of hashing (date, description) is that a second run
+    collides on the unique constraint instead of inserting again, so this
+    asserts the count rather than trusting the ON CONFLICT clause.
+    """
+    now = datetime.now(UTC)
+    key_a = "a" * 64
+    key_b = "b" * 64
+    transactions = [
+        {
+            "transaction_key": key_a,
+            "transaction_date": date(2025, 7, 1),
+            "season": "2025-26",
+            "description": "The Toronto Raptors signed Garrett Temple.",
+            "source_url": "https://example.test/transactions.html",
+            "scraped_at": now,
+        },
+        {
+            "transaction_key": key_b,
+            "transaction_date": date(2026, 2, 5),
+            "season": "2025-26",
+            "description": "In a 7-team trade, the Atlanta Hawks traded Clint Capela.",
+            "source_url": "https://example.test/transactions.html",
+            "scraped_at": now,
+        },
+    ]
+    # ATL both sends and receives in the same trade: two rows, one constraint.
+    participants = [
+        {
+            "transaction_key": key_b,
+            "participant_type": "team",
+            "direction": "from",
+            "bref_slug": "ATL",
+            "display_name": "Atlanta Hawks",
+            "team_id": TEAM_HOME,
+            "player_id": None,
+            "scraped_at": now,
+        },
+        {
+            "transaction_key": key_b,
+            "participant_type": "team",
+            "direction": "to",
+            "bref_slug": "ATL",
+            "display_name": "Atlanta Hawks",
+            "team_id": TEAM_HOME,
+            "player_id": None,
+            "scraped_at": now,
+        },
+        {
+            "transaction_key": key_b,
+            "participant_type": "player",
+            "direction": "none",
+            "bref_slug": "capelca01",
+            "display_name": "Clint Capela",
+            "team_id": None,
+            "player_id": PLAYER_ONE,
+            "scraped_at": now,
+        },
+    ]
+
+    with get_session() as session:
+        upsert_rows(session, Team, _teams(now), ["team_id"])
+        upsert_rows(
+            session,
+            Player,
+            [
+                {
+                    "player_id": PLAYER_ONE,
+                    "first_name": "Clint",
+                    "last_name": "Capela",
+                    "full_name": "Clint Capela",
+                    "is_active": True,
+                    "team_id": TEAM_HOME,
+                    "scraped_at": now,
+                }
+            ],
+            ["player_id"],
+        )
+
+    participant_conflict = ["transaction_key", "participant_type", "bref_slug", "direction"]
+    for _ in range(2):
+        with get_session() as session:
+            upsert_rows(session, Transaction, transactions, ["transaction_key"])
+            upsert_rows(session, TransactionParticipant, participants, participant_conflict)
+
+    with db_session_factory() as session:
+        assert len(session.execute(select(Transaction)).scalars().all()) == 2
+        rows = session.execute(select(TransactionParticipant)).scalars().all()
+        assert len(rows) == 3
+        atlanta = sorted(row.direction for row in rows if row.bref_slug == "ATL")
+        assert atlanta == ["from", "to"]
+        player_row = next(row for row in rows if row.participant_type == "player")
+        assert player_row.player_id == PLAYER_ONE
+        assert player_row.direction == "none"

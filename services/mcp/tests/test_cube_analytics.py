@@ -30,6 +30,8 @@ from cube.queries import (
     standings_query,
     team_games_seasons_query,
     team_record_query,
+    transaction_participants_query,
+    transactions_query,
 )
 
 
@@ -321,6 +323,8 @@ def test_new_named_cube_operations() -> None:
             [{"game_id": GAME_ONE, "market": "h2h"}],
             [{"game_id": GAME_ONE, "action_number": 1}],
             [{"reddit_id": "abc", "title": "thread"}],
+            [{"season": "2025-26", "description": "The Hawks signed a guy."}],
+            [{"team_abbreviation": "ATL", "direction": "to"}],
         ]
     )
     analytics = CubeAnalytics(client)
@@ -337,6 +341,8 @@ def test_new_named_cube_operations() -> None:
     assert analytics.get_game_odds()[0]["market"] == "h2h"
     assert analytics.get_play_by_play(GAME_ONE)[0]["action_number"] == 1
     assert analytics.get_reddit_posts("thread")[0]["reddit_id"] == "abc"
+    assert analytics.get_transactions(season="2025-26")[0]["season"] == "2025-26"
+    assert analytics.get_transaction_participants(team_abbreviation="ATL")[0]["direction"] == "to"
 
 
 @pytest.mark.unit
@@ -442,3 +448,32 @@ def test_list_standings_resolves_season_from_team_games() -> None:
     assert client.queries[0]["dimensions"] == ["standings.season"]
     assert client.queries[1]["dimensions"] == ["team_games.season"]
     assert client.queries[2]["filters"][0]["values"] == ["2026-27"]
+
+
+@pytest.mark.unit
+def test_transactions_queries_build_optional_filters() -> None:
+    bare = transactions_query()
+    assert bare["filters"] == []
+    assert bare["order"] == {"transactions.transaction_date": "desc"}
+
+    filtered = transactions_query(season="2025-26", search=" traded ", limit=500)
+    members = [item["member"] for item in filtered["filters"]]
+    assert members == ["transactions.season", "transactions.description"]
+    # Whitespace-only input is not a filter, and the limit is clamped.
+    assert filtered["filters"][1]["values"] == ["traded"]
+    assert filtered["limit"] == 200
+    assert transactions_query(season="   ", search="  ")["filters"] == []
+
+    participants = transaction_participants_query(
+        player_id=PLAYER_CURRY,
+        team_abbreviation="atl",
+        season="2025-26",
+    )
+    assert [item["member"] for item in participants["filters"]] == [
+        "transaction_participants.player_id",
+        "transaction_participants.team_abbreviation",
+        "transaction_participants.season",
+    ]
+    # Abbreviations are upper-cased so a lowercase tool argument still matches.
+    assert participants["filters"][1]["values"] == ["ATL"]
+    assert transaction_participants_query()["filters"] == []

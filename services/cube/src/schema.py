@@ -25,6 +25,8 @@ REQUIRED_CUBES = (
     "reddit_comments",
     "reddit_entity_mentions",
     "reddit_flair",
+    "transactions",
+    "transaction_participants",
 )
 REQUIRED_VIEWS = ("player_performance",)
 

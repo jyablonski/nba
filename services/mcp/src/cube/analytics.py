@@ -32,6 +32,8 @@ from cube.queries import (
     team_record_games_query,
     team_record_query,
     teams_played_query,
+    transaction_participants_query,
+    transactions_query,
 )
 from standings_rank import apply_derived_ranks
 
@@ -352,6 +354,30 @@ class CubeAnalytics:
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         return self.client.load(game_odds_query(game_id=game_id, limit=limit))
+
+    def get_transactions(
+        self,
+        season: str | None = None,
+        search: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        return self.client.load(transactions_query(season=season, search=search, limit=limit))
+
+    def get_transaction_participants(
+        self,
+        player_id: UUID | None = None,
+        team_abbreviation: str | None = None,
+        season: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        return self.client.load(
+            transaction_participants_query(
+                player_id=player_id,
+                team_abbreviation=team_abbreviation,
+                season=season,
+                limit=limit,
+            )
+        )
 
     def get_play_by_play(
         self,

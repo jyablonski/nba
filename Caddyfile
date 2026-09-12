@@ -2,9 +2,8 @@
 # Optional ACME account email: set CADDY_EMAIL on the caddy service.
 # Caddy requires `{` to be the last token on its line — one-line handle blocks
 # do not parse. Check with `caddy validate --config Caddyfile` before deploying.
-# Retiring nbadashboard later is a second site block here; see
-# docs/plans/oci-caddy-hosting.md. It only takes effect once that name's DNS
-# points at this VM.
+# nbadashboard.jyablonski.dev redirects to baseline; see the block at the
+# bottom and docs/plans/oci-caddy-hosting.md.
 
 baseline.jyablonski.dev {
 	encode gzip zstd
@@ -39,4 +38,26 @@ baseline.jyablonski.dev {
 	handle {
 		reverse_proxy frontend:3000
 	}
+}
+
+# Legacy hostname. Kept here rather than as a Cloudflare Bulk Redirect so the
+# rule is version-controlled beside the site it points at.
+#
+# 308 not 301: 308 forbids a client from rewriting the method, so a POST to the
+# old host replays as a POST. `redir ... permanent` is 301, which historically
+# lets clients downgrade POST to GET.
+#
+# {uri} is path + query, so /example?source=legacy survives the hop. Using
+# {path} instead would silently drop query strings.
+#
+# No reverse_proxy here on purpose: legacy traffic must not reach the old
+# dashboard service. Nothing loops, because this block only matches the legacy
+# host and every redirect it emits targets a different one.
+#
+# Caddy issues a separate Let's Encrypt certificate for this name via the same
+# on-demand ACME path as baseline. That needs the nbadashboard DNS record
+# pointing at this VM (grey-cloud) and :80 reachable for HTTP-01 — until DNS
+# moves, this block parses fine and simply never gets hit.
+nbadashboard.jyablonski.dev {
+	redir https://baseline.jyablonski.dev{uri} 308
 }

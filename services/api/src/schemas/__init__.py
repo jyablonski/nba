@@ -47,6 +47,7 @@ from schemas.social import (
 from schemas.standing import StandingRow, StandingSummary
 from schemas.status import WarehouseStatus
 from schemas.team import TeamDetail, TeamRecord, TeamSummary
+from schemas.transaction import Transaction, TransactionDetail, TransactionParticipant
 
 
 class PaginationMeta(BaseModel):
@@ -108,6 +109,9 @@ __all__ = [
     "ScheduledGame",
     "SeasonListResponse",
     "SourceHealth",
+    "Transaction",
+    "TransactionDetail",
+    "TransactionParticipant",
     "StandingRow",
     "StandingSummary",
     "TableFreshness",

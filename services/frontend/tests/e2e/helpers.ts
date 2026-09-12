@@ -5,7 +5,6 @@ export const PRIMARY_NAV = [
   "Schedule",
   "Players",
   "Teams",
-  "Compare",
   "Ask",
   "Social",
   "About",

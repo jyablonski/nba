@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: stg_transactions
+    description: Basketball-Reference transactions log, one row per dated entry.
+    columns:
+      - name: transaction_key
+        description: sha256(transaction_date|description). The grain.
+        data_tests:
+          - not_null
+          - unique
+      - name: transaction_date
+        data_tests:
+          - not_null
+      - name: description
+        data_tests:
+          - not_null
+
+  - name: stg_transaction_participants
+    description: >
+      Teams and players named by a transaction, resolved from their
+      Basketball-Reference href slugs. Draft picks are prose, not links, and
+      are deliberately absent.
+    columns:
+      - name: transaction_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_transactions')
+                field: transaction_key
+      - name: participant_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["player", "team"]
+      - name: direction
+        description: >
+          From the team link's data-attr-from / data-attr-to. 'none' for
+          players, which carry no direction.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["from", "to", "none"]
+      - name: bref_slug
+        data_tests:
+          - not_null
+    data_tests:
+      - dbt_expectations.expect_compound_columns_to_be_unique:
+          arguments:
+            column_list: ["transaction_key", "participant_type", "bref_slug", "direction"]
